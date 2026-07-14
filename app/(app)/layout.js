@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AppProvider, useApp } from "./AppContext";
 import { MI, Caps, Stepper } from "@/components/ui";
-import { TABS, TIPS, XP, gamify, fmtK, focusXp, sleepXp, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX } from "@/lib/state";
+import { TABS, XP, gamify, fmtK, focusXp, sleepXp, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX } from "@/lib/state";
 import { hasSupabase } from "@/lib/persistence";
 
 function Chrome({ children }) {
@@ -121,11 +121,6 @@ function Chrome({ children }) {
           )}
 
           {children}
-
-          <div className="glass-card rounded-xl p-4 mt-section-margin flex items-center gap-3">
-            <MI name="tips_and_updates" className="text-primary-container" />
-            <p className="text-body-md text-on-surface flex-1">{TIPS[state.stats.totalSessions % TIPS.length]}</p>
-          </div>
         </div>
       </main>
 

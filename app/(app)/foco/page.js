@@ -3,14 +3,28 @@
 import { useState } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps, StatTile, inputCls } from "@/components/ui";
-import { XP, award, focusXp, sleepXp, gamify, fmtK, formatTime, getDateStr } from "@/lib/state";
+import { XP, award, focusXp, sleepXp, gamify, fmtK, formatTime, getDateStr, youtubeId, DEFAULT_LOFI_URL } from "@/lib/state";
 
 export default function FocoPage() {
-  const { state, setState, board, myName, timer } = useApp();
+  const { state, setState, board, myName, timer, toast } = useApp();
 
   // timer é global (vive no AppContext) — persiste entre páginas
   const { phase, secondsLeft, isRunning, cyclePos, toggleTimer, resetPhase, skipPhase } = timer;
   const [newTask, setNewTask] = useState("");
+
+  // player lofi
+  const lofiUrl = state.settings.lofiUrl || DEFAULT_LOFI_URL;
+  const lofiId = youtubeId(lofiUrl);
+  const [lofiInput, setLofiInput] = useState(lofiUrl);
+  function playLofi(url) {
+    const target = (url ?? lofiInput).trim();
+    if (!youtubeId(target)) {
+      toast("URL do YouTube inválida", { type: "error" });
+      return;
+    }
+    setLofiInput(target);
+    setState((prev) => ({ ...prev, settings: { ...prev.settings, lofiUrl: target } }));
+  }
 
   function addTask() {
     const text = newTask.trim();
@@ -62,8 +76,10 @@ export default function FocoPage() {
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter items-start">
-        {/* Timer */}
-        <div className="lg:col-span-8 glass-card p-8 md:p-12 rounded-xl flex flex-col items-center justify-center relative min-h-[420px] md:min-h-[500px]">
+        {/* Coluna principal: timer + player lofi (mesma largura) */}
+        <div className="lg:col-span-8 space-y-gutter">
+          {/* Timer */}
+          <div className="glass-card p-8 md:p-12 rounded-xl flex flex-col items-center justify-center relative min-h-[420px] md:min-h-[500px]">
           <div className="relative z-10 flex flex-col items-center">
             <div className="relative w-72 h-72 md:w-80 md:h-80 flex items-center justify-center">
               <svg className="absolute inset-0 w-full h-full timer-glow" viewBox="0 0 200 200">
@@ -108,6 +124,39 @@ export default function FocoPage() {
               {state.stats.todaySessions} sessão(ões) hoje · {state.stats.todayMinutes} min
             </p>
           </div>
+          </div>
+
+          {/* Missões de hoje — abaixo do timer */}
+          <div className="glass-card p-6 rounded-xl">
+            <h3 className="font-headline-md text-headline-md text-primary mb-4">MISSÕES DE HOJE</h3>
+            <div className="space-y-3">
+              {state.tasks.length === 0 && <p className="text-[12px] text-outline">Nenhuma meta ainda. Adicione de 1 a 3 metas claras.</p>}
+              {state.tasks.map((t) => (
+                <div key={t.id} className={`flex items-center gap-3 p-3 bg-surface-container-high rounded-lg border border-white/5 ${t.done ? "" : "opacity-70"}`}>
+                  <button onClick={() => toggleTask(t.id)} aria-label="Alternar meta">
+                    <MI name={t.done ? "task_alt" : "radio_button_unchecked"} fill={t.done} className={t.done ? "text-primary-container" : "text-outline"} />
+                  </button>
+                  <div className="flex-1">
+                    <div className={`text-[13px] font-bold ${t.done ? "line-through text-outline" : "text-on-surface"}`}>{t.text}</div>
+                    <div className="text-[10px] text-outline">RECOMPENSA: +{XP.tasksAllDone} XP (todas feitas)</div>
+                  </div>
+                  <Caps className={t.done ? "text-primary-container text-[10px]" : "text-outline text-[10px]"}>{t.done ? "FEITA" : "ATIVA"}</Caps>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 mt-4">
+              <input
+                value={newTask}
+                onChange={(e) => setNewTask(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addTask()}
+                placeholder="Nova meta..."
+                className={`${inputCls} flex-1 text-[13px]`}
+              />
+              <button onClick={addTask} aria-label="Adicionar meta" className="px-3 rounded-lg bg-primary-container text-on-primary-container flex items-center active:scale-95 transition">
+                <MI name="add" />
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Sidebar */}
@@ -137,34 +186,49 @@ export default function FocoPage() {
             </p>
           </div>
 
-          {/* Missões = tasks */}
-          <div className="glass-card p-6 rounded-xl">
-            <h3 className="font-headline-md text-headline-md text-primary mb-4">MISSÕES DE HOJE</h3>
-            <div className="space-y-3">
-              {state.tasks.length === 0 && <p className="text-[12px] text-outline">Nenhuma meta ainda. Adicione de 1 a 3 metas claras.</p>}
-              {state.tasks.map((t) => (
-                <div key={t.id} className={`flex items-center gap-3 p-3 bg-surface-container-high rounded-lg border border-white/5 ${t.done ? "" : "opacity-70"}`}>
-                  <button onClick={() => toggleTask(t.id)} aria-label="Alternar meta">
-                    <MI name={t.done ? "task_alt" : "radio_button_unchecked"} fill={t.done} className={t.done ? "text-primary-container" : "text-outline"} />
-                  </button>
-                  <div className="flex-1">
-                    <div className={`text-[13px] font-bold ${t.done ? "line-through text-outline" : "text-on-surface"}`}>{t.text}</div>
-                    <div className="text-[10px] text-outline">RECOMPENSA: +{XP.tasksAllDone} XP (todas feitas)</div>
-                  </div>
-                  <Caps className={t.done ? "text-primary-container text-[10px]" : "text-outline text-[10px]"}>{t.done ? "FEITA" : "ATIVA"}</Caps>
-                </div>
-              ))}
+          {/* Player lofi — sidebar */}
+          <div className="glass-card p-5 rounded-xl">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-headline-md text-headline-md text-primary flex items-center gap-2">
+                <MI name="music_note" className="text-primary-container" /> LOFI
+              </h3>
+              {lofiUrl !== DEFAULT_LOFI_URL && (
+                <button
+                  onClick={() => playLofi(DEFAULT_LOFI_URL)}
+                  className="font-label-caps text-[10px] text-outline hover:text-primary transition"
+                >
+                  PADRÃO
+                </button>
+              )}
             </div>
-            <div className="flex gap-2 mt-4">
+            {lofiId ? (
+              <div className="aspect-video w-full rounded-lg overflow-hidden border border-white/10 mb-3">
+                <iframe
+                  key={lofiId}
+                  src={`https://www.youtube-nocookie.com/embed/${lofiId}?rel=0&autoplay=1&loop=1&playlist=${lofiId}`}
+                  title="Player lofi"
+                  className="w-full h-full"
+                  allow="autoplay; encrypted-media; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            ) : (
+              <p className="text-[12px] text-error mb-3">URL inválida.</p>
+            )}
+            <div className="flex gap-2">
               <input
-                value={newTask}
-                onChange={(e) => setNewTask(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addTask()}
-                placeholder="Nova meta..."
-                className={`${inputCls} flex-1 text-[13px]`}
+                value={lofiInput}
+                onChange={(e) => setLofiInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && playLofi()}
+                placeholder="URL do YouTube..."
+                className={`${inputCls} flex-1 text-[12px] min-w-0`}
               />
-              <button onClick={addTask} aria-label="Adicionar meta" className="px-3 rounded-lg bg-primary-container text-on-primary-container flex items-center active:scale-95 transition">
-                <MI name="add" />
+              <button
+                onClick={() => playLofi()}
+                aria-label="Tocar"
+                className="px-3 rounded-lg bg-primary-container text-on-primary-container flex items-center active:scale-95 transition shrink-0"
+              >
+                <MI name="play_arrow" fill />
               </button>
             </div>
           </div>
