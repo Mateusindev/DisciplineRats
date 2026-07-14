@@ -106,6 +106,10 @@ function Chrome({ children }) {
               <Stepper label="Sessões até pausa longa" value={state.settings.cycleLength} onDec={() => updateSetting("cycleLength", -1, 2, 8)} onInc={() => updateSetting("cycleLength", 1, 2, 8)} />
               <Stepper label="Meta de sono (min)" value={state.settings.sleepGoalMin} onDec={() => updateSetting("sleepGoalMin", -15, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX)} onInc={() => updateSetting("sleepGoalMin", 15, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX)} />
               <Stepper label="Meta de treinos/semana" value={state.settings.exerciseWeeklyGoal} onDec={() => updateSetting("exerciseWeeklyGoal", -1, 1, 14)} onInc={() => updateSetting("exerciseWeeklyGoal", 1, 1, 14)} />
+              <Stepper label="Meta de kcal/dia" value={state.settings.dietKcalGoal} onDec={() => updateSetting("dietKcalGoal", -50, 1000, 5000)} onInc={() => updateSetting("dietKcalGoal", 50, 1000, 5000)} />
+              <Stepper label="Meta de proteína (g)" value={state.settings.dietProteinGoal} onDec={() => updateSetting("dietProteinGoal", -5, 20, 400)} onInc={() => updateSetting("dietProteinGoal", 5, 20, 400)} />
+              <Stepper label="Meta de carboidrato (g)" value={state.settings.dietCarbGoal} onDec={() => updateSetting("dietCarbGoal", -5, 20, 600)} onInc={() => updateSetting("dietCarbGoal", 5, 20, 600)} />
+              <Stepper label="Meta de gordura (g)" value={state.settings.dietFatGoal} onDec={() => updateSetting("dietFatGoal", -5, 10, 250)} onInc={() => updateSetting("dietFatGoal", 5, 10, 250)} />
               <p className="text-[11px] text-outline">
                 XP: foco +{focusXp(state.settings.focusMin)} · metas do dia +{XP.tasksAllDone} · sono na meta +{sleepXp(state.settings.sleepGoalMin)} · treino +{XP.exercise}. Foco e sono escalam com a duração/meta. Streak dá +5%/dia (máx +50%).
               </p>
