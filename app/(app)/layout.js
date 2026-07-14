@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AppProvider, useApp } from "./AppContext";
 import { MI, Caps, Stepper } from "@/components/ui";
-import { TABS, TIPS, XP, gamify, fmtK } from "@/lib/state";
+import { TABS, TIPS, XP, gamify, fmtK, focusXp, sleepXp, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX } from "@/lib/state";
 import { hasSupabase } from "@/lib/persistence";
 
 function Chrome({ children }) {
@@ -104,10 +104,10 @@ function Chrome({ children }) {
               <Stepper label="Pausa curta (min)" value={state.settings.breakMin} onDec={() => updateSetting("breakMin", -1, 1, 30)} onInc={() => updateSetting("breakMin", 1, 1, 30)} />
               <Stepper label="Pausa longa (min)" value={state.settings.longBreakMin} onDec={() => updateSetting("longBreakMin", -5, 5, 60)} onInc={() => updateSetting("longBreakMin", 5, 5, 60)} />
               <Stepper label="Sessões até pausa longa" value={state.settings.cycleLength} onDec={() => updateSetting("cycleLength", -1, 2, 8)} onInc={() => updateSetting("cycleLength", 1, 2, 8)} />
-              <Stepper label="Meta de sono (min)" value={state.settings.sleepGoalMin} onDec={() => updateSetting("sleepGoalMin", -15, 240, 720)} onInc={() => updateSetting("sleepGoalMin", 15, 240, 720)} />
+              <Stepper label="Meta de sono (min)" value={state.settings.sleepGoalMin} onDec={() => updateSetting("sleepGoalMin", -15, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX)} onInc={() => updateSetting("sleepGoalMin", 15, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX)} />
               <Stepper label="Meta de treinos/semana" value={state.settings.exerciseWeeklyGoal} onDec={() => updateSetting("exerciseWeeklyGoal", -1, 1, 14)} onInc={() => updateSetting("exerciseWeeklyGoal", 1, 1, 14)} />
               <p className="text-[11px] text-outline">
-                XP: foco +{XP.focus} · metas do dia +{XP.tasksAllDone} · sono na meta +{XP.sleepGoal} · treino +{XP.exercise}. Streak dá +5%/dia (máx +50%).
+                XP: foco +{focusXp(state.settings.focusMin)} · metas do dia +{XP.tasksAllDone} · sono na meta +{sleepXp(state.settings.sleepGoalMin)} · treino +{XP.exercise}. Foco e sono escalam com a duração/meta. Streak dá +5%/dia (máx +50%).
               </p>
               <button onClick={resetAllData} className="self-start mt-1 px-3 py-1.5 rounded font-label-caps text-[10px] text-error border border-error/60 hover:bg-error/10 transition">
                 REINICIAR TODOS OS DADOS

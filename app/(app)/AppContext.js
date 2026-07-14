@@ -4,7 +4,7 @@ import { createContext, useContext, useState, useEffect, useRef, useCallback } f
 import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { getSession, loadState, saveState, fetchLeaderboard, signOut, readLocal, hasSupabase } from "@/lib/persistence";
-import { defaultState, mergeWithDefaults, getDateStr, XP, award, formatTime, playChime } from "@/lib/state";
+import { defaultState, mergeWithDefaults, getDateStr, XP, award, focusXp, formatTime, playChime } from "@/lib/state";
 import { MI } from "@/components/ui";
 
 const AppCtx = createContext(null);
@@ -207,7 +207,7 @@ export function AppProvider({ children }) {
       }
       stats.lastCompletedDate = today;
       stats.bestStreak = Math.max(stats.bestStreak, stats.streak);
-      stats.xp = (stats.xp || 0) + award(XP.focus, stats.streak);
+      stats.xp = (stats.xp || 0) + award(focusXp(prev.settings.focusMin), stats.streak);
       // registra no histórico diário (retrospecto de foco)
       const focusHistory = { ...(prev.focusHistory || {}) };
       const day = focusHistory[today] || { sessions: 0, minutes: 0, series: 0 };

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps, StarRating, inputCls } from "@/components/ui";
-import { XP, award, getDateStr, minutesToHm, weekdayShort, last7Dates } from "@/lib/state";
+import { sleepXp, award, getDateStr, minutesToHm, weekdayShort, last7Dates } from "@/lib/state";
 
 function hm(min) {
   const h = Math.floor(min / 60);
@@ -54,13 +54,13 @@ export default function SonoPage() {
       let stats = prev.stats;
       if (durationMin >= goalMin && !already) {
         entry.xpAwarded = true;
-        stats = { ...stats, xp: (stats.xp || 0) + award(XP.sleepGoal, stats.streak) };
+        stats = { ...stats, xp: (stats.xp || 0) + award(sleepXp(goalMin), stats.streak) };
       }
       return { ...prev, sleep: { ...prev.sleep, [today]: entry }, stats };
     });
     const wasAwarded = existing?.xpAwarded;
     toast("Sono salvo", {
-      sub: hitsGoal ? (wasAwarded ? "META BATIDA" : `META BATIDA · +${XP.sleepGoal} XP`) : "ABAIXO DA META",
+      sub: hitsGoal ? (wasAwarded ? "META BATIDA" : `META BATIDA · +${sleepXp(goalMin)} XP`) : "ABAIXO DA META",
       icon: hitsGoal ? "check_circle" : "bedtime",
     });
   }
@@ -98,7 +98,7 @@ export default function SonoPage() {
               <h3 className="font-headline-md text-headline-md text-on-surface mb-1">SONO DE HOJE</h3>
               <div className="flex items-center gap-2 text-primary">
                 <MI name="stars" fill className="text-sm" />
-                <Caps>+{XP.sleepGoal} XP DISPONÍVEIS</Caps>
+                <Caps>+{sleepXp(goalMin)} XP DISPONÍVEIS</Caps>
               </div>
             </div>
           </div>
@@ -155,7 +155,7 @@ export default function SonoPage() {
               >
                 <MI name={hitsGoal ? "check_circle" : "bedtime"} fill={hitsGoal} className={`text-sm ${hitsGoal ? "text-primary" : "text-outline"}`} />
                 <Caps className={`text-[10px] ${hitsGoal ? "text-primary" : "text-outline"}`}>
-                  META {minutesToHm(goalMin)} · {hitsGoal ? `BATEU A META (+${XP.sleepGoal} XP)` : "ABAIXO DA META"}
+                  META {minutesToHm(goalMin)} · {hitsGoal ? `BATEU A META (+${sleepXp(goalMin)} XP)` : "ABAIXO DA META"}
                 </Caps>
               </div>
             </div>

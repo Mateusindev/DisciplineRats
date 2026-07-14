@@ -6,10 +6,16 @@ Regras de XP e níveis (implementadas em `app/page.js`).
 
 | Fonte | XP base | Frequência |
 |---|---|---|
-| Sessão de foco concluída | **50** | por sessão |
+| Sessão de foco concluída | **50** (a 25 min; escala com a duração) | por sessão |
 | Zerar todas as metas do dia | **+10** | 1x/dia (`tasksBonusDate`) |
-| Dormir ≥ meta de sono | **50** | 1x/noite (`sleep[date].xpAwarded`) |
+| Dormir ≥ meta de sono | **50** (a 7h30; escala com a meta) | 1x/noite (`sleep[date].xpAwarded`) |
 | Treino registrado | **40** | por treino |
+
+### XP proporcional (foco e sono)
+
+- Foco: `round(50 × focusMin / 25)` — mais tempo de pomodoro = mais XP; menos = menos. (`focusXp`)
+- Sono: `round(50 × sleepGoalMin / 450)` — meta maior = mais XP. (`sleepXp`)
+- Meta de sono limitada a **6h–9h** (`SLEEP_GOAL_MIN`/`SLEEP_GOAL_MAX`).
 
 ## Multiplicador de streak
 

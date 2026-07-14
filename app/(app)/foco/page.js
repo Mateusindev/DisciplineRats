@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps, StatTile, inputCls } from "@/components/ui";
-import { XP, award, gamify, fmtK, formatTime, getDateStr } from "@/lib/state";
+import { XP, award, focusXp, sleepXp, gamify, fmtK, formatTime, getDateStr } from "@/lib/state";
 
 export default function FocoPage() {
   const { state, setState, board, myName, timer } = useApp();
@@ -133,7 +133,7 @@ export default function FocoPage() {
               </div>
             </div>
             <p className="text-[12px] text-on-surface-variant leading-relaxed">
-              Foco +{XP.focus} · metas do dia +{XP.tasksAllDone} · sono na meta +{XP.sleepGoal} · treino +{XP.exercise}. Streak multiplica (+5%/dia).
+              Foco +{focusXp(state.settings.focusMin)} · metas do dia +{XP.tasksAllDone} · sono na meta +{sleepXp(state.settings.sleepGoalMin)} · treino +{XP.exercise}. Foco/sono escalam com duração/meta. Streak multiplica (+5%/dia).
             </p>
           </div>
 
