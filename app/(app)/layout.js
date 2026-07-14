@@ -30,9 +30,13 @@ function Chrome({ children }) {
             <MI name="fitness_center" className="text-primary-container" /> DISCIPLINE<br />RATS
           </div>
           <div className="flex items-center gap-1">
-            <button aria-label="Perfil" className="text-primary active:opacity-80 transition p-1">
-              <MI name="account_circle" />
-            </button>
+            <Link
+              href="/perfil"
+              aria-label="Perfil"
+              className={`p-1 transition active:opacity-80 ${pathname === "/perfil" ? "text-primary-container" : "text-primary"}`}
+            >
+              <MI name="account_circle" fill={pathname === "/perfil"} />
+            </Link>
             <button
               aria-label="Configurações"
               onClick={() => setShowSettings((v) => !v)}
@@ -79,12 +83,6 @@ function Chrome({ children }) {
         </nav>
 
         <div className="px-4 mt-auto space-y-2">
-          <Link
-            href="/foco"
-            className="block text-center w-full py-4 bg-primary-container text-on-primary-container font-label-caps text-label-caps rounded-xl font-bold tracking-widest hover:brightness-110 active:scale-95 transition"
-          >
-            INICIAR SESSÃO
-          </Link>
           {hasSupabase() && (
             <button
               onClick={handleLogout}
@@ -142,6 +140,13 @@ function Chrome({ children }) {
             </Link>
           );
         })}
+        <Link
+          href="/perfil"
+          className={`flex flex-col items-center justify-center transition ${pathname === "/perfil" ? "text-primary scale-110 font-bold" : "text-on-surface-variant"}`}
+        >
+          <MI name="account_circle" fill={pathname === "/perfil"} />
+          <Caps className="text-[10px] mt-1">Perfil</Caps>
+        </Link>
         <button
           onClick={() => setShowSettings((v) => !v)}
           className={`flex flex-col items-center justify-center transition ${showSettings ? "text-primary scale-110 font-bold" : "text-on-surface-variant"}`}
@@ -151,14 +156,6 @@ function Chrome({ children }) {
         </button>
       </nav>
 
-      {/* Footer */}
-      <footer className="flex flex-col md:flex-row justify-between items-center px-container-padding py-8 opacity-60 border-t border-outline-variant/20 bg-background md:pl-72 pb-28 md:pb-8">
-        <Caps className="text-outline mb-4 md:mb-0">DISCIPLINE RATS © 2026. MANTENHA A DISCIPLINA.</Caps>
-        <div className="flex gap-8">
-          <span>{state.stats.totalSessions} sessões</span>
-          <span>{Math.round(state.stats.totalMinutes / 60)}h focadas</span>
-        </div>
-      </footer>
     </div>
   );
 }

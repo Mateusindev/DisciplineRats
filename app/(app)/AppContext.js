@@ -10,6 +10,8 @@ import { MI } from "@/components/ui";
 const AppCtx = createContext(null);
 export const useApp = () => useContext(AppCtx);
 
+const TIMER_KEY = "ferro-focus-timer"; // snapshot do cronômetro (persiste no reload)
+
 function Toaster() {
   const { toasts } = useApp();
   return (
@@ -182,7 +184,7 @@ export function AppProvider({ children }) {
     return () => clearTimeout(saveTimer.current);
   }, [state, loaded]);
 
-  const completeFocusSession = useCallback(() => {
+  const completeFocusSession = useCallback((seriesCompleted = false) => {
     setState((prev) => {
       const today = getDateStr(0);
       const yesterday = getDateStr(-1);
@@ -206,7 +208,15 @@ export function AppProvider({ children }) {
       stats.lastCompletedDate = today;
       stats.bestStreak = Math.max(stats.bestStreak, stats.streak);
       stats.xp = (stats.xp || 0) + award(XP.focus, stats.streak);
-      return { ...prev, stats };
+      // registra no histórico diário (retrospecto de foco)
+      const focusHistory = { ...(prev.focusHistory || {}) };
+      const day = focusHistory[today] || { sessions: 0, minutes: 0, series: 0 };
+      focusHistory[today] = {
+        sessions: day.sessions + 1,
+        minutes: day.minutes + prev.settings.focusMin,
+        series: (day.series || 0) + (seriesCompleted ? 1 : 0),
+      };
+      return { ...prev, stats, focusHistory };
     });
   }, []);
 
@@ -222,21 +232,59 @@ export function AppProvider({ children }) {
   cycleRef.current = cyclePos;
   const timerInit = useRef(false);
 
-  // sincroniza duração inicial com as settings carregadas (só se ainda parado/intacto)
+  // restaura o cronômetro salvo (ou sincroniza com as settings, se não houver)
   useEffect(() => {
     if (!loaded || timerInit.current) return;
     timerInit.current = true;
-    if (!isRunning) setSecondsLeft(stateRef.current.settings.focusMin * 60);
+    const s = stateRef.current.settings;
+    let snap = null;
+    try {
+      const v = localStorage.getItem(TIMER_KEY);
+      snap = v ? JSON.parse(v) : null;
+    } catch (e) {}
+    if (snap && snap.phase) {
+      setPhase(snap.phase);
+      setCyclePos(snap.cyclePos || 0);
+      if (snap.isRunning && snap.endTarget) {
+        const rem = Math.round((snap.endTarget - Date.now()) / 1000);
+        if (rem > 0) {
+          setSecondsLeft(rem);
+          setIsRunning(true);
+          return;
+        }
+        // expirou enquanto a aba estava fechada — volta a fase ao início, parado
+        const dur = snap.phase === "focus" ? s.focusMin : snap.phase === "break" ? s.breakMin : s.longBreakMin;
+        setSecondsLeft(dur * 60);
+        return;
+      }
+      if (typeof snap.secondsLeft === "number") {
+        setSecondsLeft(snap.secondsLeft);
+        return;
+      }
+    }
+    setSecondsLeft(s.focusMin * 60);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded]);
+
+  // salva o cronômetro a cada mudança (reload mantém o progresso)
+  useEffect(() => {
+    if (!loaded || !timerInit.current) return;
+    try {
+      const snap = isRunning
+        ? { phase, cyclePos, isRunning: true, endTarget: Date.now() + secondsLeft * 1000 }
+        : { phase, cyclePos, isRunning: false, secondsLeft };
+      localStorage.setItem(TIMER_KEY, JSON.stringify(snap));
+    } catch (e) {}
+  }, [loaded, phase, cyclePos, isRunning, secondsLeft]);
 
   const handlePhaseEnd = useCallback(() => {
     playChime();
     const s = stateRef.current.settings;
     if (phaseRef.current === "focus") {
-      completeFocusSession();
       const nextPos = cycleRef.current + 1;
-      if (nextPos >= s.cycleLength) {
+      const seriesCompleted = nextPos >= s.cycleLength;
+      completeFocusSession(seriesCompleted);
+      if (seriesCompleted) {
         setCyclePos(0);
         setPhase("longBreak");
         setSecondsLeft(s.longBreakMin * 60);
@@ -289,10 +337,11 @@ export function AppProvider({ children }) {
     const dur = p === "focus" ? s.focusMin : p === "break" ? s.breakMin : s.longBreakMin;
     setSecondsLeft(dur * 60);
   }, []);
+  // pular só é permitido em pausas (não pula foco)
   const skipPhase = useCallback(() => {
+    if (phaseRef.current === "focus") return;
     setIsRunning(false);
     handlePhaseEnd();
-    setIsRunning(false);
   }, [handlePhaseEnd]);
 
   const phaseTotal =

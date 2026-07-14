@@ -1,23 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useApp } from "../AppContext";
 import { MI, Caps, StatTile, inputCls } from "@/components/ui";
-import {
-  XP,
-  award,
-  gamify,
-  fmtK,
-  formatTime,
-  getDateStr,
-  computeHabitStreak,
-  HABIT_ICONS,
-} from "@/lib/state";
+import { XP, award, gamify, fmtK, formatTime, getDateStr } from "@/lib/state";
 
 export default function FocoPage() {
   const { state, setState, board, myName, timer } = useApp();
-  const router = useRouter();
 
   // timer é global (vive no AppContext) — persiste entre páginas
   const { phase, secondsLeft, isRunning, cyclePos, toggleTimer, resetPhase, skipPhase } = timer;
@@ -54,7 +43,6 @@ export default function FocoPage() {
   const offset = phaseTotal > 0 ? CIRC * (secondsLeft / phaseTotal) : CIRC;
 
   const focusHours = Math.round(state.stats.totalMinutes / 60);
-  const habits = state.habits.slice(0, 3);
 
   return (
     <>
@@ -110,9 +98,11 @@ export default function FocoPage() {
               <button onClick={resetPhase} aria-label="Reiniciar" className="w-16 h-16 glass-card rounded-full flex items-center justify-center text-primary hover:bg-primary-container/10 active:scale-95 transition">
                 <MI name="refresh" />
               </button>
-              <button onClick={skipPhase} aria-label="Pular" className="w-16 h-16 glass-card rounded-full flex items-center justify-center text-primary hover:bg-primary-container/10 active:scale-95 transition">
-                <MI name="skip_next" />
-              </button>
+              {phase !== "focus" && (
+                <button onClick={skipPhase} aria-label="Pular pausa" className="w-16 h-16 glass-card rounded-full flex items-center justify-center text-primary hover:bg-primary-container/10 active:scale-95 transition">
+                  <MI name="skip_next" />
+                </button>
+              )}
             </div>
             <p className="text-outline text-[12px] mt-6">
               {state.stats.todaySessions} sessão(ões) hoje · {state.stats.todayMinutes} min
@@ -159,7 +149,7 @@ export default function FocoPage() {
                   </button>
                   <div className="flex-1">
                     <div className={`text-[13px] font-bold ${t.done ? "line-through text-outline" : "text-on-surface"}`}>{t.text}</div>
-                    <div className="text-[10px] text-outline">RECOMPENSA: +50 XP</div>
+                    <div className="text-[10px] text-outline">RECOMPENSA: +{XP.tasksAllDone} XP (todas feitas)</div>
                   </div>
                   <Caps className={t.done ? "text-primary-container text-[10px]" : "text-outline text-[10px]"}>{t.done ? "FEITA" : "ATIVA"}</Caps>
                 </div>
@@ -210,63 +200,6 @@ export default function FocoPage() {
           </div>
         </div>
       </div>
-
-      {/* Disciplinas = habits preview */}
-      <section className="mt-section-margin">
-        <div className="flex items-end justify-between mb-8">
-          <div>
-            <h2 className="font-headline-lg text-headline-lg text-primary uppercase">Disciplinas</h2>
-            <p className="text-on-surface-variant text-body-md">Forje seu caráter na repetição diária.</p>
-          </div>
-          <button onClick={() => router.push("/habitos")} className="text-primary font-label-caps text-label-caps flex items-center gap-2 hover:underline">
-            VER TODOS <MI name="arrow_forward" className="text-sm" />
-          </button>
-        </div>
-        {habits.length === 0 ? (
-          <div className="glass-card p-8 rounded-xl text-center">
-            <p className="text-on-surface-variant">Nenhum hábito ainda. Vá em Hábitos para criar.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter">
-            {habits.map((h, i) => {
-              const done = h.doneDates.includes(getDateStr(0));
-              const streak = computeHabitStreak(h.doneDates);
-              return (
-                <div key={h.id} className="glass-card p-8 rounded-xl group hover:border-primary/40 transition-all">
-                  <div className="w-12 h-12 rounded bg-primary-container/20 flex items-center justify-center text-primary-container mb-6 group-hover:scale-110 transition-transform">
-                    <MI name={HABIT_ICONS[i % HABIT_ICONS.length]} className="text-3xl" />
-                  </div>
-                  <h4 className="font-headline-md text-headline-md mb-2">{h.name}</h4>
-                  <div className="flex items-center justify-between text-outline-variant font-label-caps text-[10px] mb-4">
-                    <span className="flex items-center gap-1"><MI name="local_fire_department" className="text-sm" /> {streak} DIAS</span>
-                    <span>{done ? "100%" : "0%"}</span>
-                  </div>
-                  <div className="w-full bg-surface-variant h-1 rounded-full mb-6">
-                    <div className="bg-primary-container h-full rounded-full transition-all" style={{ width: done ? "100%" : "0%" }} />
-                  </div>
-                  <button
-                    onClick={() =>
-                      setState((prev) => ({
-                        ...prev,
-                        habits: prev.habits.map((x) =>
-                          x.id === h.id
-                            ? { ...x, doneDates: done ? x.doneDates.filter((d) => d !== getDateStr(0)) : [...x.doneDates, getDateStr(0)] }
-                            : x
-                        ),
-                      }))
-                    }
-                    className={`w-full py-2 font-label-caps text-[10px] rounded transition-colors ${
-                      done ? "bg-primary-container text-on-primary-container" : "border border-primary text-primary hover:bg-primary/10"
-                    }`}
-                  >
-                    {done ? "CONCLUÍDO HOJE" : "MARCAR AGORA"}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
     </>
   );
 }

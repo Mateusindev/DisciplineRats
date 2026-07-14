@@ -7,7 +7,7 @@ Regras de XP e níveis (implementadas em `app/page.js`).
 | Fonte | XP base | Frequência |
 |---|---|---|
 | Sessão de foco concluída | **50** | por sessão |
-| Zerar todas as metas do dia | **+50** | 1x/dia (`tasksBonusDate`) |
+| Zerar todas as metas do dia | **+10** | 1x/dia (`tasksBonusDate`) |
 | Dormir ≥ meta de sono | **50** | 1x/noite (`sleep[date].xpAwarded`) |
 | Treino registrado | **40** | por treino |
 
