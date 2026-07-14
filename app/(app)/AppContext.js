@@ -1,10 +1,10 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { getSession, loadState, saveState, fetchLeaderboard, signOut, readLocal, hasSupabase } from "@/lib/persistence";
-import { defaultState, mergeWithDefaults, getDateStr, XP, award } from "@/lib/state";
+import { defaultState, mergeWithDefaults, getDateStr, XP, award, formatTime, playChime } from "@/lib/state";
 import { MI } from "@/components/ui";
 
 const AppCtx = createContext(null);
@@ -32,6 +32,54 @@ function Toaster() {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function TimerWidget() {
+  const { timer } = useApp();
+  const pathname = usePathname();
+  const router = useRouter();
+  if (!timer || !timer.active || pathname === "/foco") return null;
+  const { phase, secondsLeft, isRunning, phaseTotal, toggleTimer } = timer;
+  const label = phase === "focus" ? "FOCO" : phase === "break" ? "PAUSA" : "PAUSA LONGA";
+  const R = 18;
+  const CIRC = 2 * Math.PI * R;
+  const offset = phaseTotal > 0 ? CIRC * (secondsLeft / phaseTotal) : CIRC;
+  return (
+    <div className="fixed bottom-4 right-4 z-[90] glass-card rounded-2xl pl-3 pr-2 py-2 flex items-center gap-3 shadow-2xl border border-primary-container/30">
+      <button
+        onClick={() => router.push("/foco")}
+        aria-label="Abrir foco"
+        className="relative w-12 h-12 flex items-center justify-center shrink-0"
+      >
+        <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 44 44">
+          <circle cx="22" cy="22" r={R} fill="transparent" stroke="currentColor" strokeWidth="3" className="text-surface-variant" />
+          <circle
+            cx="22"
+            cy="22"
+            r={R}
+            fill="transparent"
+            stroke="currentColor"
+            strokeWidth="3"
+            strokeLinecap="round"
+            className="text-primary-container"
+            style={{ strokeDasharray: CIRC, strokeDashoffset: offset, transition: "stroke-dashoffset 0.25s linear" }}
+          />
+        </svg>
+        <MI name={phase === "focus" ? "psychology" : "self_improvement"} className="text-primary-container text-lg" />
+      </button>
+      <div className="min-w-0">
+        <div className="font-display-timer text-headline-md text-primary leading-none tabular-nums">{formatTime(secondsLeft)}</div>
+        <div className="font-label-caps text-[9px] text-outline tracking-widest">{label}</div>
+      </div>
+      <button
+        onClick={toggleTimer}
+        aria-label={isRunning ? "Pausar" : "Retomar"}
+        className="w-9 h-9 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center active:scale-95 transition shrink-0"
+      >
+        <MI name={isRunning ? "pause" : "play_arrow"} fill className="text-lg" />
+      </button>
     </div>
   );
 }
@@ -162,6 +210,105 @@ export function AppProvider({ children }) {
     });
   }, []);
 
+  // ===== Timer Pomodoro global (persiste entre páginas) =====
+  const [phase, setPhase] = useState("focus");
+  const [secondsLeft, setSecondsLeft] = useState(defaultState().settings.focusMin * 60);
+  const [isRunning, setIsRunning] = useState(false);
+  const [cyclePos, setCyclePos] = useState(0);
+  const endRef = useRef(null); // timestamp-alvo do fim da fase (ms)
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
+  const cycleRef = useRef(cyclePos);
+  cycleRef.current = cyclePos;
+  const timerInit = useRef(false);
+
+  // sincroniza duração inicial com as settings carregadas (só se ainda parado/intacto)
+  useEffect(() => {
+    if (!loaded || timerInit.current) return;
+    timerInit.current = true;
+    if (!isRunning) setSecondsLeft(stateRef.current.settings.focusMin * 60);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded]);
+
+  const handlePhaseEnd = useCallback(() => {
+    playChime();
+    const s = stateRef.current.settings;
+    if (phaseRef.current === "focus") {
+      completeFocusSession();
+      const nextPos = cycleRef.current + 1;
+      if (nextPos >= s.cycleLength) {
+        setCyclePos(0);
+        setPhase("longBreak");
+        setSecondsLeft(s.longBreakMin * 60);
+      } else {
+        setCyclePos(nextPos);
+        setPhase("break");
+        setSecondsLeft(s.breakMin * 60);
+      }
+    } else {
+      setPhase("focus");
+      setSecondsLeft(s.focusMin * 60);
+    }
+    setIsRunning(true);
+  }, [completeFocusSession]);
+
+  useEffect(() => {
+    if (!isRunning) {
+      endRef.current = null;
+      return;
+    }
+    // ancora no relógio real: imune a throttling de timer em background
+    endRef.current = Date.now() + secondsLeft * 1000;
+    const tick = () => {
+      const rem = Math.round((endRef.current - Date.now()) / 1000);
+      if (rem > 0) {
+        setSecondsLeft(rem);
+        return;
+      }
+      clearInterval(id);
+      setSecondsLeft(0);
+      handlePhaseEnd();
+    };
+    const id = setInterval(tick, 250);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRunning, phase]);
+
+  const toggleTimer = useCallback(() => setIsRunning((r) => !r), []);
+  const resetPhase = useCallback(() => {
+    setIsRunning(false);
+    const s = stateRef.current.settings;
+    const p = phaseRef.current;
+    const dur = p === "focus" ? s.focusMin : p === "break" ? s.breakMin : s.longBreakMin;
+    setSecondsLeft(dur * 60);
+  }, []);
+  const skipPhase = useCallback(() => {
+    setIsRunning(false);
+    handlePhaseEnd();
+    setIsRunning(false);
+  }, [handlePhaseEnd]);
+
+  const phaseTotal =
+    (phase === "focus" ? state.settings.focusMin : phase === "break" ? state.settings.breakMin : state.settings.longBreakMin) * 60;
+  const timer = {
+    phase,
+    secondsLeft,
+    isRunning,
+    cyclePos,
+    phaseTotal,
+    active: isRunning || secondsLeft < phaseTotal,
+    toggleTimer,
+    resetPhase,
+    skipPhase,
+  };
+
   function updateSetting(key, delta, min, max) {
     setState((prev) => ({
       ...prev,
@@ -189,12 +336,14 @@ export function AppProvider({ children }) {
     handleLogout,
     toast,
     toasts,
+    timer,
   };
 
   return (
     <AppCtx.Provider value={value}>
       {children}
       <Toaster />
+      <TimerWidget />
     </AppCtx.Provider>
   );
 }

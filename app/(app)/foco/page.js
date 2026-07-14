@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "../AppContext";
 import { MI, Caps, StatTile, inputCls } from "@/components/ui";
@@ -12,70 +12,16 @@ import {
   formatTime,
   getDateStr,
   computeHabitStreak,
-  playChime,
   HABIT_ICONS,
 } from "@/lib/state";
 
 export default function FocoPage() {
-  const { state, setState, completeFocusSession, board, myName } = useApp();
+  const { state, setState, board, myName, timer } = useApp();
   const router = useRouter();
 
-  const [phase, setPhase] = useState("focus");
-  const [secondsLeft, setSecondsLeft] = useState(state.settings.focusMin * 60);
-  const [isRunning, setIsRunning] = useState(false);
-  const [cyclePos, setCyclePos] = useState(0);
+  // timer é global (vive no AppContext) — persiste entre páginas
+  const { phase, secondsLeft, isRunning, cyclePos, toggleTimer, resetPhase, skipPhase } = timer;
   const [newTask, setNewTask] = useState("");
-
-  const settingsRef = useRef(state.settings);
-  settingsRef.current = state.settings;
-
-  useEffect(() => {
-    if (!isRunning) return;
-    const id = setInterval(() => {
-      setSecondsLeft((prev) => {
-        if (prev > 1) return prev - 1;
-        clearInterval(id);
-        handlePhaseEnd();
-        return 0;
-      });
-    }, 1000);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRunning, phase]);
-
-  function handlePhaseEnd() {
-    playChime();
-    const s = settingsRef.current;
-    if (phase === "focus") {
-      completeFocusSession();
-      const nextPos = cyclePos + 1;
-      if (nextPos >= s.cycleLength) {
-        setCyclePos(0);
-        setPhase("longBreak");
-        setSecondsLeft(s.longBreakMin * 60);
-      } else {
-        setCyclePos(nextPos);
-        setPhase("break");
-        setSecondsLeft(s.breakMin * 60);
-      }
-    } else {
-      setPhase("focus");
-      setSecondsLeft(s.focusMin * 60);
-    }
-    setIsRunning(true);
-  }
-
-  function resetPhase() {
-    setIsRunning(false);
-    const s = state.settings;
-    const dur = phase === "focus" ? s.focusMin : phase === "break" ? s.breakMin : s.longBreakMin;
-    setSecondsLeft(dur * 60);
-  }
-  function skipPhase() {
-    setIsRunning(false);
-    handlePhaseEnd();
-    setIsRunning(false);
-  }
 
   function addTask() {
     const text = newTask.trim();
@@ -155,7 +101,7 @@ export default function FocoPage() {
 
             <div className="flex gap-4 mt-10 items-center">
               <button
-                onClick={() => setIsRunning((r) => !r)}
+                onClick={toggleTimer}
                 className="px-8 md:px-10 py-4 bg-primary-container text-on-primary-container font-label-caps text-headline-md rounded-full font-black flex items-center gap-3 hover:scale-105 active:scale-95 transition-transform"
               >
                 <MI name={isRunning ? "pause" : "play_arrow"} fill />
