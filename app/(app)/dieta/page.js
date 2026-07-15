@@ -32,8 +32,9 @@ function MacroBar({ label, value, goal, unit, color }) {
 }
 
 export default function DietaPage() {
-  const { state, setState, toast } = useApp();
+  const { state, setState, toast, confirm } = useApp();
   const [forms, setForms] = useState({}); // { [mealId]: {name,grams,...} }
+  const [edits, setEdits] = useState({}); // { [itemId]: {name,grams,...} } — item em edição
   const [newMeal, setNewMeal] = useState("");
 
   const plan = state.dietPlan || [];
@@ -54,7 +55,12 @@ export default function DietaPage() {
     setState((prev) => ({ ...prev, dietPlan: [...(prev.dietPlan || []), { id: Date.now(), name, items: [] }] }));
     setNewMeal("");
   }
-  function removeMeal(id) {
+  async function removeMeal(id) {
+    const m = (state.dietPlan || []).find((x) => x.id === id);
+    if ((m?.items || []).length) {
+      const ok = await confirm({ title: "Excluir refeição?", body: `"${m.name}" tem ${m.items.length} item(ns) que serão removidos.`, confirmLabel: "EXCLUIR" });
+      if (!ok) return;
+    }
     setState((prev) => ({ ...prev, dietPlan: (prev.dietPlan || []).filter((m) => m.id !== id) }));
   }
   function renameMeal(id, name) {
@@ -93,6 +99,41 @@ export default function DietaPage() {
       ...prev,
       dietPlan: (prev.dietPlan || []).map((m) => (m.id === mealId ? { ...m, items: (m.items || []).filter((i) => i.id !== itemId) } : m)),
     }));
+  }
+
+  // ---- edição de item ----
+  const startEdit = (item) =>
+    setEdits((es) => ({ ...es, [item.id]: { name: item.name, grams: item.grams, kcal: item.kcal, protein: item.protein, carbs: item.carbs, fat: item.fat } }));
+  const cancelEdit = (itemId) =>
+    setEdits((es) => {
+      const { [itemId]: _, ...rest } = es;
+      return rest;
+    });
+  const editField = (itemId, key) => (e) =>
+    setEdits((es) => ({ ...es, [itemId]: { ...es[itemId], [key]: e.target.value } }));
+
+  function saveEdit(mealId, itemId) {
+    const f = edits[itemId];
+    const name = (f.name || "").trim();
+    if (!name) {
+      toast("Informe o alimento", { type: "error" });
+      return;
+    }
+    const patch = {
+      name: name.slice(0, 60),
+      grams: Math.round(num(f.grams)),
+      kcal: Math.round(num(f.kcal)),
+      protein: Math.round(num(f.protein) * 10) / 10,
+      carbs: Math.round(num(f.carbs) * 10) / 10,
+      fat: Math.round(num(f.fat) * 10) / 10,
+    };
+    setState((prev) => ({
+      ...prev,
+      dietPlan: (prev.dietPlan || []).map((m) =>
+        m.id === mealId ? { ...m, items: (m.items || []).map((i) => (i.id === itemId ? { ...i, ...patch } : i)) } : m
+      ),
+    }));
+    cancelEdit(itemId);
   }
 
   return (
@@ -157,17 +198,45 @@ export default function DietaPage() {
 
             {(m.items || []).length > 0 && (
               <div className="space-y-2 mb-4">
-                {m.items.map((e) => (
-                  <div key={e.id} className="flex items-center gap-3 p-3 bg-surface-container-high rounded-lg border border-white/5">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[13px] font-bold text-on-surface truncate">{e.name}{e.grams ? ` · ${e.grams}g` : ""}</div>
-                      <div className="text-[10px] text-outline">{e.kcal} kcal · P {e.protein}g · C {e.carbs}g · G {e.fat}g</div>
+                {m.items.map((e) => {
+                  const ed = edits[e.id];
+                  if (ed) {
+                    return (
+                      <div key={e.id} className="p-3 bg-surface-container-high rounded-lg border border-primary-container/30">
+                        <div className="grid grid-cols-2 md:grid-cols-12 gap-2">
+                          <input value={ed.name} onChange={editField(e.id, "name")} onKeyDown={(k) => k.key === "Enter" && saveEdit(m.id, e.id)} placeholder="Alimento" className={`${inputCls} col-span-2 md:col-span-4 text-[13px]`} />
+                          <input value={ed.grams} onChange={editField(e.id, "grams")} type="number" min="0" placeholder="g" className={`${inputCls} md:col-span-1 text-[13px]`} />
+                          <input value={ed.kcal} onChange={editField(e.id, "kcal")} type="number" min="0" placeholder="kcal" className={`${inputCls} md:col-span-2 text-[13px]`} />
+                          <input value={ed.protein} onChange={editField(e.id, "protein")} type="number" min="0" placeholder="P (g)" className={`${inputCls} md:col-span-1 text-[13px]`} />
+                          <input value={ed.carbs} onChange={editField(e.id, "carbs")} type="number" min="0" placeholder="C (g)" className={`${inputCls} md:col-span-1 text-[13px]`} />
+                          <input value={ed.fat} onChange={editField(e.id, "fat")} type="number" min="0" placeholder="G (g)" className={`${inputCls} md:col-span-1 text-[13px]`} />
+                          <div className="md:col-span-2 flex gap-2">
+                            <button onClick={() => saveEdit(m.id, e.id)} aria-label="Salvar item" className="flex-1 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center py-2 active:scale-95 transition">
+                              <MI name="check" className="text-lg" />
+                            </button>
+                            <button onClick={() => cancelEdit(e.id)} aria-label="Cancelar edição" className="flex-1 rounded-lg bg-surface-variant text-on-surface-variant flex items-center justify-center py-2 active:scale-95 transition">
+                              <MI name="close" className="text-lg" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={e.id} className="flex items-center gap-3 p-3 bg-surface-container-high rounded-lg border border-white/5">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13px] font-bold text-on-surface truncate">{e.name}{e.grams ? ` · ${e.grams}g` : ""}</div>
+                        <div className="text-[10px] text-outline">{e.kcal} kcal · P {e.protein}g · C {e.carbs}g · G {e.fat}g</div>
+                      </div>
+                      <button onClick={() => startEdit(e)} aria-label="Editar item" className="text-outline hover:text-primary-container transition p-1">
+                        <MI name="edit" className="text-lg" />
+                      </button>
+                      <button onClick={() => removeItem(m.id, e.id)} aria-label="Remover item" className="text-outline hover:text-error transition p-1">
+                        <MI name="delete" className="text-lg" />
+                      </button>
                     </div>
-                    <button onClick={() => removeItem(m.id, e.id)} aria-label="Remover item" className="text-outline hover:text-error transition p-1">
-                      <MI name="delete" className="text-lg" />
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

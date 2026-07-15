@@ -151,10 +151,8 @@ export default function AnalisePage() {
     date: d,
     sessions: fh[d]?.sessions || 0,
     minutes: fh[d]?.minutes || 0,
-    series: fh[d]?.series || 0,
   }));
   const focusTotSessions = focusRows.reduce((s, r) => s + r.sessions, 0);
-  const focusTotSeries = focusRows.reduce((s, r) => s + r.series, 0);
   const focusTotMinutes = focusRows.reduce((s, r) => s + r.minutes, 0);
   const focusActiveDays = focusRows.filter((r) => r.sessions > 0).length;
   const focusBest = focusRows.reduce((best, r) => (r.sessions > (best?.sessions || 0) ? r : best), null);
@@ -293,15 +291,10 @@ export default function AnalisePage() {
         ) : (
           <>
             {/* stat tiles */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-card-gap mb-8">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-card-gap mb-8">
               <div className="bg-surface-container rounded-xl p-4 border border-white/5">
                 <Caps className="text-outline text-[10px]">SESSÕES</Caps>
                 <p className="font-headline-lg text-headline-lg text-primary leading-none mt-1">{focusTotSessions}</p>
-              </div>
-              <div className="bg-surface-container rounded-xl p-4 border border-white/5">
-                <Caps className="text-outline text-[10px]">SÉRIES</Caps>
-                <p className="font-headline-lg text-headline-lg text-primary leading-none mt-1">{focusTotSeries}</p>
-                <Caps className="text-on-surface-variant text-[10px]">ciclos completos</Caps>
               </div>
               <div className="bg-surface-container rounded-xl p-4 border border-white/5">
                 <Caps className="text-outline text-[10px]">TEMPO FOCADO</Caps>
@@ -332,7 +325,7 @@ export default function AnalisePage() {
                       <div key={r.date} className="flex-1 h-full flex items-end justify-center group relative">
                         {r.minutes ? (
                           <div
-                            title={`${weekdayShort(r.date)} ${dayOfMonth(r.date)} · ${r.sessions} sessão(ões) · ${r.series} série(s) · ${minutesToHm(r.minutes)}`}
+                            title={`${weekdayShort(r.date)} ${dayOfMonth(r.date)} · ${r.sessions} sessão(ões) · ${minutesToHm(r.minutes)}`}
                             style={{ height: `${Math.max(h, 4)}%` }}
                             className={`w-full max-w-4 rounded-t-sm transition-colors ${
                               isToday ? "bg-primary" : "bg-primary-container/70 group-hover:bg-primary-container"

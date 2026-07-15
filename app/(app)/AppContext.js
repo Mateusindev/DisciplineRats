@@ -3,9 +3,11 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { getSession, loadState, saveState, fetchLeaderboard, signOut, readLocal, hasSupabase } from "@/lib/persistence";
+import { getSession, loadUserState, syncUserState, updateUsername, fetchLeaderboard, signOut, hasSupabase } from "@/lib/persistence";
 import { defaultState, mergeWithDefaults, getDateStr, XP, award, focusXp, formatTime, playChime } from "@/lib/state";
-import { MI } from "@/components/ui";
+import { MI, Loader } from "@/components/ui";
+
+const clone = (x) => JSON.parse(JSON.stringify(x));
 
 const AppCtx = createContext(null);
 export const useApp = () => useContext(AppCtx);
@@ -38,13 +40,55 @@ function Toaster() {
   );
 }
 
+function ConfirmDialog() {
+  const { confirmState, resolveConfirm } = useApp();
+  useEffect(() => {
+    if (!confirmState) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") resolveConfirm(false);
+      if (e.key === "Enter") resolveConfirm(true);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [confirmState, resolveConfirm]);
+  if (!confirmState) return null;
+  const { title, body, confirmLabel = "CONFIRMAR", danger = true } = confirmState;
+  return (
+    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 animate-[fadeIn_.1s_ease-out]" onClick={() => resolveConfirm(false)}>
+      <div className="glass-card rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-white/10" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start gap-3 mb-4">
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${danger ? "bg-error/15 text-error" : "bg-primary-container/20 text-primary-container"}`}>
+            <MI name={danger ? "warning" : "help"} fill />
+          </div>
+          <div className="min-w-0">
+            <p className="font-headline-md text-headline-md text-on-surface">{title}</p>
+            {body && <p className="font-body-md text-body-md text-on-surface-variant mt-1">{body}</p>}
+          </div>
+        </div>
+        <div className="flex gap-2 justify-end">
+          <button onClick={() => resolveConfirm(false)} className="px-4 py-2 rounded-lg text-on-surface-variant font-label-caps text-[11px] hover:bg-surface-variant/40 active:scale-95 transition">
+            CANCELAR
+          </button>
+          <button
+            onClick={() => resolveConfirm(true)}
+            autoFocus
+            className={`px-4 py-2 rounded-lg font-label-caps text-[11px] active:scale-95 transition ${danger ? "bg-error text-on-error" : "bg-primary-container text-on-primary-container"}`}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TimerWidget() {
   const { timer } = useApp();
   const pathname = usePathname();
   const router = useRouter();
   if (!timer || !timer.active || pathname === "/foco") return null;
   const { phase, secondsLeft, isRunning, phaseTotal, toggleTimer } = timer;
-  const label = phase === "focus" ? "FOCO" : phase === "break" ? "PAUSA" : "PAUSA LONGA";
+  const label = phase === "focus" ? "FOCO" : "PAUSA";
   const R = 18;
   const CIRC = 2 * Math.PI * R;
   const offset = phaseTotal > 0 ? CIRC * (secondsLeft / phaseTotal) : CIRC;
@@ -88,17 +132,32 @@ function TimerWidget() {
 
 export function AppProvider({ children }) {
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [state, setState] = useState(defaultState());
   const [showSettings, setShowSettings] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const [myName, setMyName] = useState("");
   const [board, setBoard] = useState([]);
   const [toasts, setToasts] = useState([]);
+  const [confirmState, setConfirmState] = useState(null); // { title, body, confirmLabel, danger, resolve }
+  const lastSavedRef = useRef(null); // baseline p/ diff-sync
 
   const toast = useCallback((title, opts = {}) => {
     const id = Date.now() + Math.random();
     setToasts((t) => [...t, { id, title, sub: opts.sub, icon: opts.icon, type: opts.type || "success" }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), opts.duration || 3000);
+  }, []);
+
+  // confirm(opts) → Promise<boolean>. Resolve true/false ao clicar/cancelar.
+  const confirm = useCallback(
+    (opts = {}) => new Promise((resolve) => setConfirmState({ ...opts, resolve })),
+    []
+  );
+  const resolveConfirm = useCallback((val) => {
+    setConfirmState((c) => {
+      if (c) c.resolve(val);
+      return null;
+    });
   }, []);
 
   const router = useRouter();
@@ -140,11 +199,12 @@ export function AppProvider({ children }) {
           }
           uid = session.user.id;
           userIdRef.current = uid;
-          setMyName((session.user.email || "").split("@")[0]);
         }
-        let raw = await loadState(uid);
-        if (!raw && uid) raw = readLocal(); // migra localStorage p/ nuvem no 1º save
-        let s = mergeWithDefaults(raw || defaultState());
+        const res = await loadUserState(uid); // lança se a leitura falhar
+        setMyName(res?.username || ""); // nick vem do profile, não do email
+        const s = mergeWithDefaults(res ? res.state : defaultState());
+        // baseline p/ diff: sem perfil ainda → vazio (escreve tudo); senão clone do carregado
+        lastSavedRef.current = res ? clone(s) : {};
 
         const today = getDateStr(0);
         const yesterday = getDateStr(-1);
@@ -161,30 +221,32 @@ export function AppProvider({ children }) {
           s.stats.streak = 0;
         }
         setState(s);
-      } catch (e) {
-        setState(defaultState());
-      } finally {
         setLoaded(true);
+      } catch (e) {
+        // NUNCA cai em defaults + salva por cima: bloqueia e mostra erro
+        setLoadError(true);
       }
     })();
   }, [router]);
 
-  // save com debounce
+  // save com debounce (diff-sync targeted por domínio)
   useEffect(() => {
-    if (!loaded) return;
+    if (!loaded || loadError) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
+      const snapshot = stateRef.current; // versão imutável que vamos sincronizar
       try {
-        const ok = await saveState(userIdRef.current, stateRef.current);
-        setSaveError(!ok);
+        await syncUserState(userIdRef.current, snapshot, lastSavedRef.current);
+        lastSavedRef.current = snapshot; // baseline avança só no sucesso
+        setSaveError(false);
       } catch (e) {
-        setSaveError(true);
+        setSaveError(true); // mantém baseline → próxima mudança tenta de novo
       }
     }, 600);
     return () => clearTimeout(saveTimer.current);
-  }, [state, loaded]);
+  }, [state, loaded, loadError]);
 
-  const completeFocusSession = useCallback((seriesCompleted = false) => {
+  const completeFocusSession = useCallback(() => {
     setState((prev) => {
       const today = getDateStr(0);
       const yesterday = getDateStr(-1);
@@ -210,11 +272,10 @@ export function AppProvider({ children }) {
       stats.xp = (stats.xp || 0) + award(focusXp(prev.settings.focusMin), stats.streak);
       // registra no histórico diário (retrospecto de foco)
       const focusHistory = { ...(prev.focusHistory || {}) };
-      const day = focusHistory[today] || { sessions: 0, minutes: 0, series: 0 };
+      const day = focusHistory[today] || { sessions: 0, minutes: 0 };
       focusHistory[today] = {
         sessions: day.sessions + 1,
         minutes: day.minutes + prev.settings.focusMin,
-        series: (day.series || 0) + (seriesCompleted ? 1 : 0),
       };
       return { ...prev, stats, focusHistory };
     });
@@ -224,12 +285,10 @@ export function AppProvider({ children }) {
   const [phase, setPhase] = useState("focus");
   const [secondsLeft, setSecondsLeft] = useState(defaultState().settings.focusMin * 60);
   const [isRunning, setIsRunning] = useState(false);
-  const [cyclePos, setCyclePos] = useState(0);
   const endRef = useRef(null); // timestamp-alvo do fim da fase (ms)
+  const endingRef = useRef(false); // guard de reentrância no fim da fase
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
-  const cycleRef = useRef(cyclePos);
-  cycleRef.current = cyclePos;
   const timerInit = useRef(false);
 
   // restaura o cronômetro salvo (ou sincroniza com as settings, se não houver)
@@ -243,8 +302,8 @@ export function AppProvider({ children }) {
       snap = v ? JSON.parse(v) : null;
     } catch (e) {}
     if (snap && snap.phase) {
-      setPhase(snap.phase);
-      setCyclePos(snap.cyclePos || 0);
+      const phase = snap.phase === "focus" ? "focus" : "break"; // migra "longBreak" salvo → "break"
+      setPhase(phase);
       if (snap.isRunning && snap.endTarget) {
         const rem = Math.round((snap.endTarget - Date.now()) / 1000);
         if (rem > 0) {
@@ -253,7 +312,7 @@ export function AppProvider({ children }) {
           return;
         }
         // expirou enquanto a aba estava fechada — volta a fase ao início, parado
-        const dur = snap.phase === "focus" ? s.focusMin : snap.phase === "break" ? s.breakMin : s.longBreakMin;
+        const dur = phase === "focus" ? s.focusMin : s.breakMin;
         setSecondsLeft(dur * 60);
         return;
       }
@@ -271,28 +330,21 @@ export function AppProvider({ children }) {
     if (!loaded || !timerInit.current) return;
     try {
       const snap = isRunning
-        ? { phase, cyclePos, isRunning: true, endTarget: Date.now() + secondsLeft * 1000 }
-        : { phase, cyclePos, isRunning: false, secondsLeft };
+        ? { phase, isRunning: true, endTarget: Date.now() + secondsLeft * 1000 }
+        : { phase, isRunning: false, secondsLeft };
       localStorage.setItem(TIMER_KEY, JSON.stringify(snap));
     } catch (e) {}
-  }, [loaded, phase, cyclePos, isRunning, secondsLeft]);
+  }, [loaded, phase, isRunning, secondsLeft]);
 
   const handlePhaseEnd = useCallback(() => {
+    if (endingRef.current) return; // guard: interval tick + visibilitychange podem disparar juntos
+    endingRef.current = true;
     playChime();
     const s = stateRef.current.settings;
     if (phaseRef.current === "focus") {
-      const nextPos = cycleRef.current + 1;
-      const seriesCompleted = nextPos >= s.cycleLength;
-      completeFocusSession(seriesCompleted);
-      if (seriesCompleted) {
-        setCyclePos(0);
-        setPhase("longBreak");
-        setSecondsLeft(s.longBreakMin * 60);
-      } else {
-        setCyclePos(nextPos);
-        setPhase("break");
-        setSecondsLeft(s.breakMin * 60);
-      }
+      completeFocusSession();
+      setPhase("break");
+      setSecondsLeft(s.breakMin * 60);
     } else {
       setPhase("focus");
       setSecondsLeft(s.focusMin * 60);
@@ -307,6 +359,7 @@ export function AppProvider({ children }) {
     }
     // ancora no relógio real: imune a throttling de timer em background
     endRef.current = Date.now() + secondsLeft * 1000;
+    endingRef.current = false; // nova fase iniciou → libera o guard
     const tick = () => {
       const rem = Math.round((endRef.current - Date.now()) / 1000);
       if (rem > 0) {
@@ -334,7 +387,7 @@ export function AppProvider({ children }) {
     setIsRunning(false);
     const s = stateRef.current.settings;
     const p = phaseRef.current;
-    const dur = p === "focus" ? s.focusMin : p === "break" ? s.breakMin : s.longBreakMin;
+    const dur = p === "focus" ? s.focusMin : s.breakMin;
     setSecondsLeft(dur * 60);
   }, []);
   // pular só é permitido em pausas (não pula foco)
@@ -344,13 +397,11 @@ export function AppProvider({ children }) {
     handlePhaseEnd();
   }, [handlePhaseEnd]);
 
-  const phaseTotal =
-    (phase === "focus" ? state.settings.focusMin : phase === "break" ? state.settings.breakMin : state.settings.longBreakMin) * 60;
+  const phaseTotal = (phase === "focus" ? state.settings.focusMin : state.settings.breakMin) * 60;
   const timer = {
     phase,
     secondsLeft,
     isRunning,
-    cyclePos,
     phaseTotal,
     active: isRunning || secondsLeft < phaseTotal,
     toggleTimer,
@@ -364,7 +415,30 @@ export function AppProvider({ children }) {
       settings: { ...prev.settings, [key]: Math.min(max, Math.max(min, prev.settings[key] + delta)) },
     }));
   }
-  function resetAllData() {
+  const updateNickname = useCallback(
+    async (nick) => {
+      const res = await updateUsername(userIdRef.current, nick.trim());
+      if (res.ok) {
+        setMyName(nick.trim());
+        toast("Nick atualizado", { sub: nick.trim().toUpperCase(), icon: "badge" });
+        fetchLeaderboard().then(setBoard); // re-match do "VOCÊ" no ranking
+      } else {
+        const msg =
+          res.reason === "taken" ? "Nick já em uso" : res.reason === "invalid" ? "3–20 caracteres: letras, números, _ . -" : "Falha ao salvar nick";
+        toast(msg, { type: "error" });
+      }
+      return res.ok;
+    },
+    [toast]
+  );
+
+  async function resetAllData() {
+    const ok = await confirm({
+      title: "Reiniciar todos os dados?",
+      body: "Apaga foco, hábitos, sono, treinos, dieta, humor e XP. Não dá pra desfazer.",
+      confirmLabel: "APAGAR TUDO",
+    });
+    if (!ok) return;
     setState(defaultState());
     setShowSettings(false);
     router.push("/foco");
@@ -374,25 +448,51 @@ export function AppProvider({ children }) {
     loaded,
     state,
     setState,
+    userId: userIdRef.current,
     showSettings,
     setShowSettings,
     saveError,
     myName,
     board,
     completeFocusSession,
+    updateNickname,
     updateSetting,
     resetAllData,
     handleLogout,
     toast,
     toasts,
+    confirm,
+    confirmState,
+    resolveConfirm,
     timer,
   };
 
   return (
     <AppCtx.Provider value={value}>
-      {children}
+      {loadError ? <LoadErrorScreen /> : loaded ? children : <Loader />}
       <Toaster />
-      <TimerWidget />
+      <ConfirmDialog />
+      {loaded && !loadError && <TimerWidget />}
     </AppCtx.Provider>
+  );
+}
+
+function LoadErrorScreen() {
+  return (
+    <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center gap-4 bg-background px-6 text-center">
+      <MI name="cloud_off" className="text-error text-6xl" />
+      <div>
+        <p className="font-headline-md text-headline-md text-primary">Falha ao carregar seus dados</p>
+        <p className="font-body-md text-on-surface-variant mt-1 max-w-sm">
+          Não foi possível ler seu perfil. Para não sobrescrever nada, o app não salvou nada. Verifique a conexão e recarregue.
+        </p>
+      </div>
+      <button
+        onClick={() => window.location.reload()}
+        className="px-6 py-3 rounded-full bg-primary-container text-on-primary-container font-label-caps text-label-caps active:scale-95 transition"
+      >
+        RECARREGAR
+      </button>
+    </div>
   );
 }

@@ -155,6 +155,11 @@ body {
   pointer-events: auto;
 }
 
+@keyframes fadeIn {
+  0% { transform: translateY(-4px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
 .progress-ring__circle {
   transition: stroke-dashoffset 0.35s;
   transform: rotate(-90deg);

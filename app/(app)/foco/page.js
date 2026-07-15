@@ -9,7 +9,7 @@ export default function FocoPage() {
   const { state, setState, board, myName, timer, toast } = useApp();
 
   // timer é global (vive no AppContext) — persiste entre páginas
-  const { phase, secondsLeft, isRunning, cyclePos, toggleTimer, resetPhase, skipPhase } = timer;
+  const { phase, secondsLeft, isRunning, toggleTimer, resetPhase, skipPhase } = timer;
   const [newTask, setNewTask] = useState("");
 
   // player lofi
@@ -50,8 +50,8 @@ export default function FocoPage() {
   }
 
   const g = gamify(state.stats);
-  const phaseLabel = phase === "focus" ? "FASE DE FOCO PROFUNDO" : phase === "break" ? "PAUSA CURTA" : "PAUSA LONGA";
-  const phaseTotal = (phase === "focus" ? state.settings.focusMin : phase === "break" ? state.settings.breakMin : state.settings.longBreakMin) * 60;
+  const phaseLabel = phase === "focus" ? "FASE DE FOCO PROFUNDO" : "PAUSA";
+  const phaseTotal = (phase === "focus" ? state.settings.focusMin : state.settings.breakMin) * 60;
   const R = 90;
   const CIRC = 2 * Math.PI * R;
   const offset = phaseTotal > 0 ? CIRC * (secondsLeft / phaseTotal) : CIRC;
@@ -99,7 +99,6 @@ export default function FocoPage() {
               <div className="text-center">
                 <div className="font-display-timer text-[72px] md:text-display-timer text-primary leading-none">{formatTime(secondsLeft)}</div>
                 <Caps className="text-outline tracking-widest mt-2 uppercase block">{phaseLabel}</Caps>
-                <Caps className="text-outline-variant block mt-1">SÉRIE {cyclePos + 1} / {state.settings.cycleLength}</Caps>
               </div>
             </div>
 

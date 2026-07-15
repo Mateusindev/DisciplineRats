@@ -20,16 +20,16 @@ There is no test suite. `bun run build` is the effective correctness gate.
 
 Single-user self-discipline dashboard. **Next.js 15 App Router + React 19 + Tailwind v4**, JavaScript (no TypeScript). All UI is client-side; there are **no Next API routes** — the browser talks directly to Supabase, protected by Row Level Security.
 
-### State model — one blob, one context
+### State model — one in-memory object, normalized storage
 
-The entire app state (settings, stats, tasks, habits, sleep, exerciseLogs, mood) is a **single JSON object**. It lives in one React context and is persisted as one blob:
+The entire app state (settings, stats, tasks, habits, sleep, exerciseLogs, mood, focusHistory, dietPlan, workoutPlan) is a **single JSON object in memory**, living in one React context. **Storage is normalized** (not a single blob): time-series logs live in their own tables; config/plans/tasks stay as `jsonb` on `profiles`. The in-memory shape is unchanged from the old blob — the persistence layer maps between shape and tables.
 
 - `app/(app)/AppContext.js` — `AppProvider` holds `state` in `useState`, exposes it plus actions via `useApp()`. Owns: initial load, day-rollover logic, debounced save (600ms after any `state` change), the global Pomodoro timer, toasts, and the settings modal. **This is the file to read first** — nearly all mutation flows through here.
 - `lib/state.js` — pure helpers only (no JSX): `defaultState()`, `mergeWithDefaults()` (forward-compatible loader — always merges parsed data onto defaults, so new fields must be added here), gamification math, date/format helpers, constants (`TABS`, `TIERS`, `MOOD_OPTIONS`, `XP`).
-- `lib/persistence.js` — `loadState`/`saveState` etc. Transparently targets Supabase when a signed-in user exists, else `localStorage` (key `ferro-focus-state`). Cloud state is a `jsonb` column `profiles.state`; `xp`/`best_streak` are mirrored to top-level columns for the leaderboard.
-- `lib/supabaseClient.js` — exports `supabase`, which is **`null` when env vars are unset**. Every consumer guards on this. No env → app runs fully offline on localStorage. Never assume `supabase` is non-null.
+- `lib/persistence.js` — **Supabase-only** (localStorage fallback removed). `loadUserState(uid)` reassembles the in-memory state shape from the tables (`sleep_logs`, `mood_logs`, `focus_days`, `exercise_logs`, `habits`, `habit_checks`) plus `profiles` (`settings`/`stats`/`diet_plan`/`workout_plan`/`tasks` jsonb). `syncUserState(uid, cur, prev)` is a **targeted diff-sync**: it compares against the last-saved baseline and issues only the needed upserts/deletes per domain (date-keyed maps, id-keyed arrays, habits+checks, profile jsonb). `xp`/`best_streak` are mirrored to `profiles` columns for the leaderboard. Table-row IDs (`habits`, `exercise_logs`) are client-generated `crypto.randomUUID()` `uuid` PKs; ids inside jsonb (diet/workout plans, tasks) remain `Date.now()` — they're scoped to the user's own document, so collision doesn't matter there. A legacy `profiles.state` blob is migrated client-side on first load then nulled (`clearLegacyState`).
+- `lib/supabaseClient.js` — exports `supabase`, which is **`null` when env vars are unset**. Every consumer guards on this. With no env the app has no persistence (in-memory only). Never assume `supabase` is non-null.
 
-Persistence is fire-and-forget with debounce: mutate `state` via `setState` and the save happens automatically. Don't call `saveState` directly from feature pages.
+Persistence is fire-and-forget with debounce: mutate `state` via `setState` and the diff-sync happens automatically. Don't call `syncUserState` directly from feature pages. **Anti-clobber guard**: if the initial load throws, `AppContext` shows an error screen and never saves — so a flaky read can't overwrite good data with defaults.
 
 ### Routing
 

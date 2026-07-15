@@ -101,9 +101,7 @@ function Chrome({ children }) {
             <div className="glass-card p-6 rounded-xl mb-gutter flex flex-col gap-3">
               <h3 className="font-headline-md text-headline-md text-primary">CONFIGURAÇÕES</h3>
               <Stepper label="Foco (min)" value={state.settings.focusMin} onDec={() => updateSetting("focusMin", -5, 5, 90)} onInc={() => updateSetting("focusMin", 5, 5, 90)} />
-              <Stepper label="Pausa curta (min)" value={state.settings.breakMin} onDec={() => updateSetting("breakMin", -1, 1, 30)} onInc={() => updateSetting("breakMin", 1, 1, 30)} />
-              <Stepper label="Pausa longa (min)" value={state.settings.longBreakMin} onDec={() => updateSetting("longBreakMin", -5, 5, 60)} onInc={() => updateSetting("longBreakMin", 5, 5, 60)} />
-              <Stepper label="Sessões até pausa longa" value={state.settings.cycleLength} onDec={() => updateSetting("cycleLength", -1, 2, 8)} onInc={() => updateSetting("cycleLength", 1, 2, 8)} />
+              <Stepper label="Pausa (min)" value={state.settings.breakMin} onDec={() => updateSetting("breakMin", -1, 1, 30)} onInc={() => updateSetting("breakMin", 1, 1, 30)} />
               <Stepper label="Meta de sono (min)" value={state.settings.sleepGoalMin} onDec={() => updateSetting("sleepGoalMin", -15, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX)} onInc={() => updateSetting("sleepGoalMin", 15, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX)} />
               <Stepper label="Meta de treinos/semana" value={state.settings.exerciseWeeklyGoal} onDec={() => updateSetting("exerciseWeeklyGoal", -1, 1, 14)} onInc={() => updateSetting("exerciseWeeklyGoal", 1, 1, 14)} />
               <Stepper label="Meta de kcal/dia" value={state.settings.dietKcalGoal} onDec={() => updateSetting("dietKcalGoal", -50, 1000, 5000)} onInc={() => updateSetting("dietKcalGoal", 50, 1000, 5000)} />

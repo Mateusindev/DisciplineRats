@@ -1,9 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { useApp } from "../AppContext";
-import { MI, Caps } from "@/components/ui";
+import { MI, Caps, Spinner, inputCls } from "@/components/ui";
 import { gamify, fmtK, computeBadges } from "@/lib/state";
-import { hasSupabase } from "@/lib/persistence";
+import { hasSupabase, NICK_RE } from "@/lib/persistence";
 
 function StatCell({ icon, label, value }) {
   return (
@@ -18,8 +19,28 @@ function StatCell({ icon, label, value }) {
 }
 
 export default function PerfilPage() {
-  const { state, myName, board } = useApp();
+  const { state, myName, board, updateNickname } = useApp();
+  const [editingNick, setEditingNick] = useState(false);
+  const [nick, setNick] = useState("");
+  const [savingNick, setSavingNick] = useState(false);
   const g = gamify(state.stats);
+
+  function startNick() {
+    setNick(myName || "");
+    setEditingNick(true);
+  }
+  async function saveNick() {
+    const v = nick.trim();
+    if (v === myName) {
+      setEditingNick(false);
+      return;
+    }
+    setSavingNick(true);
+    const ok = await updateNickname(v);
+    setSavingNick(false);
+    if (ok) setEditingNick(false);
+  }
+  const nickValid = NICK_RE.test(nick.trim());
   const badges = computeBadges(state);
   const earned = badges.filter((b) => b.earned);
   const s = state.stats;
@@ -56,7 +77,47 @@ export default function PerfilPage() {
           </div>
 
           <div className="flex-1 w-full text-center sm:text-left">
-            <h2 className="font-headline-lg text-headline-lg text-primary uppercase break-all">{name}</h2>
+            {editingNick ? (
+              <div className="flex items-center gap-2 justify-center sm:justify-start">
+                <input
+                  value={nick}
+                  onChange={(e) => setNick(e.target.value)}
+                  onKeyDown={(e) => (e.key === "Enter" ? saveNick() : e.key === "Escape" ? setEditingNick(false) : null)}
+                  autoFocus
+                  maxLength={20}
+                  aria-label="Nick"
+                  placeholder="seu_nick"
+                  className={`${inputCls} font-headline-lg text-headline-lg uppercase w-full max-w-[260px] ${nick.trim() && !nickValid ? "border-error/60" : ""}`}
+                />
+                <button
+                  onClick={saveNick}
+                  disabled={savingNick || !nickValid}
+                  aria-label="Salvar nick"
+                  className="w-10 h-10 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center active:scale-95 transition disabled:opacity-40 shrink-0"
+                >
+                  {savingNick ? <Spinner size={16} /> : <MI name="check" />}
+                </button>
+                <button
+                  onClick={() => setEditingNick(false)}
+                  aria-label="Cancelar"
+                  className="w-10 h-10 rounded-lg bg-surface-variant text-on-surface-variant flex items-center justify-center active:scale-95 transition shrink-0"
+                >
+                  <MI name="close" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 justify-center sm:justify-start">
+                <h2 className="font-headline-lg text-headline-lg text-primary uppercase break-all">{name}</h2>
+                {hasSupabase() && (
+                  <button onClick={startNick} aria-label="Editar nick" className="text-outline hover:text-primary-container transition p-1 shrink-0">
+                    <MI name="edit" className="text-xl" />
+                  </button>
+                )}
+              </div>
+            )}
+            {editingNick && nick.trim() && !nickValid && (
+              <Caps className="text-error text-[10px] block mt-1">3–20 CARACTERES: LETRAS, NÚMEROS, _ . -</Caps>
+            )}
             <Caps className="text-primary-container">{g.tier}</Caps>
 
             <div className="mt-4">

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { Spinner } from "@/components/ui";
 
 function MI({ name, className = "", fill = false }) {
   return (
@@ -89,9 +90,13 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={busy}
-            className="py-3 bg-primary-container text-on-primary-container font-label-caps rounded-full font-bold tracking-widest hover:brightness-110 active:scale-95 transition disabled:opacity-60"
+            className="py-3 bg-primary-container text-on-primary-container font-label-caps rounded-full font-bold tracking-widest hover:brightness-110 active:scale-95 transition disabled:opacity-60 flex items-center justify-center gap-2"
           >
-            {busy ? "..." : mode === "signin" ? "ENTRAR" : "CRIAR CONTA"}
+            {busy ? (
+              <>
+                <Spinner size={16} /> AGUARDE
+              </>
+            ) : mode === "signin" ? "ENTRAR" : "CRIAR CONTA"}
           </button>
         </form>
 

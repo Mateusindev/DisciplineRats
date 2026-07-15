@@ -2,17 +2,98 @@
 
 import { useState } from "react";
 import { useApp } from "../AppContext";
-import { MI, Caps, StarRating } from "@/components/ui";
-import { XP, award, getDateStr, weekdayShort, last7Dates, EXERCISE_TYPES } from "@/lib/state";
+import { MI, Caps, StarRating, Select, inputCls, textareaCls } from "@/components/ui";
+import { XP, award, getDateStr, weekdayShort, last7Dates } from "@/lib/state";
 
 const GLOW = { boxShadow: "0 0 15px rgba(255, 193, 7, 0.15)" };
 
 export default function ExercicioPage() {
-  const { state, setState, toast } = useApp();
-  const [type, setType] = useState(EXERCISE_TYPES[0]);
-  const [duration, setDuration] = useState(60);
+  const { state, setState, toast, confirm } = useApp();
+  const [type, setType] = useState(state.workoutPlan?.[0]?.name || "");
+  const [division, setDivision] = useState(state.workoutPlan?.[0]?.divisions?.[0]?.name || "");
+  const [duration, setDuration] = useState("60");
   const [intensity, setIntensity] = useState(3);
   const [note, setNote] = useState("");
+
+  // ===== construtor de treinos (modalidade → divisão → exercício) =====
+  const plan = state.workoutPlan || [];
+  const modalityNames = plan.map((m) => m.name).filter(Boolean);
+  const selectedMod = plan.find((m) => m.name === type);
+  const divisionNames = (selectedMod?.divisions || []).map((d) => d.name).filter(Boolean);
+
+  // troca modalidade → reseta divisão pra 1ª da nova modalidade
+  function changeType(name) {
+    setType(name);
+    const mod = plan.find((m) => m.name === name);
+    setDivision(mod?.divisions?.[0]?.name || "");
+  }
+  const [newModality, setNewModality] = useState("");
+  const [divForms, setDivForms] = useState({}); // { [modId]: nomeDaNovaDivisao }
+  const [itemForms, setItemForms] = useState({}); // { [divId]: {name, detail} }
+
+  function addModality() {
+    const name = newModality.trim() || `Modalidade ${plan.length + 1}`;
+    setState((prev) => ({ ...prev, workoutPlan: [...(prev.workoutPlan || []), { id: Date.now(), name, divisions: [] }] }));
+    setNewModality("");
+  }
+  async function removeModality(id) {
+    const m = (state.workoutPlan || []).find((x) => x.id === id);
+    const ok = await confirm({ title: "Excluir modalidade?", body: `"${m?.name || ""}" e todas as divisões/exercícios dela serão removidos.`, confirmLabel: "EXCLUIR" });
+    if (!ok) return;
+    setState((prev) => ({ ...prev, workoutPlan: (prev.workoutPlan || []).filter((m) => m.id !== id) }));
+  }
+  function renameModality(id, name) {
+    setState((prev) => ({ ...prev, workoutPlan: (prev.workoutPlan || []).map((m) => (m.id === id ? { ...m, name } : m)) }));
+  }
+
+  const mapMod = (prev, modId, fn) => (prev.workoutPlan || []).map((m) => (m.id === modId ? fn(m) : m));
+
+  function addDivision(modId) {
+    const name = (divForms[modId] || "").trim() || "Nova divisão";
+    setState((prev) => ({ ...prev, workoutPlan: mapMod(prev, modId, (m) => ({ ...m, divisions: [...(m.divisions || []), { id: Date.now(), name, items: [] }] })) }));
+    setDivForms((f) => ({ ...f, [modId]: "" }));
+  }
+  async function removeDivision(modId, divId) {
+    const d = (state.workoutPlan || []).find((m) => m.id === modId)?.divisions?.find((x) => x.id === divId);
+    if ((d?.items || []).length) {
+      const ok = await confirm({ title: "Excluir divisão?", body: `"${d.name}" tem ${d.items.length} exercício(s) que serão removidos.`, confirmLabel: "EXCLUIR" });
+      if (!ok) return;
+    }
+    setState((prev) => ({ ...prev, workoutPlan: mapMod(prev, modId, (m) => ({ ...m, divisions: (m.divisions || []).filter((d) => d.id !== divId) })) }));
+  }
+  function renameDivision(modId, divId, name) {
+    setState((prev) => ({ ...prev, workoutPlan: mapMod(prev, modId, (m) => ({ ...m, divisions: (m.divisions || []).map((d) => (d.id === divId ? { ...d, name } : d)) })) }));
+  }
+
+  const getItemForm = (divId) => itemForms[divId] || { name: "", detail: "" };
+  const setItemField = (divId, key) => (e) => setItemForms((f) => ({ ...f, [divId]: { ...getItemForm(divId), [key]: e.target.value } }));
+
+  function addItem(modId, divId) {
+    const f = getItemForm(divId);
+    const name = (f.name || "").trim();
+    if (!name) {
+      toast("Informe o exercício", { type: "error" });
+      return;
+    }
+    const item = { id: Date.now(), name: name.slice(0, 80), detail: (f.detail || "").trim().slice(0, 80) };
+    setState((prev) => ({
+      ...prev,
+      workoutPlan: mapMod(prev, modId, (m) => ({
+        ...m,
+        divisions: (m.divisions || []).map((d) => (d.id === divId ? { ...d, items: [...(d.items || []), item] } : d)),
+      })),
+    }));
+    setItemForms((fs) => ({ ...fs, [divId]: { name: "", detail: "" } }));
+  }
+  function removeItem(modId, divId, itemId) {
+    setState((prev) => ({
+      ...prev,
+      workoutPlan: mapMod(prev, modId, (m) => ({
+        ...m,
+        divisions: (m.divisions || []).map((d) => (d.id === divId ? { ...d, items: (d.items || []).filter((i) => i.id !== itemId) } : d)),
+      })),
+    }));
+  }
 
   const today = getDateStr(0);
   const days = last7Dates();
@@ -43,16 +124,38 @@ export default function ExercicioPage() {
   const maxFreq = Math.max(60, ...days30.map((d) => freqByDate[d] || 0));
 
   function logWorkout() {
+    if (!type) {
+      toast("Cadastre uma modalidade em Meus Treinos", { type: "error" });
+      return;
+    }
+    const n = Number(duration);
+    if (!String(duration).trim() || Number.isNaN(n) || n < 1) {
+      toast("Informe uma duração válida", { type: "error" });
+      return;
+    }
+    const durationMin = Math.min(300, Math.max(5, Math.round(n)));
+    setState((prev) => {
+      const xpGain = award(XP.exercise, prev.stats.streak); // grava no log p/ estorno simétrico ao excluir
+      const log = { id: crypto.randomUUID(), date: today, type, division, durationMin, intensity, note: note.slice(0, 200), xp: xpGain };
+      return {
+        ...prev,
+        exerciseLogs: [log, ...prev.exerciseLogs].slice(0, 200),
+        stats: { ...prev.stats, xp: (prev.stats.xp || 0) + xpGain },
+      };
+    });
+    setNote("");
+    const label = division ? `${type} · ${division}` : type;
+    toast("Treino registrado", { sub: `${label.toUpperCase()} · ${durationMin} MIN · +${XP.exercise} XP`, icon: "fitness_center" });
+  }
+  async function removeLog(id) {
+    const log = state.exerciseLogs.find((l) => l.id === id);
+    const ok = await confirm({ title: "Remover treino?", body: log?.xp ? `Devolve ${log.xp} XP ganho nesse treino.` : "", confirmLabel: "REMOVER" });
+    if (!ok) return;
     setState((prev) => ({
       ...prev,
-      exerciseLogs: [{ id: Date.now(), date: today, type, durationMin: duration, intensity, note: note.slice(0, 200) }, ...prev.exerciseLogs].slice(0, 200),
-      stats: { ...prev.stats, xp: (prev.stats.xp || 0) + award(XP.exercise, prev.stats.streak) },
+      exerciseLogs: prev.exerciseLogs.filter((l) => l.id !== id),
+      stats: { ...prev.stats, xp: Math.max(0, (prev.stats.xp || 0) - (log?.xp || 0)) },
     }));
-    setNote("");
-    toast("Treino registrado", { sub: `${type.toUpperCase()} · ${duration} MIN · +${XP.exercise} XP`, icon: "fitness_center" });
-  }
-  function removeLog(id) {
-    setState((prev) => ({ ...prev, exerciseLogs: prev.exerciseLogs.filter((l) => l.id !== id) }));
   }
   function updateGoal(delta) {
     setState((prev) => ({
@@ -77,6 +180,113 @@ export default function ExercicioPage() {
         </div>
       </div>
 
+      {/* Construtor de treinos */}
+      <section className="col-span-12 space-y-4">
+        <div className="flex items-center gap-2">
+          <MI name="assignment" className="text-primary-container" />
+          <h2 className="font-headline-md text-headline-md text-primary uppercase">Meus Treinos</h2>
+        </div>
+        <p className="text-body-md text-on-surface-variant -mt-2">
+          Monte seus treinos por modalidade. Ex.: Academia com divisões A/B/C/D, JiuJitsu com posições. Tudo dinâmico.
+        </p>
+
+        {plan.length === 0 && (
+          <p className="text-[13px] text-outline glass-card rounded-xl p-6 text-center">Nenhuma modalidade ainda — crie a primeira abaixo.</p>
+        )}
+
+        {plan.map((m) => (
+          <div key={m.id} className="glass-card p-6 rounded-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <MI name="sports_martial_arts" className="text-primary-container shrink-0" />
+              <input
+                value={m.name}
+                onChange={(e) => renameModality(m.id, e.target.value)}
+                aria-label="Nome da modalidade"
+                className="flex-1 min-w-0 bg-transparent font-headline-md text-headline-md text-primary outline-none border-b border-transparent focus:border-primary-container/40 transition-colors"
+              />
+              <button onClick={() => removeModality(m.id)} aria-label="Excluir modalidade" className="text-outline hover:text-error transition p-1 shrink-0">
+                <MI name="delete" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {(m.divisions || []).map((d) => {
+                const f = getItemForm(d.id);
+                return (
+                  <div key={d.id} className="bg-surface-container-high rounded-lg border border-white/5 p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <MI name="view_module" className="text-outline text-lg shrink-0" />
+                      <input
+                        value={d.name}
+                        onChange={(e) => renameDivision(m.id, d.id, e.target.value)}
+                        aria-label="Nome da divisão"
+                        className="flex-1 min-w-0 bg-transparent font-label-caps text-label-caps text-primary outline-none border-b border-transparent focus:border-primary-container/40 transition-colors"
+                      />
+                      <button onClick={() => removeDivision(m.id, d.id)} aria-label="Excluir divisão" className="text-outline hover:text-error transition p-1 shrink-0">
+                        <MI name="delete" className="text-lg" />
+                      </button>
+                    </div>
+
+                    {(d.items || []).length > 0 && (
+                      <div className="space-y-1.5 mb-3">
+                        {d.items.map((it) => (
+                          <div key={it.id} className="flex items-center gap-3 py-1.5 px-2 rounded bg-surface-container-lowest/50">
+                            <span className="w-1 h-1 rounded-full bg-primary-container shrink-0" />
+                            <div className="flex-1 min-w-0 text-[13px]">
+                              <span className="text-on-surface font-bold">{it.name}</span>
+                              {it.detail && <span className="text-outline"> — {it.detail}</span>}
+                            </div>
+                            <button onClick={() => removeItem(m.id, d.id, it.id)} aria-label="Remover exercício" className="text-outline hover:text-error transition p-1 shrink-0">
+                              <MI name="close" className="text-base" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input value={f.name} onChange={setItemField(d.id, "name")} onKeyDown={(e) => e.key === "Enter" && addItem(m.id, d.id)} placeholder="Exercício" className={`${inputCls} flex-1 text-[13px]`} />
+                      <input value={f.detail} onChange={setItemField(d.id, "detail")} onKeyDown={(e) => e.key === "Enter" && addItem(m.id, d.id)} placeholder="Detalhe (ex.: 4x12 · 30kg)" className={`${inputCls} flex-1 text-[13px]`} />
+                      <button onClick={() => addItem(m.id, d.id)} aria-label="Adicionar exercício" className="px-3 py-2 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center gap-1 active:scale-95 transition font-label-caps text-[11px] shrink-0">
+                        <MI name="add" className="text-lg" /> ADD
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* adicionar divisão */}
+            <div className="flex gap-2 mt-4">
+              <input
+                value={divForms[m.id] || ""}
+                onChange={(e) => setDivForms((fs) => ({ ...fs, [m.id]: e.target.value }))}
+                onKeyDown={(e) => e.key === "Enter" && addDivision(m.id)}
+                placeholder="Nova divisão (ex.: Treino C, Guarda...)"
+                className={`${inputCls} flex-1 text-[13px]`}
+              />
+              <button onClick={() => addDivision(m.id)} className="px-4 rounded-lg border border-primary/40 text-primary font-label-caps text-[11px] flex items-center gap-1 hover:bg-primary/10 active:scale-95 transition shrink-0">
+                <MI name="add" className="text-lg" /> DIVISÃO
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {/* adicionar modalidade */}
+        <div className="glass-card p-4 rounded-xl flex flex-col sm:flex-row gap-3 sm:items-center">
+          <input
+            value={newModality}
+            onChange={(e) => setNewModality(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addModality()}
+            placeholder="Nova modalidade (ex.: JiuJitsu, Corrida, Natação...)"
+            className={`${inputCls} flex-1`}
+          />
+          <button onClick={addModality} className="px-5 py-2.5 rounded-lg bg-primary-container text-on-primary-container font-label-caps text-label-caps flex items-center justify-center gap-2 active:scale-95 transition">
+            <MI name="add" /> ADICIONAR MODALIDADE
+          </button>
+        </div>
+      </section>
+
       {/* Form card */}
       <section className="col-span-12 lg:col-span-7 glass-card p-8 rounded-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
@@ -90,48 +300,29 @@ export default function ExercicioPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <Caps className="text-on-surface-variant">TIPO DE TREINO</Caps>
-              <select
+              <Select
                 value={type}
-                onChange={(e) => setType(e.target.value)}
-                className="w-full bg-surface-container-lowest border-0 border-b border-outline-variant focus:border-primary focus:ring-0 text-on-surface font-body-md py-3 outline-none transition-colors"
-              >
-                {EXERCISE_TYPES.map((t) => (
-                  <option key={t}>{t}</option>
-                ))}
-              </select>
+                options={modalityNames}
+                onChange={changeType}
+                disabled={modalityNames.length === 0}
+                placeholder="Cadastre uma modalidade em Meus Treinos"
+              />
             </div>
+            {divisionNames.length > 0 && (
+              <div className="space-y-2">
+                <Caps className="text-on-surface-variant">DIVISÃO</Caps>
+                <Select value={division} options={divisionNames} onChange={setDivision} placeholder="Selecione a divisão" />
+              </div>
+            )}
             <div className="space-y-2">
               <Caps className="text-on-surface-variant">DURAÇÃO (MIN)</Caps>
               <input
-                type="number"
-                min={5}
-                max={300}
                 value={duration}
-                onChange={(e) => setDuration(Math.max(5, Math.min(300, Number(e.target.value) || 0)))}
+                onChange={(e) => setDuration(e.target.value)}
+                inputMode="numeric"
                 placeholder="60"
-                className="w-full bg-surface-container-lowest border-0 border-b border-outline-variant focus:border-primary focus:ring-0 text-on-surface font-body-md py-3 outline-none transition-colors"
+                className={`${inputCls} w-full py-2.5`}
               />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Caps className="text-on-surface-variant">FOCO / MODALIDADE</Caps>
-            <div className="flex flex-wrap gap-3">
-              {EXERCISE_TYPES.map((t) => {
-                const active = type === t;
-                return (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setType(t)}
-                    className={`px-4 py-2 rounded-full font-label-caps text-label-caps transition-all border ${
-                      active ? "border-primary bg-primary/10 text-primary" : "border-outline-variant hover:bg-primary/10 hover:border-primary"
-                    }`}
-                  >
-                    {t.toUpperCase()}
-                  </button>
-                );
-              })}
             </div>
           </div>
 
@@ -148,7 +339,7 @@ export default function ExercicioPage() {
               placeholder="Exercícios, cargas, como se sentiu..."
               maxLength={200}
               rows={3}
-              className="w-full bg-surface-container-lowest border-0 border-b border-outline-variant focus:border-primary focus:ring-0 text-on-surface font-body-md py-3 outline-none transition-colors resize-none"
+              className={textareaCls}
             />
           </div>
 
@@ -271,7 +462,7 @@ export default function ExercicioPage() {
               <li key={l.id} className="flex flex-col gap-1 rounded-lg px-3 py-2 bg-surface-container-high border border-white/5">
                 <div className="flex items-center gap-2">
                   <div className="flex-1 min-w-0">
-                    <p className="text-body-md text-on-surface truncate">{l.type} · {l.durationMin} min</p>
+                    <p className="text-body-md text-on-surface truncate">{l.type}{l.division ? ` · ${l.division}` : ""} · {l.durationMin} min</p>
                     <Caps className="text-outline text-[10px]">{weekdayShort(l.date)}, {l.date}</Caps>
                   </div>
                   <StarRating value={l.intensity} onChange={() => {}} size="text-sm" />
