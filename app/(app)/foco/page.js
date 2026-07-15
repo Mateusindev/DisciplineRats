@@ -6,7 +6,7 @@ import { MI, Caps, StatTile, inputCls } from "@/components/ui";
 import { XP, award, focusXp, sleepXp, gamify, fmtK, formatTime, getDateStr, youtubeId, DEFAULT_LOFI_URL } from "@/lib/state";
 
 export default function FocoPage() {
-  const { state, setState, board, myName, timer, toast } = useApp();
+  const { state, setState, timer, toast } = useApp();
 
   // timer é global (vive no AppContext) — persiste entre páginas
   const { phase, secondsLeft, isRunning, toggleTimer, resetPhase, skipPhase } = timer;
@@ -232,35 +232,6 @@ export default function FocoPage() {
             </div>
           </div>
 
-          {/* Leaderboard */}
-          <div className="glass-card p-6 rounded-xl bg-gradient-to-br from-surface-container to-background">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-headline-md text-headline-md text-primary">TOP DISCÍPULOS</h3>
-              <MI name="leaderboard" className="text-outline" />
-            </div>
-            {board.length === 0 ? (
-              <p className="text-[12px] text-outline">Sem ranking ainda. Ganhe XP pra aparecer.</p>
-            ) : (
-              <div className="space-y-3">
-                {board.slice(0, 6).map((row, i) => {
-                  const me = row.username === myName;
-                  return (
-                    <div
-                      key={i}
-                      className={`flex justify-between items-center text-[13px] ${
-                        me ? "bg-primary-container/10 px-2 py-1 rounded border border-primary-container/20" : "text-on-surface/80"
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <span className={me ? "text-primary font-bold" : "text-outline"}>{i + 1}.</span> {me ? "VOCÊ" : row.username}
-                      </span>
-                      <Caps className={me ? "text-primary" : ""}>{fmtK(row.xp)} XP</Caps>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
         </div>
       </div>
     </>
