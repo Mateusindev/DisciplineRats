@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps } from "@/components/ui";
-import { getDateStr, weekdayShort, last7Dates, MOOD_OPTIONS } from "@/lib/state";
+import { getDateStr, last7Dates, MOOD_OPTIONS } from "@/lib/state";
+import { LineChart } from "@/components/charts";
 
 const GLOW = { boxShadow: "0 0 15px rgba(255, 193, 7, 0.2)" };
 const MOOD_ICON = {
@@ -158,29 +159,19 @@ export default function HumorPage() {
             <span className="w-2 h-2 rounded-full bg-primary-container" /> ESCALA 1–5
           </div>
         </div>
-        <div className="h-48 w-full flex items-end justify-between gap-2 px-2">
-          {days.map((d) => {
-            const entry = state.mood[d];
-            const isToday = d === today;
-            const opt = entry ? MOOD_OPTIONS.find((o) => o.value === entry.mood) : null;
-            const hpct = entry ? Math.round((entry.mood / 5) * 100) : 6;
-            return (
-              <div key={d} className="w-full group relative flex flex-col items-center h-full justify-end">
-                {opt && (
-                  <span className="mb-1 text-lg opacity-0 group-hover:opacity-100 transition-opacity">{opt.emoji}</span>
-                )}
-                <div
-                  title={opt ? `${opt.label} (${entry.mood}/5)` : "sem registro"}
-                  style={{ height: `${hpct}%`, ...(isToday && entry ? GLOW : {}) }}
-                  className={`w-full rounded-t-sm transition-all ${
-                    entry ? (isToday ? "bg-primary-container" : "bg-primary opacity-50 group-hover:opacity-100") : "bg-surface-bright opacity-40"
-                  }`}
-                />
-                <Caps className={`mt-2 text-[10px] ${isToday ? "text-primary" : "opacity-50"}`}>{weekdayShort(d)}</Caps>
-              </div>
-            );
-          })}
-        </div>
+        {withData.length > 0 ? (
+          <LineChart
+            days={days}
+            values={days.map((d) => state.mood[d]?.mood ?? null)}
+            today={today}
+            yMin={0}
+            yMax={5.4}
+            format={(v) => MOOD_OPTIONS.find((o) => o.value === v)?.emoji || v}
+            ariaLabel="Humor nos últimos 7 dias (escala 1 a 5)"
+          />
+        ) : (
+          <p className="text-[13px] text-outline text-center py-10">Sem registros ainda — confirme seu humor de hoje pra começar o gráfico.</p>
+        )}
       </section>
     </div>
   );

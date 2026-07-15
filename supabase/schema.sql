@@ -90,17 +90,40 @@ create table if not exists public.habits (
   id         uuid primary key default gen_random_uuid(),    -- client manda crypto.randomUUID()
   user_id    uuid not null references auth.users (id) on delete cascade,
   name       text not null,
+  icon       text,                                          -- Material Symbol escolhido pelo user
+  kind       text not null default 'build',                 -- 'build' (criar) | 'quit' (largar vício)
+  priority   smallint not null default 2,                   -- 1 baixa · 2 normal · 3 alta
+  milestones jsonb not null default '{}'::jsonb,            -- quit: { "inicio-do-periodo-limpo": [3,7,...] } marcos já premiados
   created_at timestamptz not null default now()
 );
+alter table public.habits add column if not exists icon text;
+alter table public.habits add column if not exists kind text not null default 'build';
+alter table public.habits add column if not exists priority smallint not null default 2;
+alter table public.habits add column if not exists milestones jsonb not null default '{}'::jsonb;
 create index if not exists habits_user on public.habits (user_id);
 
 create table if not exists public.habit_checks (
   user_id  uuid not null references auth.users (id) on delete cascade,
   habit_id uuid not null references public.habits (id) on delete cascade,
   date     date not null,
+  xp       integer not null default 0,   -- XP concedido no check (estorno exato no uncheck); quit não usa
   primary key (habit_id, date)
 );
+alter table public.habit_checks add column if not exists xp integer not null default 0;
 create index if not exists habit_checks_user on public.habit_checks (user_id);
+
+-- Séries de academia: peso × reps (ou falha) por exercício, base do gráfico de progressão.
+create table if not exists public.gym_sets (
+  id         uuid primary key default gen_random_uuid(),   -- client manda crypto.randomUUID()
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  date       date not null,
+  exercise   text not null,
+  weight     real not null default 0,     -- kg (aceita 22.5)
+  reps       integer,                     -- null quando só "até a falha"
+  failure    boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists gym_sets_user_ex on public.gym_sets (user_id, exercise, date);
 
 -- ---------- Row Level Security ----------
 alter table public.profiles     enable row level security;
@@ -110,6 +133,7 @@ alter table public.focus_days   enable row level security;
 alter table public.exercise_logs enable row level security;
 alter table public.habits       enable row level security;
 alter table public.habit_checks enable row level security;
+alter table public.gym_sets     enable row level security;
 
 -- profiles: cada um só mexe no próprio.
 drop policy if exists "own profile select" on public.profiles;
@@ -123,7 +147,7 @@ create policy "own profile update" on public.profiles for update using (auth.uid
 do $$
 declare t text;
 begin
-  foreach t in array array['sleep_logs','mood_logs','focus_days','exercise_logs','habits','habit_checks']
+  foreach t in array array['sleep_logs','mood_logs','focus_days','exercise_logs','habits','habit_checks','gym_sets']
   loop
     execute format('drop policy if exists "own rows select" on public.%I', t);
     execute format('create policy "own rows select" on public.%I for select using (auth.uid() = user_id)', t);

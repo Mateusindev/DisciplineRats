@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps, StarRating, inputCls } from "@/components/ui";
 import { sleepXp, award, getDateStr, minutesToHm, weekdayShort, last7Dates } from "@/lib/state";
+import { LineChart } from "@/components/charts";
 
 function hm(min) {
   const h = Math.floor(min / 60);
@@ -68,7 +69,6 @@ export default function SonoPage() {
   const days = last7Dates();
   const withData = days.filter((d) => state.sleep[d]);
   const avgMin = withData.length ? Math.round(withData.reduce((s, d) => s + state.sleep[d].durationMin, 0) / withData.length) : null;
-  const maxBar = Math.max(600, goalMin + 120);
 
   // progress ring
   const R = 40;
@@ -188,34 +188,21 @@ export default function SonoPage() {
 
         {/* Chart */}
         <div className="md:col-span-5 glass-card p-gutter rounded-xl flex flex-col">
-          <h3 className="font-headline-md text-headline-md text-on-surface mb-8">ÚLTIMOS 7 DIAS</h3>
-          <div className="flex-1 flex items-end justify-between gap-2 px-2" style={{ minHeight: 220 }}>
-            {days.map((d) => {
-              const entry = state.sleep[d];
-              const isToday = d === today;
-              const hpx = entry ? Math.max(14, Math.round((entry.durationMin / maxBar) * 200)) : 8;
-              return (
-                <div key={d} className="flex flex-col items-center gap-2 group cursor-help">
-                  <div className="relative flex items-end" style={{ height: 200 }}>
-                    <div
-                      className={`rounded-t-sm transition-colors ${
-                        isToday && entry
-                          ? "w-8 bg-primary-container shadow-[0_0_20px_rgba(255,193,7,0.2)]"
-                          : "w-6 bg-surface-variant/40 group-hover:bg-primary/20"
-                      }`}
-                      style={{ height: hpx }}
-                    >
-                      {entry && (
-                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-on-surface text-background text-[10px] font-bold px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                          {minutesToHm(entry.durationMin)}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <Caps className={`text-[10px] ${isToday ? "text-primary font-bold" : "text-secondary"}`}>{weekdayShort(d)}</Caps>
-                </div>
-              );
-            })}
+          <h3 className="font-headline-md text-headline-md text-on-surface mb-4">ÚLTIMOS 7 DIAS</h3>
+          <div className="flex-1 flex items-center">
+            {days.some((d) => state.sleep[d]) ? (
+              <LineChart
+                days={days}
+                values={days.map((d) => state.sleep[d]?.durationMin ?? null)}
+                today={today}
+                yMax={Math.max(600, goalMin + 120)}
+                goal={{ value: goalMin, label: `META ${minutesToHm(goalMin)}` }}
+                format={minutesToHm}
+                ariaLabel="Duração do sono nos últimos 7 dias"
+              />
+            ) : (
+              <p className="text-[13px] text-outline text-center w-full py-10">Sem registros ainda — salve seu sono de hoje pra começar o gráfico.</p>
+            )}
           </div>
           <div className="mt-8 pt-4 border-t border-white/5 flex items-center justify-between">
             <div className="flex flex-col">

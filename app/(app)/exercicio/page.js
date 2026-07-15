@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps, StarRating, Select, inputCls, textareaCls } from "@/components/ui";
-import { XP, award, getDateStr, weekdayShort, last7Dates } from "@/lib/state";
+import { XP, award, getDateStr, weekdayShort, last7Dates, isGymModality, gymProgress, gymExercises } from "@/lib/state";
+import { LineChart } from "@/components/charts";
 
 const GLOW = { boxShadow: "0 0 15px rgba(255, 193, 7, 0.15)" };
 
@@ -96,6 +97,45 @@ export default function ExercicioPage() {
   }
 
   const today = getDateStr(0);
+
+  // ===== academia: séries (peso × reps | falha) =====
+  const gymSets = state.gymSets || [];
+  const [setForm, setSetForm] = useState({ exercise: "", weight: "", reps: "" });
+  const [setFailure, setSetFailure] = useState(false);
+  const [chartEx, setChartEx] = useState(null);
+  const [metric, setMetric] = useState("max"); // max | volume
+
+  const gymMod = plan.find(isGymModality);
+  const planExercises = (gymMod?.divisions || []).flatMap((d) => (d.items || []).map((i) => i.name));
+  const knownExercises = [...new Set([...gymExercises(gymSets), ...planExercises])];
+  const todaySets = gymSets.filter((s) => s.date === today);
+  const todayByEx = {};
+  for (const s of todaySets) (todayByEx[s.exercise] ||= []).push(s);
+  const chartExercise = chartEx || gymExercises(gymSets)[0] || null;
+  const progress = chartExercise ? gymProgress(gymSets, chartExercise).slice(-12) : [];
+  const progressVals = progress.map((p) => (metric === "max" ? p.max : Math.round(p.volume)));
+
+  function addSet() {
+    const exercise = setForm.exercise.trim().slice(0, 60);
+    const weight = parseFloat(String(setForm.weight).replace(",", "."));
+    const reps = parseInt(setForm.reps, 10);
+    if (!exercise) return toast("Informe o exercício", { type: "error" });
+    if (isNaN(weight) || weight <= 0) return toast("Informe a carga (kg)", { type: "error" });
+    if (!setFailure && (isNaN(reps) || reps <= 0)) return toast("Informe as repetições ou marque FALHA", { type: "error" });
+    setState((prev) => ({
+      ...prev,
+      gymSets: [
+        ...(prev.gymSets || []),
+        { id: crypto.randomUUID(), date: today, exercise, weight, reps: isNaN(reps) || reps <= 0 ? null : reps, failure: setFailure },
+      ],
+    }));
+    setSetForm((f) => ({ ...f, reps: "" })); // mantém exercício+carga pra próxima série
+    setSetFailure(false);
+  }
+  function removeSet(id) {
+    setState((prev) => ({ ...prev, gymSets: (prev.gymSets || []).filter((s) => s.id !== id) }));
+  }
+
   const days = last7Dates();
   const daysSet = new Set(days);
   const weekLogs = state.exerciseLogs.filter((l) => daysSet.has(l.date));
@@ -194,19 +234,29 @@ export default function ExercicioPage() {
           <p className="text-[13px] text-outline glass-card rounded-xl p-6 text-center">Nenhuma modalidade ainda — crie a primeira abaixo.</p>
         )}
 
-        {plan.map((m) => (
+        {plan.map((m) => {
+          const gym = isGymModality(m);
+          return (
           <div key={m.id} className="glass-card p-6 rounded-xl">
             <div className="flex items-center gap-3 mb-4">
-              <MI name="sports_martial_arts" className="text-primary-container shrink-0" />
-              <input
-                value={m.name}
-                onChange={(e) => renameModality(m.id, e.target.value)}
-                aria-label="Nome da modalidade"
-                className="flex-1 min-w-0 bg-transparent font-headline-md text-headline-md text-primary outline-none border-b border-transparent focus:border-primary-container/40 transition-colors"
-              />
-              <button onClick={() => removeModality(m.id)} aria-label="Excluir modalidade" className="text-outline hover:text-error transition p-1 shrink-0">
-                <MI name="delete" />
-              </button>
+              <MI name={gym ? "fitness_center" : "sports_martial_arts"} className="text-primary-container shrink-0" />
+              {gym ? (
+                <span className="flex-1 min-w-0 font-headline-md text-headline-md text-primary">{m.name}</span>
+              ) : (
+                <input
+                  value={m.name}
+                  onChange={(e) => renameModality(m.id, e.target.value)}
+                  aria-label="Nome da modalidade"
+                  className="flex-1 min-w-0 bg-transparent font-headline-md text-headline-md text-primary outline-none border-b border-transparent focus:border-primary-container/40 transition-colors"
+                />
+              )}
+              {gym ? (
+                <Caps className="text-outline text-[10px] border border-white/10 rounded-full px-2 py-1 shrink-0">FIXA</Caps>
+              ) : (
+                <button onClick={() => removeModality(m.id)} aria-label="Excluir modalidade" className="text-outline hover:text-error transition p-1 shrink-0">
+                  <MI name="delete" />
+                </button>
+              )}
             </div>
 
             <div className="space-y-3">
@@ -270,7 +320,8 @@ export default function ExercicioPage() {
               </button>
             </div>
           </div>
-        ))}
+          );
+        })}
 
         {/* adicionar modalidade */}
         <div className="glass-card p-4 rounded-xl flex flex-col sm:flex-row gap-3 sm:items-center">
@@ -284,6 +335,133 @@ export default function ExercicioPage() {
           <button onClick={addModality} className="px-5 py-2.5 rounded-lg bg-primary-container text-on-primary-container font-label-caps text-label-caps flex items-center justify-center gap-2 active:scale-95 transition">
             <MI name="add" /> ADICIONAR MODALIDADE
           </button>
+        </div>
+      </section>
+
+      {/* Academia: registro de séries + progressão */}
+      <section className="col-span-12 grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+        {/* registro do dia */}
+        <div className="lg:col-span-5 glass-card p-6 rounded-xl">
+          <div className="flex items-center gap-2 mb-1">
+            <MI name="exercise" className="text-primary-container" />
+            <h3 className="font-headline-md text-headline-md text-primary uppercase">Séries de Hoje</h3>
+          </div>
+          <p className="text-[11px] text-outline mb-4">Academia · registre cada série: carga × repetições, ou até a falha.</p>
+
+          <div className="grid grid-cols-12 gap-2 mb-2">
+            <input
+              value={setForm.exercise}
+              onChange={(e) => setSetForm((f) => ({ ...f, exercise: e.target.value }))}
+              list="gym-exercises"
+              placeholder="Exercício (ex.: Supino reto)"
+              className={`${inputCls} col-span-12 text-[13px]`}
+            />
+            <datalist id="gym-exercises">
+              {knownExercises.map((n) => (
+                <option key={n} value={n} />
+              ))}
+            </datalist>
+            <input
+              value={setForm.weight}
+              onChange={(e) => setSetForm((f) => ({ ...f, weight: e.target.value }))}
+              inputMode="decimal"
+              placeholder="kg"
+              className={`${inputCls} col-span-3 text-[13px]`}
+            />
+            <input
+              value={setForm.reps}
+              onChange={(e) => setSetForm((f) => ({ ...f, reps: e.target.value }))}
+              onKeyDown={(e) => e.key === "Enter" && addSet()}
+              inputMode="numeric"
+              placeholder="reps"
+              disabled={setFailure && !setForm.reps}
+              className={`${inputCls} col-span-3 text-[13px] disabled:opacity-40`}
+            />
+            <button
+              onClick={() => setSetFailure((v) => !v)}
+              aria-pressed={setFailure}
+              className={`col-span-3 rounded-lg font-label-caps text-[10px] border transition ${
+                setFailure ? "bg-error text-on-error border-error" : "border-error/40 text-error hover:bg-error/10"
+              }`}
+            >
+              FALHA
+            </button>
+            <button onClick={addSet} aria-label="Adicionar série" className="col-span-3 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center active:scale-95 transition">
+              <MI name="add" />
+            </button>
+          </div>
+
+          {todaySets.length === 0 ? (
+            <p className="text-[12px] text-outline text-center py-6">Nenhuma série hoje. Bora puxar ferro.</p>
+          ) : (
+            <div className="space-y-3 mt-4 max-h-72 overflow-y-auto ff-scroll">
+              {Object.entries(todayByEx).map(([ex, sets]) => (
+                <div key={ex}>
+                  <Caps className="text-primary-container text-[10px] block mb-1">{ex}</Caps>
+                  <div className="space-y-1">
+                    {sets.map((s, si) => (
+                      <div key={s.id} className="flex items-center gap-2 py-1.5 px-2 rounded bg-surface-container-high border border-white/5 text-[13px]">
+                        <span className="text-outline w-5 text-[10px]">{si + 1}ª</span>
+                        <span className="flex-1 text-on-surface font-bold">
+                          {s.weight}kg × {s.reps ?? "—"}
+                          {s.failure && <span className="text-error font-label-caps text-[9px] ml-1.5">FALHA</span>}
+                        </span>
+                        <button onClick={() => removeSet(s.id)} aria-label="Remover série" className="text-outline hover:text-error transition">
+                          <MI name="close" className="text-base" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* gráfico de progressão */}
+        <div className="lg:col-span-7 glass-card p-6 rounded-xl flex flex-col">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between mb-4">
+            <div>
+              <h3 className="font-headline-md text-headline-md text-primary uppercase">Progressão de Carga</h3>
+              <Caps className="text-outline text-[10px]">ÚLTIMOS {progress.length} TREINO(S)</Caps>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-44">
+                <Select value={chartExercise} options={gymExercises(gymSets)} onChange={setChartEx} placeholder="Exercício" disabled={gymExercises(gymSets).length === 0} />
+              </div>
+              <div className="flex rounded-lg overflow-hidden border border-white/10 shrink-0">
+                <button
+                  onClick={() => setMetric("max")}
+                  className={`px-3 py-2 font-label-caps text-[10px] transition ${metric === "max" ? "bg-primary-container text-on-primary-container" : "text-on-surface-variant hover:bg-surface-variant/40"}`}
+                >
+                  CARGA
+                </button>
+                <button
+                  onClick={() => setMetric("volume")}
+                  className={`px-3 py-2 font-label-caps text-[10px] transition ${metric === "volume" ? "bg-primary-container text-on-primary-container" : "text-on-surface-variant hover:bg-surface-variant/40"}`}
+                >
+                  VOLUME
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="flex-1 flex items-center">
+            {progress.length > 0 ? (
+              <LineChart
+                days={progress.map((p) => p.date)}
+                values={progressVals}
+                today={today}
+                yMax={Math.max(...progressVals) * 1.15 || 10}
+                format={(v) => (metric === "max" ? `${v}kg` : `${v}`)}
+                xLabel={(d) => `${d.slice(8, 10)}/${d.slice(5, 7)}`}
+                ariaLabel={`Progressão de ${chartExercise || "exercício"}`}
+              />
+            ) : (
+              <p className="text-[13px] text-outline text-center w-full py-10">
+                Registre séries pra ver sua progressão. Carga máxima e volume por treino.
+              </p>
+            )}
+          </div>
         </div>
       </section>
 
