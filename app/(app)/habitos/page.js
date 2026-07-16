@@ -10,12 +10,15 @@ import {
   HABIT_PRIORITIES,
   habitPriority,
   QUIT_MILESTONES,
+  WEEKLY_BONUS,
   award,
   cleanDays,
   bestCleanRun,
   lastRelapse,
   relapsesInWindow,
   computeDueMilestones,
+  computeDueWeeklyBonus,
+  weekCount,
   shiftDate,
 } from "@/lib/state";
 
@@ -46,34 +49,53 @@ function PriorityChips({ value, onChange, size = "text-[10px]" }) {
 export default function HabitosPage() {
   const { state, setState, confirm, toast } = useApp();
   const [newHabit, setNewHabit] = useState("");
-  const [newKind, setNewKind] = useState("build"); // build | quit
+  const [newKind, setNewKind] = useState("build"); // build | weekly | quit
   const [newPriority, setNewPriority] = useState(2);
+  const [newDirection, setNewDirection] = useState("min"); // weekly: min | max
+  const [newTarget, setNewTarget] = useState(3); // weekly: dias/semana
   const [edits, setEdits] = useState({}); // { [id]: nome em edição }
   const [pickingIcon, setPickingIcon] = useState(null); // id do hábito com picker aberto
   const today = getDateStr(0);
 
-  // ===== marcos de dias limpos (quit): concede pendentes ao abrir/mudar =====
+  // ===== recompensas pendentes: marcos de dias limpos (quit) + bônus de semana na meta (weekly) =====
   useEffect(() => {
     const dues = (state.habits || [])
-      .map((h) => ({ name: h.name, due: computeDueMilestones(h) }))
-      .filter((x) => x.due);
+      .map((h) => {
+        const quit = computeDueMilestones(h);
+        const weekly = computeDueWeeklyBonus(h);
+        return quit || weekly ? { name: h.name, quit, weekly } : null;
+      })
+      .filter(Boolean);
     if (!dues.length) return;
     setState((prev) => {
       // recomputa sobre prev: idempotente — se já concedido, retorna prev por identidade
       let gained = 0;
       const habits = (prev.habits || []).map((h) => {
-        const due = computeDueMilestones(h);
-        if (!due) return h;
-        gained += due.xp;
-        const got = (h.milestones && h.milestones[due.key]) || [];
-        return { ...h, milestones: { ...(h.milestones || {}), [due.key]: [...got, ...due.newDays] } };
+        const quit = computeDueMilestones(h);
+        const weekly = computeDueWeeklyBonus(h);
+        if (!quit && !weekly) return h;
+        const milestones = { ...(h.milestones || {}) };
+        if (quit) {
+          gained += quit.xp;
+          milestones[quit.key] = [...(milestones[quit.key] || []), ...quit.newDays];
+        }
+        if (weekly) {
+          gained += weekly.xp;
+          for (const k of weekly.keys) milestones[k] = true;
+        }
+        return { ...h, milestones };
       });
       if (!gained) return prev;
       return { ...prev, habits, stats: { ...prev.stats, xp: (prev.stats.xp || 0) + gained } };
     });
-    const totalXp = dues.reduce((s, x) => s + x.due.xp, 0);
-    const notes = dues.map((x) => `${x.name}: ${x.due.newDays.map((d) => `${d}d`).join(", ")}`);
-    toast("Marco de dias limpos!", { sub: `${notes.join(" · ")} · +${totalXp} XP`, icon: "military_tech", duration: 5000 });
+    const totalXp = dues.reduce((s, x) => s + (x.quit?.xp || 0) + (x.weekly?.xp || 0), 0);
+    const notes = dues.map((x) => {
+      const parts = [];
+      if (x.quit) parts.push(x.quit.newDays.map((d) => `${d}d limpo`).join(", "));
+      if (x.weekly) parts.push(`${x.weekly.keys.length} semana(s) na meta`);
+      return `${x.name}: ${parts.join(" · ")}`;
+    });
+    toast("Recompensa de hábitos!", { sub: `${notes.join(" · ")} · +${totalXp} XP`, icon: "military_tech", duration: 5000 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.habits]);
 
@@ -87,9 +109,11 @@ export default function HabitosPage() {
         {
           id: crypto.randomUUID(),
           name,
-          icon: newKind === "quit" ? "block" : HABIT_ICONS[prev.habits.length % HABIT_ICONS.length],
+          icon: newKind === "quit" ? "block" : newKind === "weekly" ? "event_repeat" : HABIT_ICONS[prev.habits.length % HABIT_ICONS.length],
           kind: newKind,
           priority: newPriority,
+          direction: newKind === "weekly" ? newDirection : null,
+          weeklyTarget: newKind === "weekly" ? newTarget : null,
           createdAt: new Date().toISOString(),
           doneDates: [],
           checkXp: {},
@@ -108,11 +132,12 @@ export default function HabitosPage() {
     setState((prev) => ({ ...prev, habits: prev.habits.map((h) => (h.id === id ? { ...h, priority } : h)) }));
   }
 
-  // ===== build: check concede XP por prioridade; uncheck estorna o valor gravado =====
+  // ===== build/weekly: check concede XP por prioridade (weekly-max não premia — marcar = consumir) =====
   function toggleHabit(id) {
     setState((prev) => {
       const h = prev.habits.find((x) => x.id === id);
       if (!h || (h.kind || "build") === "quit") return prev;
+      const noXp = (h.kind || "build") === "weekly" && h.direction === "max";
       const has = h.doneDates.includes(today);
       let stats = prev.stats;
       let patch;
@@ -120,7 +145,9 @@ export default function HabitosPage() {
         const refund = h.checkXp?.[today] || 0;
         const { [today]: _, ...restXp } = h.checkXp || {};
         patch = { doneDates: h.doneDates.filter((d) => d !== today), checkXp: restXp };
-        stats = { ...stats, xp: Math.max(0, (stats.xp || 0) - refund) };
+        if (refund) stats = { ...stats, xp: Math.max(0, (stats.xp || 0) - refund) };
+      } else if (noXp) {
+        patch = { doneDates: [...h.doneDates, today] };
       } else {
         const gain = award(habitPriority(h).xp, stats.streak);
         patch = { doneDates: [...h.doneDates, today], checkXp: { ...(h.checkXp || {}), [today]: gain } };
@@ -275,6 +302,54 @@ export default function HabitosPage() {
     );
   }
 
+  function WeeklyCard({ h, i }) {
+    const target = h.weeklyTarget || 3;
+    const dir = h.direction || "min";
+    const count = weekCount(h);
+    const done = h.doneDates.includes(today);
+    const prio = habitPriority(h);
+    const bonus = Math.round(WEEKLY_BONUS[dir] * prio.mult);
+    const pct = Math.min(100, Math.round((count / Math.max(1, target)) * 100));
+    const over = dir === "max" && count > target;
+    const hit = dir === "min" && count >= target;
+    return (
+      <div className="glass-card p-6 rounded-xl relative border-l-4 border-l-primary-container/40">
+        <CardHeader h={h} i={i} />
+        <div className="flex items-end justify-between mb-1">
+          <Caps className="text-outline text-[10px]">
+            {dir === "min" ? "PELO MENOS" : "NO MÁXIMO"} {target}×/SEMANA
+          </Caps>
+          <span className={`font-headline-md text-headline-md ${over ? "text-error" : hit ? "text-primary-container" : "text-on-surface"}`}>
+            {count}/{target}
+          </span>
+        </div>
+        <div className="w-full h-2 bg-surface-variant rounded-full overflow-hidden mb-2">
+          <div className={`h-full rounded-full ${over ? "bg-error" : "bg-primary-container"}`} style={{ width: `${pct}%` }} />
+        </div>
+        <div className="flex justify-between items-center mb-4">
+          <Caps className={`text-[10px] ${over ? "text-error" : hit ? "text-primary-container" : "text-outline-variant"}`}>
+            {dir === "min" ? (hit ? "META BATIDA ✓" : `FALTAM ${target - count}`) : over ? "LIMITE ESTOURADO" : `RESTAM ${target - count}`}
+          </Caps>
+          <Caps className="text-outline text-[10px]">+{bonus} XP/SEMANA NA META</Caps>
+        </div>
+        <button
+          onClick={() => toggleHabit(h.id)}
+          className={`w-full py-2 font-label-caps text-[10px] rounded transition-colors ${
+            dir === "min"
+              ? done
+                ? "bg-primary-container text-on-primary-container"
+                : "border border-primary text-primary hover:bg-primary/10"
+              : done
+                ? "bg-error/15 text-error border border-error/40"
+                : "border border-error/40 text-error hover:bg-error/10"
+          }`}
+        >
+          {dir === "min" ? (done ? "PRATICADO HOJE ✓" : "PRATIQUEI HOJE") : done ? "CONSUMIDO HOJE · DESFAZER" : "CONSUMI HOJE"}
+        </button>
+      </div>
+    );
+  }
+
   function QuitCard({ h, i }) {
     const clean = cleanDays(h);
     const best = bestCleanRun(h);
@@ -329,8 +404,10 @@ export default function HabitosPage() {
     );
   }
 
-  const buildHabits = state.habits.filter((h) => (h.kind || "build") !== "quit");
+  const buildHabits = state.habits.filter((h) => (h.kind || "build") === "build");
+  const weeklyHabits = state.habits.filter((h) => (h.kind || "build") === "weekly");
   const quitHabits = state.habits.filter((h) => (h.kind || "build") === "quit");
+  const groupCount = [buildHabits, weeklyHabits, quitHabits].filter((g) => g.length > 0).length;
 
   return (
     <>
@@ -354,15 +431,23 @@ export default function HabitosPage() {
           <div className="flex rounded-lg overflow-hidden border border-white/10">
             <button
               onClick={() => setNewKind("build")}
-              className={`px-4 py-1.5 font-label-caps text-[10px] flex items-center gap-1.5 transition ${
+              className={`px-3 py-1.5 font-label-caps text-[10px] flex items-center gap-1.5 transition ${
                 newKind === "build" ? "bg-primary-container text-on-primary-container" : "text-on-surface-variant hover:bg-surface-variant/40"
               }`}
             >
-              <MI name="trending_up" className="text-sm" /> CRIAR
+              <MI name="trending_up" className="text-sm" /> DIÁRIO
+            </button>
+            <button
+              onClick={() => setNewKind("weekly")}
+              className={`px-3 py-1.5 font-label-caps text-[10px] flex items-center gap-1.5 transition ${
+                newKind === "weekly" ? "bg-primary-container text-on-primary-container" : "text-on-surface-variant hover:bg-surface-variant/40"
+              }`}
+            >
+              <MI name="event_repeat" className="text-sm" /> META SEMANAL
             </button>
             <button
               onClick={() => setNewKind("quit")}
-              className={`px-4 py-1.5 font-label-caps text-[10px] flex items-center gap-1.5 transition ${
+              className={`px-3 py-1.5 font-label-caps text-[10px] flex items-center gap-1.5 transition ${
                 newKind === "quit" ? "bg-error text-on-error" : "text-on-surface-variant hover:bg-surface-variant/40"
               }`}
             >
@@ -374,10 +459,41 @@ export default function HabitosPage() {
             <PriorityChips value={newPriority} onChange={setNewPriority} />
           </div>
         </div>
+        {newKind === "weekly" && (
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex rounded-lg overflow-hidden border border-white/10">
+              <button
+                onClick={() => setNewDirection("min")}
+                className={`px-3 py-1.5 font-label-caps text-[10px] transition ${
+                  newDirection === "min" ? "bg-primary-container text-on-primary-container" : "text-on-surface-variant hover:bg-surface-variant/40"
+                }`}
+              >
+                PELO MENOS
+              </button>
+              <button
+                onClick={() => setNewDirection("max")}
+                className={`px-3 py-1.5 font-label-caps text-[10px] transition ${
+                  newDirection === "max" ? "bg-error text-on-error" : "text-on-surface-variant hover:bg-surface-variant/40"
+                }`}
+              >
+                NO MÁXIMO
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setNewTarget((t) => Math.max(1, t - 1))} aria-label="Diminuir dias" className="w-7 h-7 rounded-full bg-surface-variant text-on-surface flex items-center justify-center hover:brightness-125 active:scale-95 transition">−</button>
+              <Caps className="text-primary w-24 text-center">{newTarget}×/SEMANA</Caps>
+              <button onClick={() => setNewTarget((t) => Math.min(7, t + 1))} aria-label="Aumentar dias" className="w-7 h-7 rounded-full bg-surface-variant text-on-surface flex items-center justify-center hover:brightness-125 active:scale-95 transition">+</button>
+            </div>
+          </div>
+        )}
         <p className="text-[11px] text-outline">
           {newKind === "quit"
             ? "Vício: registre só as recaídas. Dias limpo rendem XP em marcos (3, 7, 14, 30, 60, 90 dias)."
-            : `Hábito diário: marcar rende XP pela prioridade (${HABIT_PRIORITIES.map((p) => `${p.label.toLowerCase()} +${p.xp}`).join(" · ")}).`}
+            : newKind === "weekly"
+              ? newDirection === "min"
+                ? `Praticar ${newTarget}×/semana: cada dia marcado rende XP pela prioridade + bônus ao fechar a semana na meta.`
+                : `Moderar: no máx ${newTarget} dia(s) de consumo por semana. Marcar não dá XP — fechar a semana dentro do limite dá bônus.`
+              : `Hábito diário: marcar rende XP pela prioridade (${HABIT_PRIORITIES.map((p) => `${p.label.toLowerCase()} +${p.xp}`).join(" · ")}).`}
         </p>
       </div>
 
@@ -387,7 +503,7 @@ export default function HabitosPage() {
         <div className="space-y-8">
           {buildHabits.length > 0 && (
             <section>
-              {quitHabits.length > 0 && (
+              {groupCount > 1 && (
                 <div className="flex items-center gap-2 mb-4">
                   <MI name="trending_up" className="text-primary-container" />
                   <h3 className="font-headline-md text-headline-md text-primary uppercase">Construindo</h3>
@@ -400,12 +516,29 @@ export default function HabitosPage() {
               </div>
             </section>
           )}
+          {weeklyHabits.length > 0 && (
+            <section>
+              {groupCount > 1 && (
+                <div className="flex items-center gap-2 mb-4">
+                  <MI name="event_repeat" className="text-primary-container" />
+                  <h3 className="font-headline-md text-headline-md text-primary uppercase">Metas da Semana</h3>
+                </div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
+                {weeklyHabits.map((h, i) => (
+                  <WeeklyCard key={h.id} h={h} i={i} />
+                ))}
+              </div>
+            </section>
+          )}
           {quitHabits.length > 0 && (
             <section>
-              <div className="flex items-center gap-2 mb-4">
-                <MI name="block" className="text-error" />
-                <h3 className="font-headline-md text-headline-md text-primary uppercase">Largando</h3>
-              </div>
+              {groupCount > 1 && (
+                <div className="flex items-center gap-2 mb-4">
+                  <MI name="block" className="text-error" />
+                  <h3 className="font-headline-md text-headline-md text-primary uppercase">Largando</h3>
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
                 {quitHabits.map((h, i) => (
                   <QuitCard key={h.id} h={h} i={i} />

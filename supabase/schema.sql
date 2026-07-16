@@ -16,6 +16,8 @@ create table if not exists public.profiles (
   diet_plan     jsonb   not null default '[]'::jsonb,
   workout_plan  jsonb   not null default '[]'::jsonb,
   tasks         jsonb   not null default '{}'::jsonb,  -- { tasks:[], tasksDate, tasksBonusDate }
+  routine       jsonb   not null default '{}'::jsonb,  -- rotina fixa: { items:[{id,name,time}], bonusDate }
+  pantry        jsonb   not null default '[]'::jsonb,  -- despensa: [{id,name,qty,status}]
   updated_at    timestamptz not null default now()
 );
 
@@ -25,6 +27,8 @@ alter table public.profiles add column if not exists stats        jsonb not null
 alter table public.profiles add column if not exists diet_plan    jsonb not null default '[]'::jsonb;
 alter table public.profiles add column if not exists workout_plan jsonb not null default '[]'::jsonb;
 alter table public.profiles add column if not exists tasks        jsonb not null default '{}'::jsonb;
+alter table public.profiles add column if not exists routine      jsonb not null default '{}'::jsonb;
+alter table public.profiles add column if not exists pantry       jsonb not null default '[]'::jsonb;
 alter table public.profiles drop column if exists state;           -- blob legado removido
 
 -- ---------- LOGS por data/entrada ----------
@@ -91,15 +95,19 @@ create table if not exists public.habits (
   user_id    uuid not null references auth.users (id) on delete cascade,
   name       text not null,
   icon       text,                                          -- Material Symbol escolhido pelo user
-  kind       text not null default 'build',                 -- 'build' (criar) | 'quit' (largar vício)
+  kind       text not null default 'build',                 -- 'build' (diário) | 'weekly' (meta semanal) | 'quit' (largar vício)
   priority   smallint not null default 2,                   -- 1 baixa · 2 normal · 3 alta
-  milestones jsonb not null default '{}'::jsonb,            -- quit: { "inicio-do-periodo-limpo": [3,7,...] } marcos já premiados
+  milestones jsonb not null default '{}'::jsonb,            -- quit: { periodo: [3,7,...] } · weekly: { "wk:segunda": true } premiados
+  direction  text,                                          -- weekly: 'min' (pelo menos Nx) | 'max' (no máximo Nx)
+  weekly_target smallint,                                   -- weekly: N dias por semana (1-7)
   created_at timestamptz not null default now()
 );
 alter table public.habits add column if not exists icon text;
 alter table public.habits add column if not exists kind text not null default 'build';
 alter table public.habits add column if not exists priority smallint not null default 2;
 alter table public.habits add column if not exists milestones jsonb not null default '{}'::jsonb;
+alter table public.habits add column if not exists direction text;
+alter table public.habits add column if not exists weekly_target smallint;
 create index if not exists habits_user on public.habits (user_id);
 
 create table if not exists public.habit_checks (
@@ -111,6 +119,15 @@ create table if not exists public.habit_checks (
 );
 alter table public.habit_checks add column if not exists xp integer not null default 0;
 create index if not exists habit_checks_user on public.habit_checks (user_id);
+
+-- Checks diários da rotina fixa (item_id aponta pro id no jsonb profiles.routine).
+create table if not exists public.routine_checks (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  date    date not null,
+  item_id text not null,
+  xp      integer not null default 0,   -- XP concedido no check (estorno exato no uncheck)
+  primary key (user_id, date, item_id)
+);
 
 -- Séries de academia: peso × reps (ou falha) por exercício, base do gráfico de progressão.
 create table if not exists public.gym_sets (
@@ -134,6 +151,7 @@ alter table public.exercise_logs enable row level security;
 alter table public.habits       enable row level security;
 alter table public.habit_checks enable row level security;
 alter table public.gym_sets     enable row level security;
+alter table public.routine_checks enable row level security;
 
 -- profiles: cada um só mexe no próprio.
 drop policy if exists "own profile select" on public.profiles;
@@ -147,7 +165,7 @@ create policy "own profile update" on public.profiles for update using (auth.uid
 do $$
 declare t text;
 begin
-  foreach t in array array['sleep_logs','mood_logs','focus_days','exercise_logs','habits','habit_checks','gym_sets']
+  foreach t in array array['sleep_logs','mood_logs','focus_days','exercise_logs','habits','habit_checks','gym_sets','routine_checks']
   loop
     execute format('drop policy if exists "own rows select" on public.%I', t);
     execute format('create policy "own rows select" on public.%I for select using (auth.uid() = user_id)', t);
