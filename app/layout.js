@@ -3,6 +3,12 @@ import "./globals.css";
 export const metadata = {
   title: "Discipline Rats",
   description: "Seu painel diário de disciplina",
+  manifest: "/manifest.json",
+  icons: { icon: "/icon.svg" },
+};
+
+export const viewport = {
+  themeColor: "#121414",
 };
 
 export default function RootLayout({ children }) {

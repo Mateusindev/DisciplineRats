@@ -1,0 +1,12 @@
+{
+  "name": "Discipline Rats",
+  "short_name": "DisciplineRats",
+  "description": "Seu painel diário de disciplina",
+  "start_url": "/foco",
+  "display": "standalone",
+  "background_color": "#121414",
+  "theme_color": "#121414",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

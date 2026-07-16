@@ -4,7 +4,8 @@ import { createContext, useContext, useState, useEffect, useRef, useCallback } f
 import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { getSession, loadUserState, syncUserState, updateUsername, fetchLeaderboard, signOut, hasSupabase } from "@/lib/persistence";
-import { defaultState, mergeWithDefaults, getDateStr, XP, award, focusXp, formatTime, playChime } from "@/lib/state";
+import { defaultState, mergeWithDefaults, getDateStr, XP, award, focusXp, formatTime, playChime, playAlarm } from "@/lib/state";
+import { registerServiceWorker, ensureNotifyPermission, notify } from "@/lib/notify";
 import { MI, Loader } from "@/components/ui";
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -170,6 +171,11 @@ export function AppProvider({ children }) {
     await signOut();
     router.replace("/login");
   }
+
+  // service worker: habilita notificação de sistema (mobile exige SW)
+  useEffect(() => {
+    registerServiceWorker();
+  }, []);
 
   // redireciona ao /login em signout
   useEffect(() => {
@@ -339,13 +345,17 @@ export function AppProvider({ children }) {
   const handlePhaseEnd = useCallback(() => {
     if (endingRef.current) return; // guard: interval tick + visibilitychange podem disparar juntos
     endingRef.current = true;
-    playChime();
     const s = stateRef.current.settings;
+    const hidden = typeof document !== "undefined" && document.visibilityState !== "visible";
     if (phaseRef.current === "focus") {
+      playAlarm(); // fim do pomodoro: alarme forte
+      if (hidden) notify("Pomodoro concluído! 🍅", `+${focusXp(s.focusMin)} XP · pausa de ${s.breakMin} min começou.`);
       completeFocusSession();
       setPhase("break");
       setSecondsLeft(s.breakMin * 60);
     } else {
+      playChime(); // fim da pausa: chime suave
+      if (hidden) notify("Pausa acabou", `Bora focar: ${s.focusMin} min.`);
       setPhase("focus");
       setSecondsLeft(s.focusMin * 60);
     }
@@ -382,7 +392,10 @@ export function AppProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRunning, phase]);
 
-  const toggleTimer = useCallback(() => setIsRunning((r) => !r), []);
+  const toggleTimer = useCallback(() => {
+    setIsRunning((r) => !r);
+    ensureNotifyPermission(); // gesto do usuário: momento certo de pedir permissão (idempotente)
+  }, []);
   const resetPhase = useCallback(() => {
     setIsRunning(false);
     const s = stateRef.current.settings;
