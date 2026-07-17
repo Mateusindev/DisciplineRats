@@ -5,6 +5,13 @@ import { useApp } from "../AppContext";
 import { MI, Caps, StatTile, inputCls } from "@/components/ui";
 import { XP, award, focusXp, sleepXp, gamify, fmtK, formatTime, getDateStr, shiftDate, weekdayShort, youtubeId, DEFAULT_LOFI_URL } from "@/lib/state";
 
+// prioridade da missão: label visual + ordenação (não altera XP)
+const TASK_PRIORITIES = {
+  1: { label: "BAIXA", chip: "bg-surface-variant text-on-surface-variant", dot: "text-outline" },
+  2: { label: "MÉDIA", chip: "bg-primary-container/20 text-primary-container border border-primary-container/40", dot: "text-primary-container" },
+  3: { label: "ALTA", chip: "bg-error-container/40 text-error border border-error/40", dot: "text-error" },
+};
+
 export default function FocoPage() {
   const { state, setState, timer, toast } = useApp();
 
@@ -31,16 +38,20 @@ export default function FocoPage() {
   const tomorrow = shiftDate(today, 1);
   const maxTaskDate = shiftDate(today, 7);
   const [newDate, setNewDate] = useState(today);
+  const [newPriority, setNewPriority] = useState(2);
+  const taskPri = (t) => TASK_PRIORITIES[t.priority] || TASK_PRIORITIES[2]; // sem priority (legado) = média
+  const byPriority = (a, b) => (b.priority || 2) - (a.priority || 2);
   const taskDue = (t) => t.date || today; // sem date = missão de hoje (legado)
-  const dueTasks = state.tasks.filter((t) => taskDue(t) <= today);
-  const futureTasks = state.tasks.filter((t) => taskDue(t) > today).sort((a, b) => (a.date < b.date ? -1 : 1));
+  // feitas por último; dentro de cada grupo, prioridade alta primeiro
+  const dueTasks = state.tasks.filter((t) => taskDue(t) <= today).sort((a, b) => (a.done !== b.done ? (a.done ? 1 : -1) : byPriority(a, b)));
+  const futureTasks = state.tasks.filter((t) => taskDue(t) > today).sort((a, b) => (a.date !== b.date ? (a.date < b.date ? -1 : 1) : byPriority(a, b)));
   const dayLabel = (d) => (d === tomorrow ? "AMANHÃ" : `${weekdayShort(d).toUpperCase()} ${d.slice(8, 10)}/${d.slice(5, 7)}`);
 
   function addTask() {
     const text = newTask.trim();
     if (!text) return;
     const date = newDate >= today && newDate <= maxTaskDate ? newDate : today;
-    setState((prev) => ({ ...prev, tasks: [...prev.tasks, { id: Date.now(), text, done: false, date }] }));
+    setState((prev) => ({ ...prev, tasks: [...prev.tasks, { id: Date.now(), text, done: false, date, priority: newPriority }] }));
     setNewTask("");
     if (date > today) toast("Missão agendada", { sub: dayLabel(date), icon: "event_upcoming" });
   }
@@ -158,10 +169,11 @@ export default function FocoPage() {
                   <button onClick={() => toggleTask(t.id)} aria-label="Alternar meta">
                     <MI name={t.done ? "task_alt" : "radio_button_unchecked"} fill={t.done} className={t.done ? "text-primary-container" : "text-outline"} />
                   </button>
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <div className={`text-[13px] font-bold ${t.done ? "line-through text-outline" : "text-on-surface"}`}>{t.text}</div>
                     <div className="text-[10px] text-outline">RECOMPENSA: +{XP.tasksAllDone} XP (todas feitas)</div>
                   </div>
+                  <span className={`px-2 py-0.5 rounded-full font-label-caps text-[9px] shrink-0 ${t.done ? "opacity-50" : ""} ${taskPri(t).chip}`}>{taskPri(t).label}</span>
                   <Caps className={t.done ? "text-primary-container text-[10px]" : "text-outline text-[10px]"}>{t.done ? "FEITA" : "ATIVA"}</Caps>
                   {!t.done && (
                     <button onClick={() => pushToTomorrow(t.id)} aria-label="Jogar para amanhã" title="Jogar para amanhã" className="text-outline hover:text-primary-container transition p-1">
@@ -182,6 +194,21 @@ export default function FocoPage() {
               <button onClick={addTask} aria-label="Adicionar meta" className="px-3 rounded-lg bg-primary-container text-on-primary-container flex items-center active:scale-95 transition">
                 <MI name="add" />
               </button>
+            </div>
+            {/* prioridade da nova missão */}
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              <Caps className="text-outline text-[10px]">PRIORIDADE:</Caps>
+              {[1, 2, 3].map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setNewPriority(p)}
+                  className={`px-3 py-1.5 rounded-full font-label-caps text-[10px] border transition active:scale-95 ${
+                    newPriority === p ? `${TASK_PRIORITIES[p].chip} font-black` : "border-white/10 text-on-surface-variant hover:bg-surface-variant/40"
+                  }`}
+                >
+                  {TASK_PRIORITIES[p].label}
+                </button>
+              ))}
             </div>
             {/* agendamento: hoje / amanhã / data livre (até 7 dias) */}
             <div className="flex flex-wrap items-center gap-2 mt-3">
@@ -220,6 +247,7 @@ export default function FocoPage() {
                     <div key={t.id} className="flex items-center gap-3 p-3 bg-surface-container-high rounded-lg border border-white/5">
                       <Caps className="text-primary-container text-[10px] whitespace-nowrap shrink-0">{dayLabel(t.date)}</Caps>
                       <div className="flex-1 min-w-0 text-[13px] font-bold text-on-surface truncate">{t.text}</div>
+                      <span className={`px-2 py-0.5 rounded-full font-label-caps text-[9px] shrink-0 ${taskPri(t).chip}`}>{taskPri(t).label}</span>
                       <button onClick={() => pullToToday(t.id)} aria-label="Antecipar para hoje" title="Antecipar para hoje" className="text-outline hover:text-primary-container transition p-1">
                         <MI name="today" className="text-lg" />
                       </button>
