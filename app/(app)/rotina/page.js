@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps, PageHeader, inputCls } from "@/components/ui";
-import { XP, award, getDateStr, computeRoutinePenalty } from "@/lib/state";
+import { XP, award, getDateStr } from "@/lib/state";
 
 // dias da semana, ordem seg→dom (valor = getDay() do JS: 0 = domingo)
 const DOWS = [
@@ -82,28 +82,6 @@ export default function RotinaPage() {
   const [newDays, setNewDays] = useState(ALL_DAYS);
   const [newCritical, setNewCritical] = useState(false);
   const [edits, setEdits] = useState({}); // { [id]: {name, time, days, critical} }
-
-  // ===== penalidade: inegociável não feito em dia fechado custa XP =====
-  useEffect(() => {
-    const due = computeRoutinePenalty(state.routine, state.routineChecks);
-    if (!due) return;
-    setState((prev) => {
-      // recomputa sobre prev: idempotente — penaltyDate avança e re-run vira null
-      const d2 = computeRoutinePenalty(prev.routine, prev.routineChecks);
-      if (!d2) return prev;
-      const r = prev.routine || {};
-      return {
-        ...prev,
-        routine: { ...r, penaltyDate: d2.lastEvaluated },
-        stats: d2.xp ? { ...prev.stats, xp: Math.max(0, (prev.stats.xp || 0) - d2.xp) } : prev.stats,
-      };
-    });
-    if (due.xp > 0) {
-      const names = [...new Set(due.missed.map((m) => m.name))].join(", ").slice(0, 90);
-      toast("Inegociável perdido!", { sub: `${names} · −${due.xp} XP`, type: "error", icon: "local_fire_department", duration: 6000 });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.routine, state.routineChecks]);
 
   function addItem() {
     const name = newName.trim();
@@ -208,7 +186,7 @@ export default function RotinaPage() {
           <div className="h-full rounded-full bg-primary-container transition-all" style={{ width: `${pct}%` }} />
         </div>
         <p className="text-[11px] text-outline mt-2">
-          +{XP.routineItem} XP por item · rotina do dia completa +{XP.routineAllDone} XP de bônus (1×/dia). Reseta todo dia.
+          +{XP.routineItem} XP por item · rotina do dia completa +{XP.routineAllDone} XP de bônus (1×/dia). Reseta todo dia. Item não feito em dia fechado tira −{XP.routineItemPenalty} (inegociável −{XP.routineCriticalPenalty}).
         </p>
       </div>
 

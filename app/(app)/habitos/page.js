@@ -411,7 +411,7 @@ export default function HabitosPage() {
 
   return (
     <>
-      <PageHeader title="HÁBITOS" subtitle="Construa os bons, largue os ruins. Prioridade alta vale mais XP." />
+      <PageHeader title="HÁBITOS" subtitle="Construa os bons, largue os ruins. Prioridade alta vale mais XP. Hábito diário não feito tira metade." />
 
       {/* form de criação */}
       <div className="glass-card p-6 rounded-xl mb-gutter space-y-3">

@@ -4,7 +4,20 @@ import { createContext, useContext, useState, useEffect, useRef, useCallback } f
 import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { getSession, loadUserState, syncUserState, updateUsername, fetchLeaderboard, signOut, hasSupabase } from "@/lib/persistence";
-import { defaultState, mergeWithDefaults, getDateStr, XP, award, focusXp, formatTime, playChime, playAlarm } from "@/lib/state";
+import {
+  defaultState,
+  mergeWithDefaults,
+  getDateStr,
+  XP,
+  award,
+  focusXp,
+  formatTime,
+  playChime,
+  playAlarm,
+  computeRoutinePenalty,
+  computeExercisePenalty,
+  computeHabitDailyPenalty,
+} from "@/lib/state";
 import { registerServiceWorker, ensureNotifyPermission, notify } from "@/lib/notify";
 import { MI, Loader } from "@/components/ui";
 
@@ -219,17 +232,69 @@ export function AppProvider({ children }) {
           s.stats.todayMinutes = 0;
           s.stats.todayDate = today;
         }
+
+        // ===== penalidades de períodos fechados (metade do XP do comportamento não cumprido) =====
+        // Centralizado no load: aplica ao abrir o app em qualquer página (não dá p/ fugir).
+        const penalties = [];
+        let penaltyXp = 0;
+
+        // missões: dia fechado com missão devida não concluída → −tasksMiss (só se havia missão)
         if (s.tasksDate !== today) {
-          // missão não feita morre no rollover; agendada (date >= hoje) sobrevive.
-          // Sem date = missão do dia antigo (legado) → morre junto.
-          s.tasks = (s.tasks || []).filter((t) => (t.date || s.tasksDate) >= today);
+          const oldDate = s.tasksDate;
+          const dueOld = (s.tasks || []).filter((t) => (t.date || oldDate) <= oldDate);
+          const allDone = dueOld.length > 0 && dueOld.every((t) => t.done);
+          if (dueOld.length > 0 && !allDone && s.tasksBonusDate !== oldDate) {
+            penaltyXp += XP.tasksMiss;
+            penalties.push(`missões (−${XP.tasksMiss})`);
+          }
+          // agendada (date >= hoje) sobrevive; resto morre no rollover
+          s.tasks = (s.tasks || []).filter((t) => (t.date || oldDate) >= today);
           s.tasksDate = today;
         }
+
+        // rotina: itens não checados em dias fechados (normal −3, inegociável −15)
+        const rp = computeRoutinePenalty(s.routine, s.routineChecks, today);
+        if (rp) {
+          s.routine = { ...(s.routine || {}), penaltyDate: rp.lastEvaluated };
+          if (rp.xp > 0) {
+            penaltyXp += rp.xp;
+            penalties.push(`rotina (−${rp.xp})`);
+          }
+        }
+
+        // exercício: treinos faltantes na meta semanal, por semana fechada
+        const ep = computeExercisePenalty(s.exerciseLogs, s.settings?.exerciseWeeklyGoal, s.settings?.exercisePenaltyWeek, today);
+        if (ep) {
+          s.settings = { ...(s.settings || {}), exercisePenaltyWeek: ep.lastWeek };
+          if (ep.xp > 0) {
+            penaltyXp += ep.xp;
+            penalties.push(`treino (−${ep.xp})`);
+          }
+        }
+
+        // hábitos diários (build): dia fechado sem check → −metade por prioridade
+        let habitPenTotal = 0;
+        s.habits = (s.habits || []).map((h) => {
+          const hp = computeHabitDailyPenalty(h, today);
+          if (!hp) return h;
+          habitPenTotal += hp.xp;
+          return { ...h, penaltyDate: hp.lastEvaluated };
+        });
+        if (habitPenTotal > 0) {
+          penaltyXp += habitPenTotal;
+          penalties.push(`hábitos (−${habitPenTotal})`);
+        }
+
+        if (penaltyXp > 0) s.stats.xp = Math.max(0, (s.stats.xp || 0) - penaltyXp);
+
         if (s.stats.lastCompletedDate && s.stats.lastCompletedDate !== today && s.stats.lastCompletedDate !== yesterday) {
           s.stats.streak = 0;
         }
         setState(s);
         setLoaded(true);
+        if (penaltyXp > 0) {
+          setTimeout(() => toast("XP perdido por pendências", { sub: `${penalties.join(" · ")} = −${penaltyXp} XP`, type: "error", icon: "trending_down", duration: 7000 }), 400);
+        }
       } catch (e) {
         // NUNCA cai em defaults + salva por cima: bloqueia e mostra erro
         setLoadError(true);

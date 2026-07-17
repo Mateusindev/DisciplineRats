@@ -114,7 +114,7 @@ function Chrome({ children }) {
               <Stepper label="Meta de carboidrato (g)" value={state.settings.dietCarbGoal} onDec={() => updateSetting("dietCarbGoal", -5, 20, 600)} onInc={() => updateSetting("dietCarbGoal", 5, 20, 600)} />
               <Stepper label="Meta de gordura (g)" value={state.settings.dietFatGoal} onDec={() => updateSetting("dietFatGoal", -5, 10, 250)} onInc={() => updateSetting("dietFatGoal", 5, 10, 250)} />
               <p className="text-[11px] text-outline">
-                XP: foco +{focusXp(state.settings.focusMin)} · metas do dia +{XP.tasksAllDone} · sono na meta +{sleepXp(state.settings.sleepGoalMin)} · treino +{XP.exercise}. Foco e sono escalam com a duração/meta. Streak dá +5%/dia (máx +50%).
+                XP: foco +{focusXp(state.settings.focusMin)} · metas do dia +{XP.tasksAllDone} · sono na meta +{sleepXp(state.settings.sleepGoalMin)} · treino +{XP.exercise}. Foco e sono escalam com a duração/meta. Streak dá +5%/dia (máx +50%). Comportamento não cumprido tira metade do XP que daria (foco isento; inegociável da rotina tira −{XP.routineCriticalPenalty}).
               </p>
               <button onClick={resetAllData} className="self-start mt-1 px-3 py-1.5 rounded font-label-caps text-[10px] text-error border border-error/60 hover:bg-error/10 transition">
                 REINICIAR TODOS OS DADOS

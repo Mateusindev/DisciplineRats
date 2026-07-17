@@ -285,7 +285,7 @@ export default function FocoPage() {
               </div>
             </div>
             <p className="text-[12px] text-on-surface-variant leading-relaxed">
-              Foco +{focusXp(state.settings.focusMin)} · metas do dia +{XP.tasksAllDone} · sono na meta +{sleepXp(state.settings.sleepGoalMin)} · treino +{XP.exercise}. Foco/sono escalam com duração/meta. Streak multiplica (+5%/dia).
+              Foco +{focusXp(state.settings.focusMin)} · metas do dia +{XP.tasksAllDone} · sono na meta +{sleepXp(state.settings.sleepGoalMin)} · treino +{XP.exercise}. Foco/sono escalam com duração/meta. Streak multiplica (+5%/dia). Não cumprir tira metade do XP (foco é isento).
             </p>
           </div>
 

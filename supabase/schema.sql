@@ -41,9 +41,11 @@ create table if not exists public.sleep_logs (
   quality      smallint,
   note         text,
   xp_awarded   boolean not null default false,
+  xp           integer not null default 0,  -- efeito líquido: +prêmio (meta) ou −penalidade (abaixo)
   updated_at   timestamptz not null default now(),
   primary key (user_id, date)
 );
+alter table public.sleep_logs add column if not exists xp integer not null default 0;
 
 create table if not exists public.mood_logs (
   user_id  uuid not null references auth.users (id) on delete cascade,
@@ -100,6 +102,7 @@ create table if not exists public.habits (
   milestones jsonb not null default '{}'::jsonb,            -- quit: { periodo: [3,7,...] } · weekly: { "wk:segunda": true } premiados
   direction  text,                                          -- weekly: 'min' (pelo menos Nx) | 'max' (no máximo Nx)
   weekly_target smallint,                                   -- weekly: N dias por semana (1-7)
+  penalty_date date,                                        -- build: último dia fechado já avaliado p/ penalidade
   created_at timestamptz not null default now()
 );
 alter table public.habits add column if not exists icon text;
@@ -108,6 +111,7 @@ alter table public.habits add column if not exists priority smallint not null de
 alter table public.habits add column if not exists milestones jsonb not null default '{}'::jsonb;
 alter table public.habits add column if not exists direction text;
 alter table public.habits add column if not exists weekly_target smallint;
+alter table public.habits add column if not exists penalty_date date;
 create index if not exists habits_user on public.habits (user_id);
 
 create table if not exists public.habit_checks (
