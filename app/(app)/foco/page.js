@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps, StatTile, inputCls } from "@/components/ui";
-import { XP, award, focusXp, sleepXp, gamify, fmtK, formatTime, getDateStr, youtubeId, DEFAULT_LOFI_URL } from "@/lib/state";
+import { XP, award, focusXp, sleepXp, gamify, fmtK, formatTime, getDateStr, shiftDate, weekdayShort, youtubeId, DEFAULT_LOFI_URL } from "@/lib/state";
 
 export default function FocoPage() {
   const { state, setState, timer, toast } = useApp();
@@ -26,17 +26,36 @@ export default function FocoPage() {
     setState((prev) => ({ ...prev, settings: { ...prev.settings, lofiUrl: target } }));
   }
 
+  // ===== missões: hoje + agendadas (até 7 dias) =====
+  const today = getDateStr(0);
+  const tomorrow = shiftDate(today, 1);
+  const maxTaskDate = shiftDate(today, 7);
+  const [newDate, setNewDate] = useState(today);
+  const taskDue = (t) => t.date || today; // sem date = missão de hoje (legado)
+  const dueTasks = state.tasks.filter((t) => taskDue(t) <= today);
+  const futureTasks = state.tasks.filter((t) => taskDue(t) > today).sort((a, b) => (a.date < b.date ? -1 : 1));
+  const dayLabel = (d) => (d === tomorrow ? "AMANHÃ" : `${weekdayShort(d).toUpperCase()} ${d.slice(8, 10)}/${d.slice(5, 7)}`);
+
   function addTask() {
     const text = newTask.trim();
     if (!text) return;
-    setState((prev) => ({ ...prev, tasks: [...prev.tasks, { id: Date.now(), text, done: false }] }));
+    const date = newDate >= today && newDate <= maxTaskDate ? newDate : today;
+    setState((prev) => ({ ...prev, tasks: [...prev.tasks, { id: Date.now(), text, done: false, date }] }));
     setNewTask("");
+    if (date > today) toast("Missão agendada", { sub: dayLabel(date), icon: "event_upcoming" });
+  }
+  function removeTask(id) {
+    setState((prev) => ({ ...prev, tasks: prev.tasks.filter((t) => t.id !== id) }));
+  }
+  function pullToToday(id) {
+    setState((prev) => ({ ...prev, tasks: prev.tasks.map((t) => (t.id === id ? { ...t, date: getDateStr(0) } : t)) }));
   }
   function toggleTask(id) {
     setState((prev) => {
       const tasks = prev.tasks.map((t) => (t.id === id ? { ...t, done: !t.done } : t));
       const today = getDateStr(0);
-      const allDone = tasks.length > 0 && tasks.every((t) => t.done);
+      const due = tasks.filter((t) => (t.date || today) <= today);
+      const allDone = due.length > 0 && due.every((t) => t.done);
       if (allDone && prev.tasksBonusDate !== today) {
         return {
           ...prev,
@@ -129,8 +148,8 @@ export default function FocoPage() {
           <div className="glass-card p-6 rounded-xl">
             <h3 className="font-headline-md text-headline-md text-primary mb-4">MISSÕES DE HOJE</h3>
             <div className="space-y-3">
-              {state.tasks.length === 0 && <p className="text-[12px] text-outline">Nenhuma meta ainda. Adicione de 1 a 3 metas claras.</p>}
-              {state.tasks.map((t) => (
+              {dueTasks.length === 0 && <p className="text-[12px] text-outline">Nenhuma meta ainda. Adicione de 1 a 3 metas claras.</p>}
+              {dueTasks.map((t) => (
                 <div key={t.id} className={`flex items-center gap-3 p-3 bg-surface-container-high rounded-lg border border-white/5 ${t.done ? "" : "opacity-70"}`}>
                   <button onClick={() => toggleTask(t.id)} aria-label="Alternar meta">
                     <MI name={t.done ? "task_alt" : "radio_button_unchecked"} fill={t.done} className={t.done ? "text-primary-container" : "text-outline"} />
@@ -155,6 +174,54 @@ export default function FocoPage() {
                 <MI name="add" />
               </button>
             </div>
+            {/* agendamento: hoje / amanhã / data livre (até 7 dias) */}
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              <Caps className="text-outline text-[10px]">PARA:</Caps>
+              {[{ d: today, label: "HOJE" }, { d: tomorrow, label: "AMANHÃ" }].map(({ d, label }) => (
+                <button
+                  key={d}
+                  onClick={() => setNewDate(d)}
+                  className={`px-3 py-1.5 rounded-full font-label-caps text-[10px] border transition active:scale-95 ${
+                    newDate === d ? "bg-primary-container text-on-primary-container border-transparent" : "border-white/10 text-on-surface-variant hover:bg-surface-variant/40"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+              <input
+                type="date"
+                value={newDate}
+                min={today}
+                max={maxTaskDate}
+                onChange={(e) => e.target.value && setNewDate(e.target.value)}
+                aria-label="Data da missão"
+                className={`${inputCls} !py-1.5 text-[12px] w-auto ${newDate > tomorrow ? "border-primary-container/50" : ""}`}
+              />
+            </div>
+
+            {/* próximas (agendadas) */}
+            {futureTasks.length > 0 && (
+              <details className="mt-4 border-t border-white/10 pt-3">
+                <summary className="cursor-pointer font-label-caps text-[11px] text-on-surface-variant flex items-center gap-2 list-none">
+                  <MI name="event_upcoming" className="text-base text-primary-container" />
+                  PRÓXIMAS ({futureTasks.length})
+                </summary>
+                <div className="space-y-2 mt-3">
+                  {futureTasks.map((t) => (
+                    <div key={t.id} className="flex items-center gap-3 p-3 bg-surface-container-high rounded-lg border border-white/5">
+                      <Caps className="text-primary-container text-[10px] whitespace-nowrap shrink-0">{dayLabel(t.date)}</Caps>
+                      <div className="flex-1 min-w-0 text-[13px] font-bold text-on-surface truncate">{t.text}</div>
+                      <button onClick={() => pullToToday(t.id)} aria-label="Antecipar para hoje" title="Antecipar para hoje" className="text-outline hover:text-primary-container transition p-1">
+                        <MI name="today" className="text-lg" />
+                      </button>
+                      <button onClick={() => removeTask(t.id)} aria-label="Remover missão" className="text-outline hover:text-error transition p-1">
+                        <MI name="delete" className="text-lg" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
         </div>
 

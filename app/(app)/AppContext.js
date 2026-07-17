@@ -220,7 +220,9 @@ export function AppProvider({ children }) {
           s.stats.todayDate = today;
         }
         if (s.tasksDate !== today) {
-          s.tasks = [];
+          // missão não feita morre no rollover; agendada (date >= hoje) sobrevive.
+          // Sem date = missão do dia antigo (legado) → morre junto.
+          s.tasks = (s.tasks || []).filter((t) => (t.date || s.tasksDate) >= today);
           s.tasksDate = today;
         }
         if (s.stats.lastCompletedDate && s.stats.lastCompletedDate !== today && s.stats.lastCompletedDate !== yesterday) {
