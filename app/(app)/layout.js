@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AppProvider, useApp } from "./AppContext";
@@ -7,9 +8,13 @@ import { MI, Caps, Stepper } from "@/components/ui";
 import { TABS, XP, gamify, fmtK, focusXp, sleepXp, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX } from "@/lib/state";
 import { hasSupabase } from "@/lib/persistence";
 
+// bottom nav mobile: 4 destinos fixos + MAIS (bottom sheet com o resto)
+const MOBILE_PRIMARY = ["foco", "rotina", "habitos", "exercicio"];
+
 function Chrome({ children }) {
   const { loaded, state, showSettings, setShowSettings, saveError, updateSetting, resetAllData, handleLogout } = useApp();
   const pathname = usePathname();
+  const [moreOpen, setMoreOpen] = useState(false);
 
   if (!loaded) {
     return (
@@ -122,35 +127,95 @@ function Chrome({ children }) {
         </div>
       </main>
 
-      {/* Bottom nav (mobile) */}
-      <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-6 pt-4 md:hidden bg-surface-container-highest/80 backdrop-blur-xl shadow-2xl border-t border-outline-variant/10">
-        {TABS.map((t) => {
-          const active = pathname === t.path;
+      {/* Bottom sheet MAIS (mobile) */}
+      {moreOpen && (
+        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-label="Mais seções">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setMoreOpen(false)} />
+          <div className="absolute bottom-0 left-0 w-full bg-surface-container-highest rounded-t-2xl border-t border-white/10 shadow-2xl px-4 pt-3 pb-28">
+            <div className="w-10 h-1 rounded-full bg-outline-variant mx-auto mb-4" />
+            <div className="grid grid-cols-4 gap-2">
+              {TABS.filter((t) => !MOBILE_PRIMARY.includes(t.id)).map((t) => {
+                const active = pathname === t.path;
+                return (
+                  <Link
+                    key={t.id}
+                    href={t.path}
+                    onClick={() => setMoreOpen(false)}
+                    className={`flex flex-col items-center gap-1.5 py-3 rounded-xl transition active:scale-95 ${
+                      active ? "bg-primary-container/20 text-primary" : "text-on-surface-variant hover:bg-surface-variant/40"
+                    }`}
+                  >
+                    <MI name={t.icon} fill={active} />
+                    <Caps className="text-[10px]">{t.label}</Caps>
+                  </Link>
+                );
+              })}
+              <Link
+                href="/perfil"
+                onClick={() => setMoreOpen(false)}
+                className={`flex flex-col items-center gap-1.5 py-3 rounded-xl transition active:scale-95 ${
+                  pathname === "/perfil" ? "bg-primary-container/20 text-primary" : "text-on-surface-variant hover:bg-surface-variant/40"
+                }`}
+              >
+                <MI name="account_circle" fill={pathname === "/perfil"} />
+                <Caps className="text-[10px]">Perfil</Caps>
+              </Link>
+              <button
+                onClick={() => {
+                  setShowSettings((v) => !v);
+                  setMoreOpen(false);
+                }}
+                className={`flex flex-col items-center gap-1.5 py-3 rounded-xl transition active:scale-95 ${
+                  showSettings ? "bg-primary-container/20 text-primary" : "text-on-surface-variant hover:bg-surface-variant/40"
+                }`}
+              >
+                <MI name="settings" fill={showSettings} />
+                <Caps className="text-[10px]">Config</Caps>
+              </button>
+              {hasSupabase() && (
+                <button
+                  onClick={handleLogout}
+                  className="flex flex-col items-center gap-1.5 py-3 rounded-xl transition active:scale-95 text-on-surface-variant hover:bg-surface-variant/40 hover:text-error"
+                >
+                  <MI name="logout" />
+                  <Caps className="text-[10px]">Sair</Caps>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bottom nav (mobile): 4 fixos + MAIS */}
+      <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 pb-6 pt-3 md:hidden bg-surface-container-highest/80 backdrop-blur-xl shadow-2xl border-t border-outline-variant/10">
+        {TABS.filter((t) => MOBILE_PRIMARY.includes(t.id)).map((t) => {
+          const active = pathname === t.path && !moreOpen;
           return (
             <Link
               key={t.id}
               href={t.path}
-              className={`flex flex-col items-center justify-center transition ${active ? "text-primary scale-110 font-bold" : "text-on-surface-variant"}`}
+              onClick={() => setMoreOpen(false)}
+              className={`flex flex-col items-center justify-center flex-1 transition ${active ? "text-primary scale-110 font-bold" : "text-on-surface-variant"}`}
             >
               <MI name={t.icon} fill={active} />
               <Caps className="text-[10px] mt-1">{t.label}</Caps>
             </Link>
           );
         })}
-        <Link
-          href="/perfil"
-          className={`flex flex-col items-center justify-center transition ${pathname === "/perfil" ? "text-primary scale-110 font-bold" : "text-on-surface-variant"}`}
-        >
-          <MI name="account_circle" fill={pathname === "/perfil"} />
-          <Caps className="text-[10px] mt-1">Perfil</Caps>
-        </Link>
-        <button
-          onClick={() => setShowSettings((v) => !v)}
-          className={`flex flex-col items-center justify-center transition ${showSettings ? "text-primary scale-110 font-bold" : "text-on-surface-variant"}`}
-        >
-          <MI name="settings" fill={showSettings} />
-          <Caps className="text-[10px] mt-1">Config</Caps>
-        </button>
+        {(() => {
+          const overflowActive = moreOpen || !TABS.some((t) => MOBILE_PRIMARY.includes(t.id) && t.path === pathname);
+          return (
+            <button
+              onClick={() => setMoreOpen((v) => !v)}
+              aria-expanded={moreOpen}
+              aria-label="Mais seções"
+              className={`flex flex-col items-center justify-center flex-1 transition ${overflowActive ? "text-primary scale-110 font-bold" : "text-on-surface-variant"}`}
+            >
+              <MI name="apps" fill={moreOpen} />
+              <Caps className="text-[10px] mt-1">Mais</Caps>
+            </button>
+          );
+        })()}
       </nav>
 
     </div>
