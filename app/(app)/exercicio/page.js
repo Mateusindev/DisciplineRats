@@ -122,6 +122,11 @@ export default function ExercicioPage() {
       return;
     }
     const patch = { name: name.slice(0, 80), detail: (f.detail || "").trim().slice(0, 80) };
+    // rename migra o histórico de séries (gym_sets são chaveados por nome)
+    const curMod = plan.find((m) => m.id === modId);
+    const oldName = (curMod?.divisions || []).find((d) => d.id === divId)?.items?.find((i) => i.id === itemId)?.name;
+    const renamed = !!oldName && oldName !== patch.name && isGymModality(curMod);
+    const migrated = renamed ? (state.gymSets || []).filter((s) => s.exercise === oldName).length : 0;
     setState((prev) => ({
       ...prev,
       workoutPlan: mapMod(prev, modId, (m) => ({
@@ -130,7 +135,13 @@ export default function ExercicioPage() {
           d.id === divId ? { ...d, items: (d.items || []).map((i) => (i.id === itemId ? { ...i, ...patch } : i)) } : d
         ),
       })),
+      gymSets: renamed
+        ? (prev.gymSets || []).map((s) => (s.exercise === oldName ? { ...s, exercise: patch.name } : s))
+        : prev.gymSets,
     }));
+    if (renamed && chartEx === oldName) setChartEx(patch.name);
+    if (renamed && rowForms[oldName]) setRowForms(({ [oldName]: row, ...rest }) => ({ ...rest, [patch.name]: row }));
+    if (migrated > 0) toast("Histórico migrado", { sub: `${migrated} SÉRIE(S) → ${patch.name.toUpperCase()}`, icon: "sync_alt" });
     cancelItemEdit(itemId);
   }
 
