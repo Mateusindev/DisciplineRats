@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { weekdayShort } from "@/lib/state";
 
 // path suave (Catmull-Rom → cubic bezier) pelos pontos
@@ -25,12 +25,22 @@ export function smoothPath(pts) {
 // days: ["YYYY-MM-DD"]; values: number|null alinhado a days (null = sem registro).
 // goal: { value, label } opcional — linha tracejada horizontal.
 // format(v): label do ponto (texto ou emoji).
-export function LineChart({ days, values, today, yMax, yMin = 0, goal = null, format = (v) => v, xLabel = weekdayShort, ariaLabel = "" }) {
+export function LineChart({ days, values, today, yMax, yMin = 0, goal = null, format = (v) => v, xLabel = weekdayShort, ariaLabel = "", height = 200 }) {
   const gid = useId();
-  const W = 320;
-  const H = 190;
-  const PAD_X = 14;
-  const PAD_TOP = 26;
+  // viewBox acompanha a largura real do container (escala 1:1) → altura fixa
+  // e texto em tamanho nativo, em vez de esticar proporcionalmente com w-full.
+  const wrapRef = useRef(null);
+  const [W, setW] = useState(320);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setW(Math.max(260, Math.round(e.contentRect.width))));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const H = height;
+  const PAD_X = 18;
+  const PAD_TOP = 28;
   const PAD_BOT = 30;
   const span = yMax - yMin || 1;
   const xFor = (i) => PAD_X + (i * (W - PAD_X * 2)) / Math.max(1, days.length - 1);
@@ -44,7 +54,8 @@ export function LineChart({ days, values, today, yMax, yMin = 0, goal = null, fo
   const area = pts.length >= 2 ? `${line} L ${pts[pts.length - 1].x} ${H - PAD_BOT} L ${pts[0].x} ${H - PAD_BOT} Z` : "";
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={ariaLabel}>
+    <div ref={wrapRef} className="w-full">
+      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="w-full" role="img" aria-label={ariaLabel}>
       <defs>
         <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="var(--color-primary-container)" stopOpacity="0.35" />
@@ -56,7 +67,7 @@ export function LineChart({ days, values, today, yMax, yMin = 0, goal = null, fo
         <>
           <line x1={PAD_X} x2={W - PAD_X} y1={yFor(goal.value)} y2={yFor(goal.value)} stroke="currentColor" strokeDasharray="4 4" strokeWidth="1" className="text-outline-variant" />
           {goal.label && (
-            <text x={W - PAD_X} y={yFor(goal.value) - 4} textAnchor="end" className="fill-current text-outline" style={{ fontSize: 8, fontFamily: "inherit" }}>
+            <text x={W - PAD_X} y={yFor(goal.value) - 5} textAnchor="end" className="fill-current text-outline" style={{ fontSize: 10, fontFamily: "inherit" }}>
               {goal.label}
             </text>
           )}
@@ -72,9 +83,9 @@ export function LineChart({ days, values, today, yMax, yMin = 0, goal = null, fo
         const isToday = p.date === today;
         return (
           <g key={p.date} className="cursor-help">
-            <circle cx={p.x} cy={p.y} r={isToday ? 5 : 3.5} fill="var(--color-primary-container)" stroke="var(--color-background)" strokeWidth="1.5" />
+            <circle cx={p.x} cy={p.y} r={isToday ? 5 : 4} fill="var(--color-primary-container)" stroke="var(--color-background)" strokeWidth="1.5" />
             {isToday && <circle cx={p.x} cy={p.y} r="9" fill="none" stroke="var(--color-primary-container)" strokeOpacity="0.35" strokeWidth="2" />}
-            <text x={p.x} y={p.y - 10} textAnchor="middle" className="fill-current text-on-surface" style={{ fontSize: 8.5, fontWeight: 700, fontFamily: "inherit" }}>
+            <text x={p.x} y={p.y - 11} textAnchor="middle" className="fill-current text-on-surface" style={{ fontSize: 11, fontWeight: 700, fontFamily: "inherit" }}>
               {format(p.v)}
             </text>
             <title>{`${xLabel(p.date)} · ${format(p.v)}`}</title>
@@ -89,11 +100,12 @@ export function LineChart({ days, values, today, yMax, yMin = 0, goal = null, fo
           y={H - 8}
           textAnchor="middle"
           className={`fill-current ${d === today ? "text-primary" : "text-secondary"}`}
-          style={{ fontSize: 9, fontWeight: d === today ? 800 : 500, textTransform: "uppercase", fontFamily: "inherit" }}
+          style={{ fontSize: 10, fontWeight: d === today ? 800 : 500, textTransform: "uppercase", fontFamily: "inherit" }}
         >
           {xLabel(d)}
         </text>
       ))}
-    </svg>
+      </svg>
+    </div>
   );
 }
