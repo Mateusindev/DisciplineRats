@@ -50,6 +50,10 @@ export default function FocoPage() {
   function pullToToday(id) {
     setState((prev) => ({ ...prev, tasks: prev.tasks.map((t) => (t.id === id ? { ...t, date: getDateStr(0) } : t)) }));
   }
+  function pushToTomorrow(id) {
+    setState((prev) => ({ ...prev, tasks: prev.tasks.map((t) => (t.id === id ? { ...t, date: shiftDate(getDateStr(0), 1), done: false } : t)) }));
+    toast("Missão adiada", { sub: "AMANHÃ", icon: "update" });
+  }
   function toggleTask(id) {
     setState((prev) => {
       const tasks = prev.tasks.map((t) => (t.id === id ? { ...t, done: !t.done } : t));
@@ -159,6 +163,11 @@ export default function FocoPage() {
                     <div className="text-[10px] text-outline">RECOMPENSA: +{XP.tasksAllDone} XP (todas feitas)</div>
                   </div>
                   <Caps className={t.done ? "text-primary-container text-[10px]" : "text-outline text-[10px]"}>{t.done ? "FEITA" : "ATIVA"}</Caps>
+                  {!t.done && (
+                    <button onClick={() => pushToTomorrow(t.id)} aria-label="Jogar para amanhã" title="Jogar para amanhã" className="text-outline hover:text-primary-container transition p-1">
+                      <MI name="update" className="text-lg" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
