@@ -442,7 +442,7 @@ export default function AnalisePage() {
               <span className="w-3 h-3 rounded-sm bg-surface-bright" /> SONO (H)
             </div>
             <div className="flex items-center gap-2 text-[10px] font-label-caps">
-              <span className="w-3 h-3 rounded-sm bg-error" /> DEITOU TARDE
+              <span className="w-3 h-3 rounded-sm bg-error/45" /> DEITOU TARDE
             </div>
             <div className="flex items-center gap-2 text-[10px] font-label-caps">
               <span className="w-3 h-3 rounded-full bg-primary" /> HUMOR (1–5)
@@ -484,7 +484,7 @@ export default function AnalisePage() {
                         title={tip}
                         style={{ height: `${h}%`, opacity: qOpacity }}
                         className={`w-5 rounded-t-sm transition-colors ${
-                          r.sleepLate ? "bg-error group-hover:bg-error/80" : isToday ? "bg-primary/40" : "bg-surface-bright group-hover:bg-primary/30"
+                          r.sleepLate ? "bg-error/45 group-hover:bg-error/65" : isToday ? "bg-primary/40" : "bg-surface-bright group-hover:bg-primary/30"
                         }`}
                       />
                     ) : (
