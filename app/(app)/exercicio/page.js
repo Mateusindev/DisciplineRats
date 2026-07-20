@@ -105,6 +105,27 @@ export default function ExercicioPage() {
     }));
   }
 
+  // ---- reordenar exercícios (drag & drop) ----
+  const [drag, setDrag] = useState(null); // { divId, index }
+  const [dragOver, setDragOver] = useState(null); // { divId, index }
+  function moveItem(modId, divId, from, to) {
+    if (from === to) return;
+    setState((prev) => ({
+      ...prev,
+      workoutPlan: mapMod(prev, modId, (m) => ({
+        ...m,
+        divisions: (m.divisions || []).map((d) => {
+          if (d.id !== divId) return d;
+          const items = [...(d.items || [])];
+          if (from < 0 || from >= items.length || to < 0 || to >= items.length) return d;
+          const [moved] = items.splice(from, 1);
+          items.splice(to, 0, moved);
+          return { ...d, items };
+        }),
+      })),
+    }));
+  }
+
   // ---- edição inline de exercício do plano ----
   const [itemEdits, setItemEdits] = useState({}); // { [itemId]: {name, detail} }
   const startItemEdit = (it) => setItemEdits((e) => ({ ...e, [it.id]: { name: it.name, detail: it.detail || "" } }));
@@ -819,7 +840,7 @@ export default function ExercicioPage() {
 
                         {(d.items || []).length > 0 && (
                           <div className="space-y-1.5 mb-3">
-                            {d.items.map((it) => {
+                            {d.items.map((it, idx) => {
                               const ed = itemEdits[it.id];
                               if (ed) {
                                 return (
@@ -850,13 +871,51 @@ export default function ExercicioPage() {
                                   </div>
                                 );
                               }
+                              const isDragging = drag && drag.divId === d.id && drag.index === idx;
+                              const isOver = dragOver && dragOver.divId === d.id && dragOver.index === idx && !isDragging;
                               return (
-                                <div key={it.id} className="flex items-center gap-3 py-1.5 px-2 rounded bg-surface-container-lowest/50">
-                                  <span className="w-1 h-1 rounded-full bg-primary-container shrink-0" />
+                                <div
+                                  key={it.id}
+                                  onDragOver={(e) => {
+                                    if (!drag || drag.divId !== d.id) return;
+                                    e.preventDefault();
+                                    if (!isOver) setDragOver({ divId: d.id, index: idx });
+                                  }}
+                                  onDrop={(e) => {
+                                    if (!drag || drag.divId !== d.id) return;
+                                    e.preventDefault();
+                                    moveItem(m.id, d.id, drag.index, idx);
+                                    setDrag(null);
+                                    setDragOver(null);
+                                  }}
+                                  className={`flex items-center gap-2 py-1.5 px-2 rounded bg-surface-container-lowest/50 transition ${isDragging ? "opacity-40" : ""} ${isOver ? "border-t-2 border-primary-container" : "border-t-2 border-transparent"}`}
+                                >
+                                  <button
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.effectAllowed = "move";
+                                      setDrag({ divId: d.id, index: idx });
+                                    }}
+                                    onDragEnd={() => {
+                                      setDrag(null);
+                                      setDragOver(null);
+                                    }}
+                                    aria-label="Arrastar para reordenar"
+                                    className="text-outline hover:text-on-surface-variant cursor-grab active:cursor-grabbing shrink-0 touch-none"
+                                  >
+                                    <MI name="drag_indicator" className="text-base" />
+                                  </button>
                                   <div className="flex-1 min-w-0 text-[13px]">
                                     <span className="text-on-surface font-bold">{it.name}</span>
                                     {it.detail && <span className="text-outline"> — {it.detail}</span>}
                                   </div>
+                                  {/* fallback de reordenação p/ touch (drag não funciona em mobile) */}
+                                  <button onClick={() => moveItem(m.id, d.id, idx, idx - 1)} disabled={idx === 0} aria-label="Mover para cima" className="text-outline hover:text-primary-container disabled:opacity-20 disabled:hover:text-outline transition p-0.5 shrink-0">
+                                    <MI name="keyboard_arrow_up" className="text-base" />
+                                  </button>
+                                  <button onClick={() => moveItem(m.id, d.id, idx, idx + 1)} disabled={idx === d.items.length - 1} aria-label="Mover para baixo" className="text-outline hover:text-primary-container disabled:opacity-20 disabled:hover:text-outline transition p-0.5 shrink-0">
+                                    <MI name="keyboard_arrow_down" className="text-base" />
+                                  </button>
                                   <button onClick={() => startItemEdit(it)} aria-label="Editar exercício" className="text-outline hover:text-primary-container transition p-1 shrink-0">
                                     <MI name="edit" className="text-base" />
                                   </button>
