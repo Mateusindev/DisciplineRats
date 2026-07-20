@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps, StarRating, Select, inputCls, textareaCls } from "@/components/ui";
-import { XP, award, getDateStr, shiftDate, weekdayShort, last7Dates, isGymModality, gymProgress, gymExercises } from "@/lib/state";
+import { XP, award, getDateStr, shiftDate, weekdayShort, last7Dates, isGymModality, gymProgress, gymExercises, gymPR } from "@/lib/state";
 import { LineChart } from "@/components/charts";
 
 const GLOW = { boxShadow: "0 0 15px rgba(255, 193, 7, 0.15)" };
@@ -407,11 +407,20 @@ export default function ExercicioPage() {
                       {trainItems.map((it) => {
                         const sets = sessionByEx[it.name] || [];
                         const row = getRow(it.name);
+                        const pr = gymPR(gymSets, it.name);
                         return (
                           <div key={it.id} className="bg-surface-container-high rounded-lg border border-white/5 p-3">
                             <div className="flex items-center gap-2 mb-1.5">
                               <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${sets.length ? "bg-primary-container" : "bg-surface-variant"}`} />
                               <span className="flex-1 min-w-0 text-[13px] font-bold text-on-surface truncate">{it.name}</span>
+                              {pr && (
+                                <span
+                                  title={`Recorde pessoal: ${pr.weight}kg${pr.reps ? ` × ${pr.reps}` : ""}`}
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-primary-container/15 border border-primary-container/30 text-primary-container text-[10px] font-bold tabular-nums shrink-0"
+                                >
+                                  <MI name="emoji_events" fill className="text-[11px]" /> {pr.weight}kg{pr.reps ? `×${pr.reps}` : ""}
+                                </span>
+                              )}
                               {it.detail && <Caps className="text-outline text-[9px] shrink-0">{it.detail}</Caps>}
                             </div>
                             {sets.length > 0 && (
