@@ -18,6 +18,7 @@ create table if not exists public.profiles (
   tasks         jsonb   not null default '{}'::jsonb,  -- { tasks:[], tasksDate, tasksBonusDate }
   routine       jsonb   not null default '{}'::jsonb,  -- rotina fixa: { items:[{id,name,time}], bonusDate }
   pantry        jsonb   not null default '[]'::jsonb,  -- despensa: [{id,name,qty,status}]
+  journal       jsonb   not null default '{}'::jsonb,  -- diário: { date: {gratitude,win,dump,intention,xpAwarded} }
   updated_at    timestamptz not null default now()
 );
 
@@ -29,6 +30,7 @@ alter table public.profiles add column if not exists workout_plan jsonb not null
 alter table public.profiles add column if not exists tasks        jsonb not null default '{}'::jsonb;
 alter table public.profiles add column if not exists routine      jsonb not null default '{}'::jsonb;
 alter table public.profiles add column if not exists pantry       jsonb not null default '[]'::jsonb;
+alter table public.profiles add column if not exists journal      jsonb not null default '{}'::jsonb;
 alter table public.profiles drop column if exists state;           -- blob legado removido
 
 -- ---------- LOGS por data/entrada ----------
