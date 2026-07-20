@@ -2,7 +2,7 @@
 
 import { useApp } from "../AppContext";
 import { MI, Caps } from "@/components/ui";
-import { getDateStr, weekdayShort, minutesToHm, lastNDates, MOOD_OPTIONS } from "@/lib/state";
+import { getDateStr, weekdayShort, minutesToHm, lastNDates, MOOD_OPTIONS, bedtimeLateness, SLEEP_LIMIT_DEFAULT } from "@/lib/state";
 
 const N = 30; // janela de dias do panorama combinado
 
@@ -212,14 +212,21 @@ export default function AnalisePage() {
   for (const l of state.exerciseLogs) trainByDate[l.date] = (trainByDate[l.date] || 0) + l.durationMin;
 
   // linha do dia
-  const rows = days.map((d) => ({
-    date: d,
-    mood: state.mood[d]?.mood ?? null,
-    sleepMin: state.sleep[d]?.durationMin ?? null,
-    sleepQuality: state.sleep[d]?.quality ?? null,
-    trainMin: trainByDate[d] || 0,
-    trained: (trainByDate[d] || 0) > 0,
-  }));
+  const sleepLimit = state.settings.sleepLimit || SLEEP_LIMIT_DEFAULT;
+  const rows = days.map((d) => {
+    const s = state.sleep[d];
+    return {
+      date: d,
+      mood: state.mood[d]?.mood ?? null,
+      sleepMin: s?.durationMin ?? null,
+      sleepQuality: s?.quality ?? null,
+      sleepBed: s?.bedtime ?? null,
+      // noite suja: deitou tarde (passou do limite) — não conta como meta limpa
+      sleepLate: s ? bedtimeLateness(s.bedtime, sleepLimit) > 0 : false,
+      trainMin: trainByDate[d] || 0,
+      trained: (trainByDate[d] || 0) > 0,
+    };
+  });
 
   // usa TODO o histórico pra correlação (não só a janela de 14d)
   const allDates = new Set([...Object.keys(state.mood), ...Object.keys(state.sleep), ...Object.keys(trainByDate)]);
@@ -435,6 +442,9 @@ export default function AnalisePage() {
               <span className="w-3 h-3 rounded-sm bg-surface-bright" /> SONO (H)
             </div>
             <div className="flex items-center gap-2 text-[10px] font-label-caps">
+              <span className="w-3 h-3 rounded-sm bg-error" /> DEITOU TARDE
+            </div>
+            <div className="flex items-center gap-2 text-[10px] font-label-caps">
               <span className="w-3 h-3 rounded-full bg-primary" /> HUMOR (1–5)
             </div>
             <div className="flex items-center gap-2 text-[10px] font-label-caps">
@@ -442,6 +452,10 @@ export default function AnalisePage() {
             </div>
           </div>
         </div>
+
+        <p className="text-[11px] text-outline mb-4">
+          Barra vermelha = deitou depois de {sleepLimit} (madrugada não conta como meta limpa). Barra mais apagada = qualidade do sono mais baixa.
+        </p>
 
         <div className="overflow-x-auto ff-scroll">
           <div style={{ minWidth: N * 44 }}>
@@ -458,13 +472,20 @@ export default function AnalisePage() {
               {rows.map((r) => {
                 const isToday = r.date === today;
                 const h = r.sleepMin ? (r.sleepMin / maxSleep) * 100 : 0;
+                // qualidade module a opacidade da barra (qual. baixa = mais apagada); sem nota = cheia
+                const qOpacity = r.sleepQuality ? 0.4 + (r.sleepQuality / 5) * 0.6 : 1;
+                const tip = r.sleepMin
+                  ? `Sono: ${minutesToHm(r.sleepMin)}${r.sleepBed ? ` · deitou ${r.sleepBed}` : ""}${r.sleepLate ? " (tarde/suja)" : ""}${r.sleepQuality ? ` · qualidade ${r.sleepQuality}/5` : ""}`
+                  : "sem registro de sono";
                 return (
                   <div key={r.date} className="flex-1 h-full flex items-end justify-center group relative">
                     {r.sleepMin ? (
                       <div
-                        title={`Sono: ${minutesToHm(r.sleepMin)}`}
-                        style={{ height: `${h}%` }}
-                        className={`w-5 rounded-t-sm transition-colors ${isToday ? "bg-primary/40" : "bg-surface-bright group-hover:bg-primary/30"}`}
+                        title={tip}
+                        style={{ height: `${h}%`, opacity: qOpacity }}
+                        className={`w-5 rounded-t-sm transition-colors ${
+                          r.sleepLate ? "bg-error group-hover:bg-error/80" : isToday ? "bg-primary/40" : "bg-surface-bright group-hover:bg-primary/30"
+                        }`}
                       />
                     ) : (
                       <div className="w-5 h-1 bg-white/5 rounded-full" title="sem registro de sono" />
