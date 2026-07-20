@@ -14,12 +14,13 @@ function hm(min) {
 function pad2(n) {
   return String(n).padStart(2, "0");
 }
-function sleepStreak(sleep, goal) {
+// streak só conta NOITE LIMPA: bateu a meta E deitou no horário (madrugada quebra)
+function sleepStreak(sleep, goal, limit) {
   let streak = 0;
   let off = sleep[getDateStr(0)] ? 0 : -1;
   while (true) {
     const e = sleep[getDateStr(off)];
-    if (e && e.durationMin >= goal) {
+    if (e && e.durationMin >= goal && bedtimeLateness(e.bedtime, limit) <= 0) {
       streak++;
       off--;
     } else break;
@@ -91,7 +92,13 @@ export default function SonoPage() {
   const fillPct = Math.min(durationMin / goalMin, 1);
   const offset = CIRC * (1 - fillPct);
 
-  const streak = sleepStreak(state.sleep, goalMin);
+  const streak = sleepStreak(state.sleep, goalMin, limit);
+  // noites "sujas" no gráfico: deitou tarde (madrugada) — não é 8h limpa
+  const lateFlags = days.map((d) => {
+    const e = state.sleep[d];
+    return e ? bedtimeLateness(e.bedtime, limit) > 0 : false;
+  });
+  const hasLate = lateFlags.some(Boolean);
 
   return (
     <>
@@ -218,7 +225,15 @@ export default function SonoPage() {
 
         {/* Chart */}
         <div className="md:col-span-5 glass-card p-gutter rounded-xl flex flex-col">
-          <h3 className="font-headline-md text-headline-md text-on-surface mb-4">ÚLTIMOS 7 DIAS</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-headline-md text-headline-md text-on-surface">ÚLTIMOS 7 DIAS</h3>
+            {hasLate && (
+              <div className="flex items-center gap-1.5 px-2 py-1 bg-error-container/20 rounded-full border border-error/20">
+                <span className="w-2 h-2 rounded-full bg-error" />
+                <Caps className="text-[9px] text-error">DEITOU TARDE</Caps>
+              </div>
+            )}
+          </div>
           <div className="flex-1 flex items-center">
             {days.some((d) => state.sleep[d]) ? (
               <LineChart
@@ -228,7 +243,8 @@ export default function SonoPage() {
                 yMax={Math.max(600, goalMin + 120)}
                 goal={{ value: goalMin, label: `META ${minutesToHm(goalMin)}` }}
                 format={minutesToHm}
-                ariaLabel="Duração do sono nos últimos 7 dias"
+                flags={lateFlags}
+                ariaLabel="Duração do sono nos últimos 7 dias (pontos vermelhos = deitou tarde)"
               />
             ) : (
               <p className="text-[13px] text-outline text-center w-full py-10">Sem registros ainda — salve seu sono de hoje pra começar o gráfico.</p>
@@ -253,9 +269,11 @@ export default function SonoPage() {
           <div>
             <Caps className="text-on-surface">SEQUÊNCIA DE SONO</Caps>
             <p className="font-body-md text-on-surface-variant text-sm">
-              {streak > 0 ? `${streak} ${streak === 1 ? "dia" : "dias"} batendo a meta de sono.` : "Bata a meta hoje pra iniciar a sequência."}
+              {streak > 0
+                ? `${streak} ${streak === 1 ? "noite limpa" : "noites limpas"} (meta + deitar no horário).`
+                : "Bata a meta e deite no horário pra iniciar a sequência."}
             </p>
-            <div className="mt-2 text-primary font-bold text-xs">MELHOR RECUPERAÇÃO</div>
+            <div className="mt-2 text-primary font-bold text-xs">MADRUGADA QUEBRA A SEQUÊNCIA</div>
           </div>
         </div>
 
