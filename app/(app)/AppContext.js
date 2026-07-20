@@ -495,6 +495,9 @@ export function AppProvider({ children }) {
       settings: { ...prev.settings, [key]: Math.min(max, Math.max(min, prev.settings[key] + delta)) },
     }));
   }
+  function setSetting(key, value) {
+    setState((prev) => ({ ...prev, settings: { ...prev.settings, [key]: value } }));
+  }
   const updateNickname = useCallback(
     async (nick) => {
       const res = await updateUsername(userIdRef.current, nick.trim());
@@ -537,6 +540,7 @@ export function AppProvider({ children }) {
     completeFocusSession,
     updateNickname,
     updateSetting,
+    setSetting,
     resetAllData,
     handleLogout,
     toast,

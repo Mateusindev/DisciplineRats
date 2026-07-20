@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps, StarRating, inputCls } from "@/components/ui";
-import { sleepXp, sleepMissXp, award, getDateStr, minutesToHm, weekdayShort, last7Dates } from "@/lib/state";
+import { sleepXp, sleepMissXp, computeSleepXp, bedtimeLateness, SLEEP_LIMIT_DEFAULT, award, getDateStr, minutesToHm, weekdayShort, last7Dates } from "@/lib/state";
 import { LineChart } from "@/components/charts";
 
 function hm(min) {
@@ -45,43 +45,39 @@ export default function SonoPage() {
   }
   const durationMin = computeDuration(bedtime, wake);
   const goalMin = state.settings.sleepGoalMin || 450;
+  const limit = state.settings.sleepLimit || SLEEP_LIMIT_DEFAULT;
   const hitsGoal = durationMin >= goalMin;
+  const lateMin = bedtimeLateness(bedtime, limit); // >0 = deitou tarde
+  const onTime = lateMin <= 0;
+  // XP líquido previsto p/ o registro atual (assinado): combina duração + horário
+  const previewNet = computeSleepXp({ durationMin, bedtime, goalMin, limit, streak: state.stats.streak });
 
   function save() {
     setState((prev) => {
       const prevEntry = prev.sleep[today];
-      // valores exatos concedidos/cobrados antes (fallback p/ entradas legadas com só xpAwarded)
-      const prevAwarded = prevEntry?.awardedXp ?? (prevEntry?.xpAwarded ? award(sleepXp(goalMin), prev.stats.streak) : 0);
-      const prevPenalty = prevEntry?.penaltyXp || 0;
-      let xp = prev.stats.xp || 0;
-      let awardedXp = 0;
-      let penaltyXp = 0;
-      if (durationMin >= goalMin) {
-        // meta batida: concede prêmio (se novo) e estorna qualquer penalidade anterior
-        awardedXp = prevAwarded || award(sleepXp(goalMin), prev.stats.streak);
-        xp += awardedXp - prevAwarded + prevPenalty;
-      } else {
-        // abaixo da meta: aplica penalidade flat e remove prêmio concedido antes
-        penaltyXp = sleepMissXp(goalMin);
-        xp += -prevAwarded - (penaltyXp - prevPenalty);
-      }
-      xp = Math.max(0, xp);
-      const entry = { bedtime, wake, durationMin, quality, note: note.slice(0, 200), awardedXp, penaltyXp };
+      // net anterior (assinado): prêmio − penalidade; fallback p/ entradas legadas
+      const prevNet =
+        (prevEntry?.awardedXp || 0) - (prevEntry?.penaltyXp || 0) ||
+        (prevEntry?.xpAwarded ? award(sleepXp(goalMin), prev.stats.streak) : 0);
+      const net = computeSleepXp({ durationMin, bedtime, goalMin, limit, streak: prev.stats.streak });
+      const xp = Math.max(0, (prev.stats.xp || 0) + (net - prevNet)); // aplica só o delta (estorno simétrico)
+      const entry = {
+        bedtime,
+        wake,
+        durationMin,
+        quality,
+        note: note.slice(0, 200),
+        awardedXp: net > 0 ? net : 0,
+        penaltyXp: net < 0 ? -net : 0,
+      };
       return { ...prev, sleep: { ...prev.sleep, [today]: entry }, stats: { ...prev.stats, xp } };
     });
-    const penalty = sleepMissXp(goalMin);
-    const wasAwarded = existing?.awardedXp || existing?.xpAwarded;
-    const wasPenalized = (existing?.penaltyXp || 0) > 0;
+    const sign = previewNet >= 0 ? "+" : "−";
+    const reason = !hitsGoal ? "ABAIXO DA META" : onTime ? "META BATIDA · CEDO" : "META BATIDA · DEITOU TARDE";
     toast("Sono salvo", {
-      sub: hitsGoal
-        ? wasAwarded
-          ? "META BATIDA"
-          : `META BATIDA · +${sleepXp(goalMin)} XP`
-        : wasPenalized
-          ? "ABAIXO DA META"
-          : `ABAIXO DA META · −${penalty} XP`,
-      icon: hitsGoal ? "check_circle" : "warning",
-      type: hitsGoal ? undefined : "error",
+      sub: `${reason} · ${sign}${Math.abs(previewNet)} XP`,
+      icon: previewNet >= 0 ? "check_circle" : "warning",
+      type: previewNet >= 0 ? undefined : "error",
     });
   }
 
@@ -115,16 +111,13 @@ export default function SonoPage() {
           <div className="flex justify-between items-start">
             <div>
               <h3 className="font-headline-md text-headline-md text-on-surface mb-1">SONO DE HOJE</h3>
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2 text-primary">
-                  <MI name="stars" fill className="text-sm" />
-                  <Caps>META BATIDA: +{sleepXp(goalMin)} XP</Caps>
-                </div>
-                <div className="flex items-center gap-2 text-error">
-                  <MI name="warning" fill className="text-sm" />
-                  <Caps>ABAIXO DA META: −{sleepMissXp(goalMin)} XP</Caps>
-                </div>
+              <div className="flex items-center gap-2">
+                <MI name={previewNet >= 0 ? "stars" : "warning"} fill className={`text-sm ${previewNet >= 0 ? "text-primary" : "text-error"}`} />
+                <Caps className={previewNet >= 0 ? "text-primary" : "text-error"}>
+                  ESTE REGISTRO: {previewNet >= 0 ? "+" : "−"}{Math.abs(previewNet)} XP
+                </Caps>
               </div>
+              <Caps className="text-[10px] text-outline mt-1 block">DEITAR ATÉ {limit} RENDE XP CHEIO</Caps>
             </div>
           </div>
 
@@ -173,6 +166,18 @@ export default function SonoPage() {
               <p className="font-body-md text-on-surface">
                 Duração estimada: <span className="text-primary font-bold">{minutesToHm(durationMin)}</span>
               </p>
+              {/* horário de dormir */}
+              <div
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full w-fit border ${
+                  onTime ? "bg-primary-container/10 border-primary/20" : "bg-error-container/20 border-error/30"
+                }`}
+              >
+                <MI name={onTime ? "bedtime" : "nightlight"} fill className={`text-sm ${onTime ? "text-primary" : "text-error"}`} />
+                <Caps className={`text-[10px] ${onTime ? "text-primary" : "text-error"}`}>
+                  {onTime ? `DEITOU NO HORÁRIO (ATÉ ${limit})` : `DEITOU ${Math.floor(lateMin / 60)}H${String(lateMin % 60).padStart(2, "0")} APÓS O LIMITE`}
+                </Caps>
+              </div>
+              {/* duração vs meta */}
               <div
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-full w-fit border ${
                   hitsGoal ? "bg-primary-container/10 border-primary/20" : "bg-error-container/20 border-error/30"
@@ -180,7 +185,7 @@ export default function SonoPage() {
               >
                 <MI name={hitsGoal ? "check_circle" : "warning"} fill className={`text-sm ${hitsGoal ? "text-primary" : "text-error"}`} />
                 <Caps className={`text-[10px] ${hitsGoal ? "text-primary" : "text-error"}`}>
-                  META {minutesToHm(goalMin)} · {hitsGoal ? `BATEU A META (+${sleepXp(goalMin)} XP)` : `ABAIXO DA META (−${sleepMissXp(goalMin)} XP)`}
+                  META {minutesToHm(goalMin)} · {hitsGoal ? "BATEU A META" : `ABAIXO DA META (−${sleepMissXp(goalMin)} XP)`}
                 </Caps>
               </div>
             </div>

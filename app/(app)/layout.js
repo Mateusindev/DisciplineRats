@@ -12,7 +12,7 @@ import { hasSupabase } from "@/lib/persistence";
 const MOBILE_PRIMARY = ["foco", "rotina", "habitos", "exercicio"];
 
 function Chrome({ children }) {
-  const { loaded, state, showSettings, setShowSettings, saveError, updateSetting, resetAllData, handleLogout } = useApp();
+  const { loaded, state, showSettings, setShowSettings, saveError, updateSetting, setSetting, resetAllData, handleLogout } = useApp();
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
 
@@ -108,6 +108,16 @@ function Chrome({ children }) {
               <Stepper label="Foco (min)" value={state.settings.focusMin} onDec={() => updateSetting("focusMin", -5, 5, 90)} onInc={() => updateSetting("focusMin", 5, 5, 90)} />
               <Stepper label="Pausa (min)" value={state.settings.breakMin} onDec={() => updateSetting("breakMin", -1, 1, 30)} onInc={() => updateSetting("breakMin", 1, 1, 30)} />
               <Stepper label="Meta de sono (min)" value={state.settings.sleepGoalMin} onDec={() => updateSetting("sleepGoalMin", -15, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX)} onInc={() => updateSetting("sleepGoalMin", 15, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX)} />
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-body-md text-on-surface-variant">Deitar até (horário saudável)</span>
+                <input
+                  type="time"
+                  value={state.settings.sleepLimit || "23:30"}
+                  onChange={(e) => e.target.value && setSetting("sleepLimit", e.target.value)}
+                  aria-label="Horário limite pra dormir"
+                  className="bg-surface-container-highest px-3 py-1.5 rounded-lg border border-white/10 focus:border-primary/50 outline-none text-on-surface font-headline-md text-headline-md"
+                />
+              </div>
               <Stepper label="Meta de treinos/semana" value={state.settings.exerciseWeeklyGoal} onDec={() => updateSetting("exerciseWeeklyGoal", -1, 1, 14)} onInc={() => updateSetting("exerciseWeeklyGoal", 1, 1, 14)} />
               <Stepper label="Meta de kcal/dia" value={state.settings.dietKcalGoal} onDec={() => updateSetting("dietKcalGoal", -50, 1000, 5000)} onInc={() => updateSetting("dietKcalGoal", 50, 1000, 5000)} />
               <Stepper label="Meta de proteína (g)" value={state.settings.dietProteinGoal} onDec={() => updateSetting("dietProteinGoal", -5, 20, 400)} onInc={() => updateSetting("dietProteinGoal", 5, 20, 400)} />
