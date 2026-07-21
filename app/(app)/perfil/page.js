@@ -43,6 +43,14 @@ export default function PerfilPage() {
   const nickValid = NICK_RE.test(nick.trim());
   const badges = computeBadges(state);
   const earned = badges.filter((b) => b.earned);
+  // agrupa por categoria preservando a ordem de definição
+  const badgeGroups = [];
+  for (const b of badges) {
+    const key = b.group || "Geral";
+    let grp = badgeGroups.find((x) => x.key === key);
+    if (!grp) badgeGroups.push((grp = { key, items: [] }));
+    grp.items.push(b);
+  }
   const s = state.stats;
 
   const goal = state.settings.sleepGoalMin || 450;
@@ -164,37 +172,51 @@ export default function PerfilPage() {
           <h3 className="font-headline-md text-headline-md text-primary uppercase">Insígnias</h3>
           <Caps className="text-outline">{earned.length} DE {badges.length} CONQUISTADAS</Caps>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-card-gap">
-          {badges.map((b) => (
-            <div
-              key={b.id}
-              className={`glass-card p-5 rounded-xl flex flex-col items-center text-center gap-2 border transition-colors ${
-                b.earned ? "border-primary-container/40" : "border-white/5 opacity-60"
-              }`}
-            >
-              <div
-                className={`w-14 h-14 rounded-full flex items-center justify-center ${
-                  b.earned ? "bg-primary-container text-on-primary-container" : "bg-surface-variant text-outline"
-                }`}
-              >
-                <MI name={b.earned ? b.icon : "lock"} fill={b.earned} className="text-3xl" />
-              </div>
-              <div className="font-headline-md text-headline-md text-on-surface leading-tight">{b.name}</div>
-              <Caps className="text-[10px] text-on-surface-variant leading-tight">{b.desc}</Caps>
-              {b.earned ? (
-                <Caps className="text-[10px] text-primary-container mt-1">CONQUISTADA</Caps>
-              ) : (
-                <div className="w-full mt-1">
-                  <div className="w-full bg-surface-variant h-1.5 rounded-full overflow-hidden">
-                    <div className="bg-primary/50 h-full rounded-full" style={{ width: `${b.pct}%` }} />
-                  </div>
-                  <Caps className="text-[9px] text-outline mt-1 block">
-                    {b.cur}/{b.target}
-                  </Caps>
+        <div className="space-y-8">
+          {badgeGroups.map((grp) => {
+            const got = grp.items.filter((b) => b.earned).length;
+            return (
+              <div key={grp.key}>
+                <div className="flex items-center gap-2 mb-3">
+                  <Caps className="text-primary-container text-[11px]">{grp.key}</Caps>
+                  <div className="flex-1 h-px bg-outline-variant/30" />
+                  <Caps className="text-outline text-[10px]">{got}/{grp.items.length}</Caps>
                 </div>
-              )}
-            </div>
-          ))}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-card-gap">
+                  {grp.items.map((b) => (
+                    <div
+                      key={b.id}
+                      className={`glass-card p-5 rounded-xl flex flex-col items-center text-center gap-2 border transition-colors ${
+                        b.earned ? "border-primary-container/40" : "border-white/5 opacity-60"
+                      }`}
+                    >
+                      <div
+                        className={`w-14 h-14 rounded-full flex items-center justify-center ${
+                          b.earned ? "bg-primary-container text-on-primary-container" : "bg-surface-variant text-outline"
+                        }`}
+                      >
+                        <MI name={b.earned ? b.icon : "lock"} fill={b.earned} className="text-3xl" />
+                      </div>
+                      <div className="font-headline-md text-headline-md text-on-surface leading-tight">{b.name}</div>
+                      <Caps className="text-[10px] text-on-surface-variant leading-tight">{b.desc}</Caps>
+                      {b.earned ? (
+                        <Caps className="text-[10px] text-primary-container mt-1">CONQUISTADA</Caps>
+                      ) : (
+                        <div className="w-full mt-1">
+                          <div className="w-full bg-surface-variant h-1.5 rounded-full overflow-hidden">
+                            <div className="bg-primary/50 h-full rounded-full" style={{ width: `${b.pct}%` }} />
+                          </div>
+                          <Caps className="text-[9px] text-outline mt-1 block">
+                            {b.cur}/{b.target}
+                          </Caps>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
     </div>
