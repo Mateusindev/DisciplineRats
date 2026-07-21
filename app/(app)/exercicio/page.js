@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps, StarRating, Select, inputCls, textareaCls } from "@/components/ui";
-import { XP, award, getDateStr, shiftDate, weekdayShort, last7Dates, isGymModality, gymProgress, gymExercises, gymPR, DOW_SHORT } from "@/lib/state";
+import { XP, award, getDateStr, shiftDate, weekdayShort, last7Dates, weekStartOf, isGymModality, gymProgress, gymExercises, gymPR, DOW_SHORT } from "@/lib/state";
 import { LineChart } from "@/components/charts";
 
 const GLOW = { boxShadow: "0 0 15px var(--brand-glow)" };
@@ -265,6 +265,9 @@ export default function ExercicioPage() {
   // mais recente primeiro; empate na data mantém ordem de inserção (prepend)
   const weekLogs = state.exerciseLogs.filter((l) => daysSet.has(l.date)).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   const goal = state.settings.exerciseWeeklyGoal;
+  // meta semanal = dias treinados na SEMANA do calendário (começa segunda), não janela móvel
+  const weekStart = weekStartOf(getDateStr(0));
+  const weekDone = new Set(state.exerciseLogs.filter((l) => l.date >= weekStart).map((l) => l.date)).size;
 
   // volume per weekday (total minutes)
   const volByDate = {};
@@ -748,11 +751,11 @@ export default function ExercicioPage() {
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 {Array.from({ length: goal }).map((_, i) => (
-                  <MI key={i} name="fitness_center" fill={i < weekLogs.length} className={`text-2xl ${i < weekLogs.length ? "text-primary" : "text-surface-variant"}`} />
+                  <MI key={i} name="fitness_center" fill={i < weekDone} className={`text-2xl ${i < weekDone ? "text-primary" : "text-surface-variant"}`} />
                 ))}
-                {weekLogs.length > goal && <Caps className="text-outline ml-1">+{weekLogs.length - goal}</Caps>}
+                {weekDone > goal && <Caps className="text-outline ml-1">+{weekDone - goal}</Caps>}
               </div>
-              <p className="text-[12px] text-on-surface-variant mt-3">{weekLogs.length} de {goal} treinos essa semana</p>
+              <p className="text-[12px] text-on-surface-variant mt-3">{weekDone} de {goal} treinos essa semana</p>
             </div>
           </div>
 

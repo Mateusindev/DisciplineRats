@@ -7,12 +7,13 @@ import { AppProvider, useApp } from "./AppContext";
 import { MI, Caps } from "@/components/ui";
 import { TABS, gamify, fmtK } from "@/lib/state";
 import { hasSupabase } from "@/lib/persistence";
+import { DEFAULT_MODE } from "@/lib/themes";
 
 // bottom nav mobile: 4 destinos fixos + MAIS (bottom sheet com o resto)
 const MOBILE_PRIMARY = ["home", "habitos", "exercicio", "sono"];
 
 function Chrome({ children }) {
-  const { loaded, state, handleLogout } = useApp();
+  const { loaded, state, handleLogout, setSetting } = useApp();
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
 
@@ -26,8 +27,20 @@ function Chrome({ children }) {
 
   const g = gamify(state.stats);
 
+  const mode = state.settings.mode || DEFAULT_MODE;
+
   return (
     <div className="min-h-screen bg-background">
+      {/* toggle de tema sutil (canto) */}
+      <button
+        onClick={() => setSetting("mode", mode === "light" ? "dark" : "light")}
+        aria-label={mode === "light" ? "Ativar modo escuro" : "Ativar modo claro"}
+        title="Alternar tema"
+        className="fixed top-3 right-3 z-[60] w-8 h-8 rounded-full grid place-items-center text-on-surface-variant/50 hover:text-on-surface hover:bg-surface-variant/50 transition"
+      >
+        <MI name={mode === "light" ? "dark_mode" : "light_mode"} className="text-[18px]" />
+      </button>
+
       {/* Side nav (desktop) — clássica */}
       <aside className="hidden md:flex flex-col bg-surface-container border-r border-outline-variant w-64 fixed left-0 top-0 bottom-0 pt-6 pb-6 z-40">
         <div className="px-6 mb-6 flex items-center justify-between">

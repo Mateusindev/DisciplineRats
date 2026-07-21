@@ -8,12 +8,12 @@ export const metadata = {
 };
 
 export const viewport = {
-  themeColor: "#121414",
+  themeColor: "#f5f8fd",
 };
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="pt-BR" className="dark">
+    <html lang="pt-BR" className="light">
       <body className="bg-background text-on-background font-body-md selection:bg-primary-container selection:text-on-primary-container">
         {children}
       </body>
