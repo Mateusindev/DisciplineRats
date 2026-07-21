@@ -12,6 +12,26 @@ import { DEFAULT_MODE } from "@/lib/themes";
 // bottom nav mobile: 4 destinos fixos + MAIS (bottom sheet com o resto)
 const MOBILE_PRIMARY = ["home", "habitos", "exercicio", "sono"];
 
+// rotas desativadas: fora do menu, mas acessíveis por URL — bloqueadas aqui
+const DISABLED_ROUTES = ["/foco", "/rotina", "/humor", "/grupos", "/analise"];
+
+function DisabledScreen() {
+  return (
+    <div className="flex flex-col items-center justify-center text-center min-h-[60vh] gap-4">
+      <div className="w-16 h-16 rounded-full bg-surface-variant grid place-items-center text-outline">
+        <MI name="do_not_disturb_on" className="text-4xl" />
+      </div>
+      <h2 className="font-headline-lg text-headline-lg text-primary uppercase">Seção desativada</h2>
+      <p className="text-on-surface-variant text-body-md max-w-sm">
+        Esta parte está temporariamente indisponível. Volte mais tarde.
+      </p>
+      <Link href="/home" className="px-5 py-2.5 rounded-lg bg-primary-container text-on-primary-container font-label-caps text-[11px] active:scale-95 transition">
+        VOLTAR PRA HOME
+      </Link>
+    </div>
+  );
+}
+
 function Chrome({ children }) {
   const { loaded, state, handleLogout, setSetting } = useApp();
   const pathname = usePathname();
@@ -108,7 +128,7 @@ function Chrome({ children }) {
       {/* Main */}
       <main className="md:pl-64 pt-8 pb-32 md:pb-12 min-h-screen">
         <div className="max-w-6xl mx-auto px-4 sm:px-container-padding py-8">
-          {children}
+          {DISABLED_ROUTES.includes(pathname) ? <DisabledScreen /> : children}
         </div>
       </main>
 
