@@ -6,7 +6,7 @@ import { MI, Caps, StarRating, Select, inputCls, textareaCls } from "@/component
 import { XP, award, getDateStr, shiftDate, weekdayShort, last7Dates, isGymModality, gymProgress, gymExercises, gymPR } from "@/lib/state";
 import { LineChart } from "@/components/charts";
 
-const GLOW = { boxShadow: "0 0 15px rgba(255, 193, 7, 0.15)" };
+const GLOW = { boxShadow: "0 0 15px var(--brand-glow)" };
 
 const TABS_EX = [
   { id: "registrar", label: "REGISTRAR", short: "REGISTRAR", icon: "edit_note" },

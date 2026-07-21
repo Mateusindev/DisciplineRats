@@ -3,17 +3,63 @@
 @import "tailwindcss";
 
 @theme {
-  /* colors */
-  --color-on-surface-variant: #d4c5ab;
-  --color-outline-variant: #4f4632;
+  /* ============================================================
+     BRAND PALETTE — SINGLE SOURCE OF TRUTH
+     To recolor the whole app, edit ONLY this block. Every
+     primary/accent token below derives from these vars, and JS
+     inline styles read them too (var(--brand-glow) etc.).
+     Swap the active set for one of the presets to change theme.
+     ============================================================ */
+
+  /* --- ACTIVE: PURPLE --- */
+  --brand-accent:          #a98bff;                 /* vivid accent (buttons, bars, ring) */
+  --brand-accent-dim:      #d0bcff;                 /* softer accent / tint / glow-strong */
+  --brand-pale:            #e9ddff;                 /* pale text/fill on dark */
+  --brand-deep:            #4f378b;                 /* deep accent (borders on tints) */
+  --brand-deepest:         #21005d;                 /* darkest accent */
+  --brand-on-accent:       #381e72;                 /* text/icon ON the vivid accent */
+  --brand-inverse:         #7c5cd6;                 /* inverse primary */
+  --brand-glow:            rgba(169, 139, 255, 0.22); /* focus/mood glow shadow */
+  --brand-outline:         #948aa3;                 /* mid outline (neutral, brand-tinted) */
+  --brand-outline-variant: #48414f;                 /* dark outline */
+  --brand-text-variant:    #cbc3d6;                 /* secondary text (neutral, brand-tinted) */
+
+  /* --- PRESET: AMBER (original) — swap the block above for this to revert ---
+  --brand-accent:          #ffc107;
+  --brand-accent-dim:      #fabd00;
+  --brand-pale:            #ffe4af;
+  --brand-deep:            #6d5100;
+  --brand-deepest:         #261a00;
+  --brand-on-accent:       #3f2e00;
+  --brand-inverse:         #785900;
+  --brand-glow:            rgba(255, 193, 7, 0.22);
+  --brand-outline:         #9c8f78;
+  --brand-outline-variant: #4f4632;
+  --brand-text-variant:    #d4c5ab;
+  */
+
+  /* colors — primary family maps to the brand vars above */
+  --color-primary:                  var(--brand-pale);
+  --color-primary-container:        var(--brand-accent);
+  --color-primary-fixed:            var(--brand-pale);
+  --color-primary-fixed-dim:        var(--brand-accent-dim);
+  --color-surface-tint:             var(--brand-accent-dim);
+  --color-on-primary:               var(--brand-on-accent);
+  --color-on-primary-container:     var(--brand-on-accent);
+  --color-on-primary-fixed:         var(--brand-deepest);
+  --color-on-primary-fixed-variant: var(--brand-deep);
+  --color-inverse-primary:          var(--brand-inverse);
+  --color-outline:                  var(--brand-outline);
+  --color-outline-variant:          var(--brand-outline-variant);
+  --color-on-surface-variant:       var(--brand-text-variant);
+
+  /* colors — neutral / semantic (brand-independent) */
   --color-tertiary-container: #cdcac9;
   --color-on-error-container: #ffdad6;
   --color-secondary: #c8c6c5;
   --color-error: #ffb4ab;
   --color-on-secondary: #313030;
   --color-on-tertiary-container: #565555;
-  --color-outline: #9c8f78;
-  --color-on-primary-fixed: #261a00;
   --color-surface-container-low: #1b1c1c;
   --color-on-surface: #e3e2e2;
   --color-on-tertiary-fixed-variant: #474646;
@@ -22,18 +68,14 @@
   --color-surface-container-lowest: #0d0e0f;
   --color-on-error: #690005;
   --color-surface-variant: #343535;
-  --color-primary-fixed: #ffdf9e;
-  --color-primary-container: #ffc107;
   --color-error-container: #93000a;
   --color-on-secondary-container: #bab8b7;
   --color-secondary-fixed: #e5e2e1;
   --color-on-background: #e3e2e2;
-  --color-surface-tint: #fabd00;
   --color-inverse-on-surface: #303031;
   --color-surface-bright: #383939;
   --color-surface-dim: #121414;
   --color-on-tertiary-fixed: #1c1b1b;
-  --color-primary-fixed-dim: #fabd00;
   --color-surface-container-high: #292a2a;
   --color-background: #121414;
   --color-secondary-container: #4a4949;
@@ -41,15 +83,10 @@
   --color-on-secondary-fixed-variant: #474646;
   --color-surface-container-highest: #343535;
   --color-tertiary-fixed: #e5e2e1;
-  --color-on-primary-fixed-variant: #5b4300;
-  --color-on-primary-container: #6d5100;
-  --color-primary: #ffe4af;
   --color-surface: #121414;
   --color-inverse-surface: #e3e2e2;
   --color-on-secondary-fixed: #1c1b1b;
-  --color-inverse-primary: #785900;
   --color-surface-container: #1f2020;
-  --color-on-primary: #3f2e00;
   --color-secondary-fixed-dim: #c8c6c5;
 
   /* radius */
@@ -134,7 +171,7 @@ body {
 }
 
 .timer-glow {
-  filter: drop-shadow(0 0 15px rgba(255, 193, 7, 0.2));
+  filter: drop-shadow(0 0 15px var(--brand-glow));
 }
 
 @keyframes flame-pulse {

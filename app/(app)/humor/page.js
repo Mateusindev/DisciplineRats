@@ -6,7 +6,7 @@ import { MI, Caps } from "@/components/ui";
 import { getDateStr, last7Dates, MOOD_OPTIONS } from "@/lib/state";
 import { LineChart } from "@/components/charts";
 
-const GLOW = { boxShadow: "0 0 15px rgba(255, 193, 7, 0.2)" };
+const GLOW = { boxShadow: "0 0 15px var(--brand-glow)" };
 const MOOD_ICON = {
   1: "sentiment_very_dissatisfied",
   2: "sentiment_dissatisfied",
@@ -77,7 +77,7 @@ export default function HumorPage() {
           <div className="glass-card p-8 rounded-xl flex flex-col items-center justify-center relative overflow-hidden group min-h-[360px]">
             <div
               className="relative z-10 w-48 h-48 rounded-full bg-surface-container flex items-center justify-center border-4 border-primary/20 transition-all duration-500 group-hover:scale-105"
-              style={mood ? { borderColor: mood === 5 ? "#fabd00" : mood === 1 ? "#ffb4ab" : "rgba(255,193,7,0.2)" } : undefined}
+              style={mood ? { borderColor: mood === 5 ? "var(--color-primary-fixed-dim)" : mood === 1 ? "#ffb4ab" : "var(--brand-glow)" } : undefined}
             >
               <MI name={bigIcon} className={`text-[120px] ${iconColor} transition-all duration-300`} />
             </div>

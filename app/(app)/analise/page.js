@@ -37,7 +37,7 @@ function strength(r) {
   return "muito forte";
 }
 function moodColor(v) {
-  return v === 5 ? "#ffc107" : v === 1 ? "#ffb4ab" : "#ffe4af";
+  return v === 5 ? "var(--color-primary-container)" : v === 1 ? "#ffb4ab" : "var(--color-primary)";
 }
 
 function CorrCard({ icon, title, r, n, positiveHint, negativeHint }) {
@@ -497,7 +497,7 @@ export default function AnalisePage() {
               {/* overlay humor (linha + pontos) */}
               <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
                 {segments.map((s, i) => (
-                  <line key={i} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke="#ffe4af" strokeWidth="0.6" vectorEffect="non-scaling-stroke" opacity="0.7" />
+                  <line key={i} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} style={{ stroke: "var(--color-primary)" }} strokeWidth="0.6" vectorEffect="non-scaling-stroke" opacity="0.7" />
                 ))}
               </svg>
               {/* pontos de humor (divs pra ter tooltip + cor) */}
