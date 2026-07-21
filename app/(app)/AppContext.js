@@ -18,6 +18,7 @@ import {
   computeExercisePenalty,
   computeHabitDailyPenalty,
 } from "@/lib/state";
+import { applyTheme } from "@/lib/themes";
 import { registerServiceWorker, ensureNotifyPermission, notify } from "@/lib/notify";
 import { MI, Loader } from "@/components/ui";
 
@@ -189,6 +190,11 @@ export function AppProvider({ children }) {
   useEffect(() => {
     registerServiceWorker();
   }, []);
+
+  // aplica a cor de marca escolhida (escreve --brand-* no <html>)
+  useEffect(() => {
+    applyTheme(state.settings?.theme);
+  }, [state.settings?.theme]);
 
   // redireciona ao /login em signout
   useEffect(() => {

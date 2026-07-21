@@ -7,6 +7,7 @@ import { AppProvider, useApp } from "./AppContext";
 import { MI, Caps, Stepper } from "@/components/ui";
 import { TABS, XP, gamify, fmtK, focusXp, sleepXp, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX } from "@/lib/state";
 import { hasSupabase } from "@/lib/persistence";
+import { THEMES, DEFAULT_THEME } from "@/lib/themes";
 
 // bottom nav mobile: 4 destinos fixos + MAIS (bottom sheet com o resto)
 const MOBILE_PRIMARY = ["foco", "rotina", "habitos", "exercicio"];
@@ -105,6 +106,26 @@ function Chrome({ children }) {
           {showSettings && (
             <div className="glass-card p-6 rounded-xl mb-gutter flex flex-col gap-3">
               <h3 className="font-headline-md text-headline-md text-primary">CONFIGURAÇÕES</h3>
+              <div className="flex flex-col gap-2">
+                <span className="font-body-md text-on-surface-variant">Cor do tema</span>
+                <div className="flex flex-wrap gap-2.5">
+                  {THEMES.map((t) => {
+                    const active = (state.settings.theme || DEFAULT_THEME) === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => setSetting("theme", t.id)}
+                        aria-label={t.label}
+                        title={t.label}
+                        className={`w-9 h-9 rounded-full grid place-items-center border-2 transition active:scale-95 ${active ? "border-on-surface scale-110" : "border-white/10 hover:border-white/40"}`}
+                        style={{ background: t.swatch }}
+                      >
+                        {active && <MI name="check" className="text-[18px] text-black/70" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <Stepper label="Foco (min)" value={state.settings.focusMin} onDec={() => updateSetting("focusMin", -5, 5, 90)} onInc={() => updateSetting("focusMin", 5, 5, 90)} />
               <Stepper label="Pausa (min)" value={state.settings.breakMin} onDec={() => updateSetting("breakMin", -1, 1, 30)} onInc={() => updateSetting("breakMin", 1, 1, 30)} />
               <Stepper label="Meta de sono (min)" value={state.settings.sleepGoalMin} onDec={() => updateSetting("sleepGoalMin", -15, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX)} onInc={() => updateSetting("sleepGoalMin", 15, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX)} />
