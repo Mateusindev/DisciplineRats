@@ -37,15 +37,9 @@ export default function ExercicioPage() {
     const mod = plan.find((m) => m.name === name);
     setDivision(mod?.divisions?.[0]?.name || "");
   }
-  const [newModality, setNewModality] = useState("");
   const [divForms, setDivForms] = useState({}); // { [modId]: nomeDaNovaDivisao }
   const [itemForms, setItemForms] = useState({}); // { [divId]: {name, detail} }
 
-  function addModality() {
-    const name = newModality.trim() || `Modalidade ${plan.length + 1}`;
-    setState((prev) => ({ ...prev, workoutPlan: [...(prev.workoutPlan || []), { id: Date.now(), name, divisions: [] }] }));
-    setNewModality("");
-  }
   async function removeModality(id) {
     const m = (state.workoutPlan || []).find((x) => x.id === id);
     const ok = await confirm({ title: "Excluir modalidade?", body: `"${m?.name || ""}" e todas as divisões/exercícios dela serão removidos.`, confirmLabel: "EXCLUIR" });
@@ -992,20 +986,6 @@ export default function ExercicioPage() {
               </div>
             );
           })}
-
-          {/* adicionar modalidade */}
-          <div className="glass-card p-4 rounded-xl flex flex-col sm:flex-row gap-3 sm:items-center">
-            <input
-              value={newModality}
-              onChange={(e) => setNewModality(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addModality()}
-              placeholder="Nova modalidade (ex.: JiuJitsu, Corrida, Natação...)"
-              className={`${inputCls} flex-1`}
-            />
-            <button onClick={addModality} className="px-5 py-2.5 rounded-lg bg-primary-container text-on-primary-container font-label-caps text-label-caps flex items-center justify-center gap-2 active:scale-95 transition">
-              <MI name="add" /> ADICIONAR MODALIDADE
-            </button>
-          </div>
         </section>
       )}
     </div>
