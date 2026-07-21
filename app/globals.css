@@ -4,39 +4,22 @@
 
 @theme {
   /* ============================================================
-     BRAND PALETTE — SINGLE SOURCE OF TRUTH
-     To recolor the whole app, edit ONLY this block. Every
-     primary/accent token below derives from these vars, and JS
-     inline styles read them too (var(--brand-glow) etc.).
-     Swap the active set for one of the presets to change theme.
+     BRAND — DARK MODE default (vivid red).
+     Light mode overrides these under `html.light` (see below).
+     Every --color-primary* token derives from these; JS inline
+     styles read them too (var(--brand-glow) etc.).
      ============================================================ */
-
-  /* --- ACTIVE: PURPLE --- */
-  --brand-accent:          #a98bff;                 /* vivid accent (buttons, bars, ring) */
-  --brand-accent-dim:      #d0bcff;                 /* softer accent / tint / glow-strong */
-  --brand-pale:            #e9ddff;                 /* pale text/fill on dark */
-  --brand-deep:            #4f378b;                 /* deep accent (borders on tints) */
-  --brand-deepest:         #21005d;                 /* darkest accent */
-  --brand-on-accent:       #381e72;                 /* text/icon ON the vivid accent */
-  --brand-inverse:         #7c5cd6;                 /* inverse primary */
-  --brand-glow:            rgba(169, 139, 255, 0.22); /* focus/mood glow shadow */
-  --brand-outline:         #948aa3;                 /* mid outline (neutral, brand-tinted) */
-  --brand-outline-variant: #48414f;                 /* dark outline */
-  --brand-text-variant:    #cbc3d6;                 /* secondary text (neutral, brand-tinted) */
-
-  /* --- PRESET: AMBER (original) — swap the block above for this to revert ---
-  --brand-accent:          #ffc107;
-  --brand-accent-dim:      #fabd00;
-  --brand-pale:            #ffe4af;
-  --brand-deep:            #6d5100;
-  --brand-deepest:         #261a00;
-  --brand-on-accent:       #3f2e00;
-  --brand-inverse:         #785900;
-  --brand-glow:            rgba(255, 193, 7, 0.22);
-  --brand-outline:         #9c8f78;
-  --brand-outline-variant: #4f4632;
-  --brand-text-variant:    #d4c5ab;
-  */
+  --brand-accent:          #ff5252;                 /* vivid red accent (buttons, bars, ring) */
+  --brand-accent-dim:      #ff8a80;                 /* softer accent / tint */
+  --brand-pale:            #ffdad4;                 /* pale text/fill on dark */
+  --brand-deep:            #93000a;                 /* deep accent (borders on tints) */
+  --brand-deepest:         #410002;                 /* darkest accent */
+  --brand-on-accent:       #410002;                 /* text/icon ON the vivid accent */
+  --brand-inverse:         #c00012;                 /* inverse primary */
+  --brand-glow:            rgba(255, 82, 82, 0.22); /* focus/mood glow shadow */
+  --brand-outline:         #a08c8a;                 /* mid outline (neutral, brand-tinted) */
+  --brand-outline-variant: #524342;                 /* dark outline */
+  --brand-text-variant:    #d8c2c0;                 /* secondary text (neutral, brand-tinted) */
 
   /* colors — primary family maps to the brand vars above */
   --color-primary:                  var(--brand-pale);
@@ -141,6 +124,67 @@
   --text-headline-lg--line-height: 40px;
   --text-headline-lg--letter-spacing: 0.02em;
   --text-headline-lg--font-weight: 400;
+}
+
+/* ============================================================
+   LIGHT MODE — light-green accent on light surfaces.
+   Overrides the brand vars + neutral surface/text tokens.
+   Toggled by adding class `light` to <html> (see lib/themes.js).
+   ============================================================ */
+html.light {
+  /* brand → green */
+  --brand-accent:          #4caf50;
+  --brand-accent-dim:      #66bb6a;
+  --brand-pale:            #1b6e2a;   /* accent TEXT on light bg (must be dark) */
+  --brand-deep:            #1b5e20;
+  --brand-deepest:         #052e0a;
+  --brand-on-accent:       #0a3d12;   /* text ON the vivid green */
+  --brand-inverse:         #7cd88a;
+  --brand-glow:            rgba(76, 175, 80, 0.22);
+  --brand-outline:         #727d6c;
+  --brand-outline-variant: #c2ccbc;
+  --brand-text-variant:    #414941;   /* secondary text (dark on light) */
+
+  /* neutral surfaces + text → light */
+  --color-background: #f6faf3;
+  --color-surface: #f6faf3;
+  --color-surface-dim: #d7ddd2;
+  --color-surface-bright: #f6faf3;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f0f5ec;
+  --color-surface-container: #eaefe6;
+  --color-surface-container-high: #e4eae0;
+  --color-surface-container-highest: #dfe4da;
+  --color-surface-variant: #dee5d8;
+  --color-on-surface: #181d16;
+  --color-on-background: #181d16;
+  --color-inverse-surface: #2d322b;
+  --color-inverse-on-surface: #eff2ea;
+
+  --color-secondary: #52634f;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #d5e8cf;
+  --color-on-secondary-container: #101f0e;
+  --color-tertiary: #38656a;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #bcebf1;
+  --color-on-tertiary-container: #001f23;
+
+  /* error → readable on light */
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #410002;
+}
+
+/* glass card + form controls adapt to light */
+html.light .glass-card {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+html.light input[type="time"]::-webkit-calendar-picker-indicator,
+html.light input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: none;
 }
 
 html,
