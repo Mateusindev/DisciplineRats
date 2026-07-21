@@ -5,9 +5,6 @@ import { useApp } from "../AppContext";
 import { MI, Caps, StatTile } from "@/components/ui";
 import { gamify, fmtK, getDateStr, toggleHabitState, habitPriority, computeHabitStreak } from "@/lib/state";
 
-const today = getDateStr(0);
-const todayIdx = (new Date().getDay() + 6) % 7; // 0=Seg … 6=Dom (casa com weekStartOf)
-
 function greeting() {
   const h = new Date().getHours();
   if (h < 6) return "Boa madrugada";
@@ -15,8 +12,6 @@ function greeting() {
   if (h < 18) return "Boa tarde";
   return "Boa noite";
 }
-
-const FULL_DATE = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
 
 const count = (div) => (div.items || []).length;
 
@@ -56,6 +51,9 @@ function WoDashboard({ workouts }) {
 export default function HomePage() {
   const { state, setState, myName } = useApp();
   const g = gamify(state.stats);
+  const today = getDateStr(0);
+  const todayIdx = (new Date().getDay() + 6) % 7; // 0=Seg … 6=Dom (casa com weekStartOf)
+  const FULL_DATE = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
 
   // treino do dia: todas as divisões (com modalidade) agendadas pra hoje
   const todayWorkouts = [];
@@ -148,7 +146,7 @@ export default function HomePage() {
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {habits.map((h) => {
-              const done = h.doneDates.includes(today);
+              const done = (h.doneDates || []).includes(today);
               const streak = computeHabitStreak(h.doneDates);
               const noXp = (h.kind || "build") === "weekly" && h.direction === "max";
               return (
