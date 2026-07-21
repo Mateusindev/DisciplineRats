@@ -42,13 +42,6 @@ function Chrome({ children }) {
             >
               <MI name="account_circle" fill={pathname === "/perfil"} />
             </Link>
-            <Link
-              href="/config"
-              aria-label="Configurações"
-              className={`transition p-1 ${pathname === "/config" ? "text-primary-container" : "text-primary"} active:opacity-80`}
-            >
-              <MI name="settings" fill={pathname === "/config"} />
-            </Link>
           </div>
         </div>
         <div className="px-6 mb-8">
@@ -138,16 +131,6 @@ function Chrome({ children }) {
               >
                 <MI name="account_circle" fill={pathname === "/perfil"} />
                 <Caps className="text-[10px]">Perfil</Caps>
-              </Link>
-              <Link
-                href="/config"
-                onClick={() => setMoreOpen(false)}
-                className={`flex flex-col items-center gap-1.5 py-3 rounded-xl transition active:scale-95 ${
-                  pathname === "/config" ? "bg-primary-container/20 text-primary" : "text-on-surface-variant hover:bg-surface-variant/40"
-                }`}
-              >
-                <MI name="settings" fill={pathname === "/config"} />
-                <Caps className="text-[10px]">Config</Caps>
               </Link>
               {hasSupabase() && (
                 <button

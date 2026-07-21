@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useApp } from "../AppContext";
-import { MI, Caps, StatTile, inputCls } from "@/components/ui";
+import { MI, Caps, StatTile, Stepper, inputCls } from "@/components/ui";
 import { XP, award, focusXp, sleepXp, gamify, fmtK, formatTime, getDateStr, shiftDate, weekdayShort, youtubeId, DEFAULT_LOFI_URL } from "@/lib/state";
 
 // prioridade da missão: label visual + ordenação (não altera XP)
@@ -13,7 +13,7 @@ const TASK_PRIORITIES = {
 };
 
 export default function FocoPage() {
-  const { state, setState, timer, toast } = useApp();
+  const { state, setState, timer, toast, updateSetting } = useApp();
 
   // timer é global (vive no AppContext) — persiste entre páginas
   const { phase, secondsLeft, isRunning, toggleTimer, resetPhase, skipPhase } = timer;
@@ -287,6 +287,11 @@ export default function FocoPage() {
             <p className="text-[12px] text-on-surface-variant leading-relaxed">
               Foco +{focusXp(state.settings.focusMin)} · metas do dia +{XP.tasksAllDone} · sono na meta +{sleepXp(state.settings.sleepGoalMin)} · treino +{XP.exercise}. Foco/sono escalam com duração/meta. Streak multiplica (+5%/dia). Não cumprir tira metade do XP (foco é isento).
             </p>
+            <div className="mt-4 pt-4 border-t border-white/5 flex flex-col gap-3">
+              <Caps className="text-outline text-[10px]">DURAÇÃO</Caps>
+              <Stepper label="Foco (min)" value={state.settings.focusMin} onDec={() => updateSetting("focusMin", -5, 5, 90)} onInc={() => updateSetting("focusMin", 5, 5, 90)} />
+              <Stepper label="Pausa (min)" value={state.settings.breakMin} onDec={() => updateSetting("breakMin", -1, 1, 30)} onInc={() => updateSetting("breakMin", 1, 1, 30)} />
+            </div>
           </div>
 
           {/* Player lofi — sidebar */}

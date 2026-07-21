@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useApp } from "../AppContext";
-import { MI, Caps, StarRating, inputCls } from "@/components/ui";
-import { sleepXp, sleepMissXp, computeSleepXp, bedtimeLateness, SLEEP_LIMIT_DEFAULT, award, getDateStr, minutesToHm, weekdayShort, last7Dates } from "@/lib/state";
+import { MI, Caps, StarRating, Stepper, inputCls } from "@/components/ui";
+import { sleepXp, sleepMissXp, computeSleepXp, bedtimeLateness, SLEEP_LIMIT_DEFAULT, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX, award, getDateStr, minutesToHm, weekdayShort, last7Dates } from "@/lib/state";
 import { LineChart } from "@/components/charts";
 
 function hm(min) {
@@ -29,7 +29,7 @@ function sleepStreak(sleep, goal, limit) {
 }
 
 export default function SonoPage() {
-  const { state, setState, toast } = useApp();
+  const { state, setState, toast, setSetting, updateSetting } = useApp();
   const today = getDateStr(0);
   const existing = state.sleep[today];
   const [bedtime, setBedtime] = useState(existing?.bedtime || "23:00");
@@ -106,6 +106,22 @@ export default function SonoPage() {
       <div className="mb-10">
         <h1 className="font-headline-lg text-headline-lg text-primary-fixed-dim mb-1">SONO</h1>
         <p className="font-body-md text-on-surface-variant">Registre e acompanhe seu descanso para otimizar sua recuperação neural e muscular.</p>
+      </div>
+
+      {/* Metas de sono */}
+      <div className="glass-card p-5 rounded-xl mb-8 flex flex-col gap-3 max-w-lg">
+        <Caps className="text-outline text-[10px]">METAS DE SONO</Caps>
+        <Stepper label="Meta de sono (min)" value={state.settings.sleepGoalMin} onDec={() => updateSetting("sleepGoalMin", -15, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX)} onInc={() => updateSetting("sleepGoalMin", 15, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX)} />
+        <div className="flex items-center justify-between gap-3">
+          <span className="font-body-md text-on-surface-variant">Deitar até (horário saudável)</span>
+          <input
+            type="time"
+            value={state.settings.sleepLimit || "23:30"}
+            onChange={(e) => e.target.value && setSetting("sleepLimit", e.target.value)}
+            aria-label="Horário limite pra dormir"
+            className="bg-surface-container-highest px-3 py-1.5 rounded-lg border border-white/10 focus:border-primary/50 outline-none text-on-surface font-headline-md text-headline-md"
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-gutter">

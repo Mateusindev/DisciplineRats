@@ -127,48 +127,53 @@
 }
 
 /* ============================================================
-   LIGHT MODE — light-green accent on light surfaces.
+   LIGHT MODE — light-blue accent (#2B88F5) on cool light surfaces.
    Overrides the brand vars + neutral surface/text tokens.
    Toggled by adding class `light` to <html> (see lib/themes.js).
+   Texto sobre o accent = azul-marinho escuro (contraste ~4.6:1,
+   branco daria só ~3.5:1 no #2B88F5).
    ============================================================ */
 html.light {
-  /* brand → green */
-  --brand-accent:          #4caf50;
-  --brand-accent-dim:      #66bb6a;
-  --brand-pale:            #1b6e2a;   /* accent TEXT on light bg (must be dark) */
-  --brand-deep:            #1b5e20;
-  --brand-deepest:         #052e0a;
-  --brand-on-accent:       #0a3d12;   /* text ON the vivid green */
-  --brand-inverse:         #7cd88a;
-  --brand-glow:            rgba(76, 175, 80, 0.22);
-  --brand-outline:         #727d6c;
-  --brand-outline-variant: #c2ccbc;
-  --brand-text-variant:    #414941;   /* secondary text (dark on light) */
+  /* brand → azul */
+  --brand-accent:          #2b88f5;
+  --brand-accent-dim:      #6bb0fa;
+  --brand-pale:            #0b5cc2;   /* accent TEXT on light bg (must be dark) */
+  --brand-deep:            #0a4a9e;
+  --brand-deepest:         #04203f;
+  --brand-on-accent:       #0a2540;   /* text ON the vivid blue (escuro p/ contraste) */
+  --brand-inverse:         #6bb0fa;
+  --brand-glow:            rgba(43, 136, 245, 0.22);
+  --brand-outline:         #6f7a89;
+  --brand-outline-variant: #c1c9d4;
+  --brand-text-variant:    #414954;   /* secondary text (dark on light) */
 
-  /* neutral surfaces + text → light */
-  --color-background: #f6faf3;
-  --color-surface: #f6faf3;
-  --color-surface-dim: #d7ddd2;
-  --color-surface-bright: #f6faf3;
+  /* neutral surfaces + text → light (frias, casam com azul) */
+  --color-background: #f5f8fd;
+  --color-surface: #f5f8fd;
+  --color-surface-dim: #d6dce6;
+  --color-surface-bright: #f5f8fd;
   --color-surface-container-lowest: #ffffff;
-  --color-surface-container-low: #f0f5ec;
-  --color-surface-container: #eaefe6;
-  --color-surface-container-high: #e4eae0;
-  --color-surface-container-highest: #dfe4da;
-  --color-surface-variant: #dee5d8;
-  --color-on-surface: #181d16;
-  --color-on-background: #181d16;
-  --color-inverse-surface: #2d322b;
-  --color-inverse-on-surface: #eff2ea;
+  --color-surface-container-low: #eef2f9;
+  --color-surface-container: #e8edf6;
+  --color-surface-container-high: #e2e8f2;
+  --color-surface-container-highest: #dce3ee;
+  --color-surface-variant: #dde3ee;
+  --color-on-surface: #171c22;
+  --color-on-background: #171c22;
+  --color-inverse-surface: #2c313a;
+  --color-inverse-on-surface: #eef1f7;
+  /* primary aqui é azul escuro (usado como TEXTO); quando vira FUNDO
+     (bg-primary) o texto sobre ele precisa ser branco */
+  --color-on-primary: #ffffff;
 
-  --color-secondary: #52634f;
+  --color-secondary: #4d5a6b;
   --color-on-secondary: #ffffff;
-  --color-secondary-container: #d5e8cf;
-  --color-on-secondary-container: #101f0e;
-  --color-tertiary: #38656a;
+  --color-secondary-container: #d5e2f2;
+  --color-on-secondary-container: #0f1d2b;
+  --color-tertiary: #4a607a;
   --color-on-tertiary: #ffffff;
-  --color-tertiary-container: #bcebf1;
-  --color-on-tertiary-container: #001f23;
+  --color-tertiary-container: #d3e3ff;
+  --color-on-tertiary-container: #001d36;
 
   /* error → readable on light */
   --color-error: #ba1a1a;

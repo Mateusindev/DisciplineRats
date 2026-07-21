@@ -5,6 +5,7 @@ import { useApp } from "../AppContext";
 import { MI, Caps, Spinner, inputCls } from "@/components/ui";
 import { gamify, fmtK, computeBadges } from "@/lib/state";
 import { hasSupabase, NICK_RE } from "@/lib/persistence";
+import { MODES, DEFAULT_MODE } from "@/lib/themes";
 
 function StatCell({ icon, label, value }) {
   return (
@@ -19,7 +20,7 @@ function StatCell({ icon, label, value }) {
 }
 
 export default function PerfilPage() {
-  const { state, myName, board, updateNickname } = useApp();
+  const { state, myName, board, updateNickname, setSetting, resetAllData, handleLogout, saveError } = useApp();
   const [editingNick, setEditingNick] = useState(false);
   const [nick, setNick] = useState("");
   const [savingNick, setSavingNick] = useState(false);
@@ -217,6 +218,43 @@ export default function PerfilPage() {
               </div>
             );
           })}
+        </div>
+      </section>
+
+      {/* Preferências */}
+      <section>
+        <h3 className="font-headline-md text-headline-md text-primary uppercase mb-4">Preferências</h3>
+        <div className="glass-card p-6 rounded-xl flex flex-col gap-4 max-w-lg">
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-body-md text-on-surface-variant">Tema</span>
+            <div className="flex gap-1.5 bg-surface-container-highest p-1 rounded-lg">
+              {MODES.map((m) => {
+                const active = (state.settings.mode || DEFAULT_MODE) === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => setSetting("mode", m.id)}
+                    aria-label={m.label}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-label-caps text-[11px] transition ${active ? "bg-primary-container text-on-primary-container" : "text-on-surface-variant hover:bg-surface-variant/50"}`}
+                  >
+                    <MI name={m.icon} className="text-[16px]" />
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {saveError && <p className="text-[12px] text-error">Não foi possível salvar agora. Progresso pode não persistir.</p>}
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <button onClick={resetAllData} className="px-3 py-1.5 rounded font-label-caps text-[10px] text-error border border-error/60 hover:bg-error/10 transition">
+              REINICIAR TODOS OS DADOS
+            </button>
+            {hasSupabase() && (
+              <button onClick={handleLogout} className="flex items-center gap-2 text-outline hover:text-error font-label-caps text-[10px] transition">
+                <MI name="logout" className="text-sm" /> SAIR DA CONTA
+              </button>
+            )}
+          </div>
         </div>
       </section>
     </div>

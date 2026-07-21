@@ -150,7 +150,6 @@ export function AppProvider({ children }) {
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [state, setState] = useState(defaultState());
-  const [showSettings, setShowSettings] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const [myName, setMyName] = useState("");
   const [board, setBoard] = useState([]);
@@ -540,8 +539,7 @@ export function AppProvider({ children }) {
     });
     if (!ok) return;
     setState(defaultState());
-    setShowSettings(false);
-    router.push("/foco");
+    router.push("/home");
   }
 
   const value = {
@@ -549,8 +547,6 @@ export function AppProvider({ children }) {
     state,
     setState,
     userId: userIdRef.current,
-    showSettings,
-    setShowSettings,
     saveError,
     myName,
     board,

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useApp } from "../AppContext";
-import { MI, Caps, inputCls } from "@/components/ui";
+import { MI, Caps, Stepper, inputCls } from "@/components/ui";
 import { dietTotals } from "@/lib/state";
 
 const EMPTY_ITEM = { name: "", grams: "", kcal: "", protein: "", carbs: "", fat: "" };
@@ -45,7 +45,7 @@ function MacroBar({ label, value, goal, unit, color }) {
 }
 
 export default function DietaPage() {
-  const { state, setState, toast, confirm } = useApp();
+  const { state, setState, toast, confirm, updateSetting } = useApp();
   const [tab, setTab] = useState("plano");
   const [forms, setForms] = useState({}); // { [mealId]: {name,grams,...} }
   const [edits, setEdits] = useState({}); // { [itemId]: {name,grams,...} } — item em edição
@@ -240,6 +240,16 @@ export default function DietaPage() {
           </button>
         ))}
       </div>
+
+      {tab === "plano" && (
+        <div className="glass-card p-5 rounded-xl flex flex-col gap-3 max-w-lg">
+          <Caps className="text-outline text-[10px]">METAS DIÁRIAS</Caps>
+          <Stepper label="Meta de kcal/dia" value={state.settings.dietKcalGoal} onDec={() => updateSetting("dietKcalGoal", -50, 1000, 5000)} onInc={() => updateSetting("dietKcalGoal", 50, 1000, 5000)} />
+          <Stepper label="Meta de proteína (g)" value={state.settings.dietProteinGoal} onDec={() => updateSetting("dietProteinGoal", -5, 20, 400)} onInc={() => updateSetting("dietProteinGoal", 5, 20, 400)} />
+          <Stepper label="Meta de carboidrato (g)" value={state.settings.dietCarbGoal} onDec={() => updateSetting("dietCarbGoal", -5, 20, 600)} onInc={() => updateSetting("dietCarbGoal", 5, 20, 600)} />
+          <Stepper label="Meta de gordura (g)" value={state.settings.dietFatGoal} onDec={() => updateSetting("dietFatGoal", -5, 10, 250)} onInc={() => updateSetting("dietFatGoal", 5, 10, 250)} />
+        </div>
+      )}
 
       {tab === "plano" && (<>
 
