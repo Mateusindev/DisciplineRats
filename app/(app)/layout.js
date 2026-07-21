@@ -10,7 +10,7 @@ import { hasSupabase } from "@/lib/persistence";
 import { MODES, DEFAULT_MODE } from "@/lib/themes";
 
 // bottom nav mobile: 4 destinos fixos + MAIS (bottom sheet com o resto)
-const MOBILE_PRIMARY = ["foco", "rotina", "habitos", "exercicio"];
+const MOBILE_PRIMARY = ["home", "habitos", "exercicio", "sono"];
 
 function Chrome({ children }) {
   const { loaded, state, showSettings, setShowSettings, saveError, updateSetting, setSetting, resetAllData, handleLogout } = useApp();
@@ -29,7 +29,7 @@ function Chrome({ children }) {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Side nav (desktop) */}
+      {/* Side nav (desktop) — clássica */}
       <aside className="hidden md:flex flex-col bg-surface-container border-r border-outline-variant w-64 fixed left-0 top-0 bottom-0 pt-6 pb-6 z-40">
         <div className="px-6 mb-6 flex items-center justify-between">
           <div className="font-headline-md text-headline-md font-black text-primary tracking-tighter flex items-center gap-2 leading-none">
@@ -216,8 +216,8 @@ function Chrome({ children }) {
         </div>
       )}
 
-      {/* Bottom nav (mobile): 4 fixos + MAIS */}
-      <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 pb-6 pt-3 md:hidden bg-surface-container-highest/80 backdrop-blur-xl shadow-2xl border-t border-outline-variant/10">
+      {/* Bottom nav (mobile): pill flutuante — 4 fixos + MAIS */}
+      <nav className="fixed bottom-5 left-4 right-4 z-50 flex justify-around items-center px-2 py-2 md:hidden bg-surface-container-highest/90 backdrop-blur-xl rounded-full shadow-2xl border border-white/10">
         {TABS.filter((t) => MOBILE_PRIMARY.includes(t.id)).map((t) => {
           const active = pathname === t.path && !moreOpen;
           return (
@@ -225,10 +225,10 @@ function Chrome({ children }) {
               key={t.id}
               href={t.path}
               onClick={() => setMoreOpen(false)}
-              className={`flex flex-col items-center justify-center flex-1 transition ${active ? "text-primary scale-110 font-bold" : "text-on-surface-variant"}`}
+              className={`flex flex-col items-center justify-center flex-1 py-1 transition ${active ? "text-primary scale-110 font-bold" : "text-on-surface-variant"}`}
             >
               <MI name={t.icon} fill={active} />
-              <Caps className="text-[10px] mt-1">{t.label}</Caps>
+              <Caps className="text-[10px] mt-0.5">{t.label}</Caps>
             </Link>
           );
         })}
@@ -239,10 +239,10 @@ function Chrome({ children }) {
               onClick={() => setMoreOpen((v) => !v)}
               aria-expanded={moreOpen}
               aria-label="Mais seções"
-              className={`flex flex-col items-center justify-center flex-1 transition ${overflowActive ? "text-primary scale-110 font-bold" : "text-on-surface-variant"}`}
+              className={`flex flex-col items-center justify-center flex-1 py-1 transition ${overflowActive ? "text-primary scale-110 font-bold" : "text-on-surface-variant"}`}
             >
               <MI name="apps" fill={moreOpen} />
-              <Caps className="text-[10px] mt-1">Mais</Caps>
+              <Caps className="text-[10px] mt-0.5">Mais</Caps>
             </button>
           );
         })()}

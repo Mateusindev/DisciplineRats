@@ -20,6 +20,7 @@ import {
   computeDueWeeklyBonus,
   weekCount,
   shiftDate,
+  toggleHabitState,
 } from "@/lib/state";
 
 // chips de prioridade (form e card)
@@ -134,27 +135,7 @@ export default function HabitosPage() {
 
   // ===== build/weekly: check concede XP por prioridade (weekly-max não premia — marcar = consumir) =====
   function toggleHabit(id) {
-    setState((prev) => {
-      const h = prev.habits.find((x) => x.id === id);
-      if (!h || (h.kind || "build") === "quit") return prev;
-      const noXp = (h.kind || "build") === "weekly" && h.direction === "max";
-      const has = h.doneDates.includes(today);
-      let stats = prev.stats;
-      let patch;
-      if (has) {
-        const refund = h.checkXp?.[today] || 0;
-        const { [today]: _, ...restXp } = h.checkXp || {};
-        patch = { doneDates: h.doneDates.filter((d) => d !== today), checkXp: restXp };
-        if (refund) stats = { ...stats, xp: Math.max(0, (stats.xp || 0) - refund) };
-      } else if (noXp) {
-        patch = { doneDates: [...h.doneDates, today] };
-      } else {
-        const gain = award(habitPriority(h).xp, stats.streak);
-        patch = { doneDates: [...h.doneDates, today], checkXp: { ...(h.checkXp || {}), [today]: gain } };
-        stats = { ...stats, xp: (stats.xp || 0) + gain };
-      }
-      return { ...prev, stats, habits: prev.habits.map((x) => (x.id === id ? { ...x, ...patch } : x)) };
-    });
+    setState((prev) => toggleHabitState(prev, id, today));
   }
 
   // ===== quit: registrar/desfazer recaída =====

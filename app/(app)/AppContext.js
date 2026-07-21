@@ -17,6 +17,7 @@ import {
   computeRoutinePenalty,
   computeExercisePenalty,
   computeHabitDailyPenalty,
+  computeActivityStreak,
 } from "@/lib/state";
 import { applyMode } from "@/lib/themes";
 import { registerServiceWorker, ensureNotifyPermission, notify } from "@/lib/notify";
@@ -196,6 +197,16 @@ export function AppProvider({ children }) {
     applyMode(state.settings?.mode);
   }, [state.settings?.mode]);
 
+  // mantém a sequência geral em dia com a atividade (deriva de qualquer ação)
+  useEffect(() => {
+    if (!loaded) return;
+    setState((prev) => {
+      const st = computeActivityStreak(prev);
+      if (st === prev.stats.streak && st <= (prev.stats.bestStreak || 0)) return prev;
+      return { ...prev, stats: { ...prev.stats, streak: st, bestStreak: Math.max(prev.stats.bestStreak || 0, st) } };
+    });
+  }, [loaded, state.habits, state.exerciseLogs, state.gymSets, state.sleep, state.mood, state.journal, state.routineChecks, state.focusHistory]);
+
   // redireciona ao /login em signout
   useEffect(() => {
     if (!supabase) return;
@@ -293,9 +304,9 @@ export function AppProvider({ children }) {
 
         if (penaltyXp > 0) s.stats.xp = Math.max(0, (s.stats.xp || 0) - penaltyXp);
 
-        if (s.stats.lastCompletedDate && s.stats.lastCompletedDate !== today && s.stats.lastCompletedDate !== yesterday) {
-          s.stats.streak = 0;
-        }
+        // streak geral = dias consecutivos com QUALQUER atividade (derivado)
+        s.stats.streak = computeActivityStreak(s, today);
+        s.stats.bestStreak = Math.max(s.stats.bestStreak || 0, s.stats.streak);
         setState(s);
         setLoaded(true);
         if (penaltyXp > 0) {

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps, StarRating, Select, inputCls, textareaCls } from "@/components/ui";
-import { XP, award, getDateStr, shiftDate, weekdayShort, last7Dates, isGymModality, gymProgress, gymExercises, gymPR } from "@/lib/state";
+import { XP, award, getDateStr, shiftDate, weekdayShort, last7Dates, isGymModality, gymProgress, gymExercises, gymPR, DOW_SHORT } from "@/lib/state";
 import { LineChart } from "@/components/charts";
 
 const GLOW = { boxShadow: "0 0 15px var(--brand-glow)" };
@@ -60,7 +60,7 @@ export default function ExercicioPage() {
 
   function addDivision(modId) {
     const name = (divForms[modId] || "").trim() || "Nova divisão";
-    setState((prev) => ({ ...prev, workoutPlan: mapMod(prev, modId, (m) => ({ ...m, divisions: [...(m.divisions || []), { id: Date.now(), name, items: [] }] })) }));
+    setState((prev) => ({ ...prev, workoutPlan: mapMod(prev, modId, (m) => ({ ...m, divisions: [...(m.divisions || []), { id: Date.now(), name, items: [], weekdays: [] }] })) }));
     setDivForms((f) => ({ ...f, [modId]: "" }));
   }
   async function removeDivision(modId, divId) {
@@ -73,6 +73,21 @@ export default function ExercicioPage() {
   }
   function renameDivision(modId, divId, name) {
     setState((prev) => ({ ...prev, workoutPlan: mapMod(prev, modId, (m) => ({ ...m, divisions: (m.divisions || []).map((d) => (d.id === divId ? { ...d, name } : d)) })) }));
+  }
+  // liga/desliga um dia da semana (0=Seg…6=Dom) em que a divisão é executada
+  function toggleDivisionDay(modId, divId, dayIdx) {
+    setState((prev) => ({
+      ...prev,
+      workoutPlan: mapMod(prev, modId, (m) => ({
+        ...m,
+        divisions: (m.divisions || []).map((d) => {
+          if (d.id !== divId) return d;
+          const cur = d.weekdays || [];
+          const weekdays = cur.includes(dayIdx) ? cur.filter((x) => x !== dayIdx) : [...cur, dayIdx].sort((a, b) => a - b);
+          return { ...d, weekdays };
+        }),
+      })),
+    }));
   }
 
   const getItemForm = (divId) => itemForms[divId] || { name: "", detail: "" };
@@ -836,6 +851,27 @@ export default function ExercicioPage() {
                           <button onClick={() => removeDivision(m.id, d.id)} aria-label="Excluir divisão" className="text-outline hover:text-error transition p-1 shrink-0">
                             <MI name="delete" className="text-lg" />
                           </button>
+                        </div>
+
+                        {/* dias da semana em que faço esse treino (aparece na Home) */}
+                        <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+                          <Caps className="text-outline text-[9px] mr-1">DIAS</Caps>
+                          {DOW_SHORT.map((label, idx) => {
+                            const on = (d.weekdays || []).includes(idx);
+                            return (
+                              <button
+                                key={idx}
+                                onClick={() => toggleDivisionDay(m.id, d.id, idx)}
+                                aria-label={`${label}${on ? " (ativo)" : ""}`}
+                                aria-pressed={on}
+                                className={`w-8 h-8 rounded-full font-label-caps text-[9px] transition active:scale-95 ${
+                                  on ? "bg-primary-container text-on-primary-container" : "bg-surface-container-lowest/60 text-outline hover:text-on-surface-variant"
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
                         </div>
 
                         {(d.items || []).length > 0 && (
