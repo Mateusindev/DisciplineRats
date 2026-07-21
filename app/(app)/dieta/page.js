@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useApp } from "../AppContext";
-import { MI, Caps, Stepper, inputCls } from "@/components/ui";
+import { MI, Caps, inputCls } from "@/components/ui";
 import { dietTotals } from "@/lib/state";
+import MetasEditor from "@/components/MetasEditor";
 
 const EMPTY_ITEM = { name: "", grams: "", kcal: "", protein: "", carbs: "", fat: "" };
 
@@ -45,7 +46,7 @@ function MacroBar({ label, value, goal, unit, color }) {
 }
 
 export default function DietaPage() {
-  const { state, setState, toast, confirm, updateSetting } = useApp();
+  const { state, setState, toast, confirm, setSetting } = useApp();
   const [tab, setTab] = useState("plano");
   const [forms, setForms] = useState({}); // { [mealId]: {name,grams,...} }
   const [edits, setEdits] = useState({}); // { [itemId]: {name,grams,...} } — item em edição
@@ -242,12 +243,16 @@ export default function DietaPage() {
       </div>
 
       {tab === "plano" && (
-        <div className="glass-card p-5 rounded-xl flex flex-col gap-3 max-w-lg">
-          <Caps className="text-outline text-[10px]">METAS DIÁRIAS</Caps>
-          <Stepper label="Meta de kcal/dia" value={state.settings.dietKcalGoal} onDec={() => updateSetting("dietKcalGoal", -50, 1000, 5000)} onInc={() => updateSetting("dietKcalGoal", 50, 1000, 5000)} />
-          <Stepper label="Meta de proteína (g)" value={state.settings.dietProteinGoal} onDec={() => updateSetting("dietProteinGoal", -5, 20, 400)} onInc={() => updateSetting("dietProteinGoal", 5, 20, 400)} />
-          <Stepper label="Meta de carboidrato (g)" value={state.settings.dietCarbGoal} onDec={() => updateSetting("dietCarbGoal", -5, 20, 600)} onInc={() => updateSetting("dietCarbGoal", 5, 20, 600)} />
-          <Stepper label="Meta de gordura (g)" value={state.settings.dietFatGoal} onDec={() => updateSetting("dietFatGoal", -5, 10, 250)} onInc={() => updateSetting("dietFatGoal", 5, 10, 250)} />
+        <div className="glass-card p-6 rounded-xl">
+          <Caps className="text-outline text-[10px] block mb-4">METAS DIÁRIAS</Caps>
+          <MetasEditor
+            fields={[
+              { key: "dietKcalGoal", label: "Kcal/dia", type: "number", value: state.settings.dietKcalGoal, min: 1000, max: 5000, step: 50, unit: "kcal", onChange: (v) => setSetting("dietKcalGoal", v) },
+              { key: "dietProteinGoal", label: "Proteína", type: "number", value: state.settings.dietProteinGoal, min: 20, max: 400, step: 5, unit: "g", onChange: (v) => setSetting("dietProteinGoal", v) },
+              { key: "dietCarbGoal", label: "Carboidrato", type: "number", value: state.settings.dietCarbGoal, min: 20, max: 600, step: 5, unit: "g", onChange: (v) => setSetting("dietCarbGoal", v) },
+              { key: "dietFatGoal", label: "Gordura", type: "number", value: state.settings.dietFatGoal, min: 10, max: 250, step: 5, unit: "g", onChange: (v) => setSetting("dietFatGoal", v) },
+            ]}
+          />
         </div>
       )}
 
