@@ -30,73 +30,88 @@ const REGIONS = {
 export function MuscleMap({ muscle }) {
   const full = FULL.has(muscle);
   const on = new Set(full ? [] : REGIONS[muscle] || []);
-  const fill = (id) => (full ? HI : on.has(id) ? HI : BASE);
-  const op = (id) => (full ? 0.5 : on.has(id) ? 1 : 0.55);
+  const fill = (id) => (full || on.has(id) ? HI : BASE);
+  const op = (id) => (full ? 0.55 : on.has(id) ? 1 : 0.5);
+  // atalho: elipse de músculo (destacável)
+  const M = (id, cx, cy, rx, ry, rot = 0) => (
+    <ellipse cx={cx} cy={cy} rx={rx} ry={ry} transform={rot ? `rotate(${rot} ${cx} ${cy})` : undefined} fill={fill(id)} opacity={op(id)} />
+  );
 
-  // silhueta simples reutilizável (cabeça + tronco + membros) por view
+  // silhueta base (mesma p/ frente e costas)
+  const silhouette = (
+    <g fill={SKIN} stroke="var(--color-outline-variant)" strokeWidth="1" strokeLinejoin="round">
+      {/* cabeça + pescoço */}
+      <circle cx="60" cy="20" r="12" />
+      <path d="M54 30 h12 v8 h-12 z" stroke="none" />
+      {/* tronco com taper atlético */}
+      <path d="M60 38 C72 38 80 42 83 51 C85 66 78 94 74 118 C73 126 76 131 75 136 L45 136 C44 131 47 126 46 118 C42 94 35 66 37 51 C40 42 48 38 60 38 Z" />
+      {/* braços */}
+      <ellipse cx="31" cy="72" rx="8" ry="21" transform="rotate(10 31 72)" />
+      <ellipse cx="89" cy="72" rx="8" ry="21" transform="rotate(-10 89 72)" />
+      <ellipse cx="23" cy="112" rx="6.5" ry="20" transform="rotate(8 23 112)" />
+      <ellipse cx="97" cy="112" rx="6.5" ry="20" transform="rotate(-8 97 112)" />
+      <circle cx="19" cy="133" r="5" />
+      <circle cx="101" cy="133" r="5" />
+      {/* pernas */}
+      <path d="M46 136 h13 v54 q0 6 -6.5 6 h0 q-6.5 0 -6.5 -6 z" />
+      <path d="M61 136 h13 v54 q0 6 -6.5 6 h0 q-6.5 0 -6.5 -6 z" />
+      <path d="M48 196 h11 v40 q0 5 -5.5 5 h0 q-5.5 0 -5.5 -5 z" />
+      <path d="M61 196 h11 v40 q0 5 -5.5 5 h0 q-5.5 0 -5.5 -5 z" />
+      <ellipse cx="53" cy="240" rx="7" ry="4" />
+      <ellipse cx="67" cy="240" rx="7" ry="4" />
+    </g>
+  );
+
+  const front = (
+    <>
+      {M("deltF", 39, 55, 8, 8)}
+      {M("deltF", 81, 55, 8, 8)}
+      {M("chest", 52, 60, 9.5, 7)}
+      {M("chest", 68, 60, 9.5, 7)}
+      {M("biceps", 31, 72, 6, 15, 10)}
+      {M("biceps", 89, 72, 6, 15, -10)}
+      {M("forearmF", 23, 112, 5, 16, 8)}
+      {M("forearmF", 97, 112, 5, 16, -8)}
+      <rect x="51" y="74" width="18" height="34" rx="6" fill={fill("abs")} opacity={op("abs")} />
+      {M("quads", 53, 160, 6.5, 24)}
+      {M("quads", 67, 160, 6.5, 24)}
+      {M("calfF", 53, 212, 5, 16)}
+      {M("calfF", 67, 212, 5, 16)}
+    </>
+  );
+
+  const back = (
+    <>
+      <path d="M48 40 Q60 34 72 40 L66 58 Q60 55 54 58 Z" fill={fill("traps")} opacity={op("traps")} />
+      {M("deltB", 39, 55, 8, 8)}
+      {M("deltB", 81, 55, 8, 8)}
+      {M("lats", 50, 76, 8, 17, 8)}
+      {M("lats", 70, 76, 8, 17, -8)}
+      {M("triceps", 31, 74, 6, 15, 10)}
+      {M("triceps", 89, 74, 6, 15, -10)}
+      {M("forearmB", 23, 112, 5, 16, 8)}
+      {M("forearmB", 97, 112, 5, 16, -8)}
+      {M("glutes", 53, 142, 8.5, 10)}
+      {M("glutes", 67, 142, 8.5, 10)}
+      {M("hams", 53, 166, 6.5, 22)}
+      {M("hams", 67, 166, 6.5, 22)}
+      {M("calfB", 53, 212, 5, 16)}
+      {M("calfB", 67, 212, 5, 16)}
+    </>
+  );
+
   const Body = ({ label, parts }) => (
-    <div className="flex flex-col items-center gap-1">
-      <svg viewBox="0 0 100 200" className="w-full max-w-[130px]" role="img" aria-label={`Corpo ${label}`}>
-        {/* silhueta base */}
-        <g fill={SKIN} stroke="var(--color-outline-variant)" strokeWidth="0.8">
-          <circle cx="50" cy="16" r="10" />
-          <rect x="34" y="27" width="32" height="45" rx="8" />
-          {/* braços */}
-          <rect x="20" y="30" width="12" height="46" rx="6" />
-          <rect x="68" y="30" width="12" height="46" rx="6" />
-          <rect x="20" y="74" width="11" height="40" rx="5" />
-          <rect x="69" y="74" width="11" height="40" rx="5" />
-          {/* quadril + pernas */}
-          <rect x="35" y="70" width="30" height="20" rx="6" />
-          <rect x="36" y="88" width="13" height="52" rx="6" />
-          <rect x="51" y="88" width="13" height="52" rx="6" />
-          <rect x="37" y="138" width="12" height="46" rx="5" />
-          <rect x="51" y="138" width="12" height="46" rx="5" />
-        </g>
-        {/* músculos destacáveis */}
+    <div className="flex flex-col items-center gap-1.5">
+      <svg viewBox="0 0 120 250" className="w-full max-w-[128px]" role="img" aria-label={`Corpo ${label}`}>
+        {silhouette}
         <g stroke="none">{parts}</g>
       </svg>
       <Caps className="text-[9px] text-outline">{label}</Caps>
     </div>
   );
 
-  const front = (
-    <>
-      <rect id="deltF" x="30" y="29" width="10" height="10" rx="4" fill={fill("deltF")} opacity={op("deltF")} />
-      <rect id="deltF2" x="60" y="29" width="10" height="10" rx="4" fill={fill("deltF")} opacity={op("deltF")} />
-      <rect id="chest" x="36" y="31" width="28" height="16" rx="5" fill={fill("chest")} opacity={op("chest")} />
-      <rect id="abs" x="40" y="49" width="20" height="20" rx="4" fill={fill("abs")} opacity={op("abs")} />
-      <rect id="biceps" x="21" y="48" width="9" height="20" rx="4" fill={fill("biceps")} opacity={op("biceps")} />
-      <rect id="biceps2" x="70" y="48" width="9" height="20" rx="4" fill={fill("biceps")} opacity={op("biceps")} />
-      <rect id="forearmF" x="21" y="76" width="9" height="34" rx="4" fill={fill("forearmF")} opacity={op("forearmF")} />
-      <rect id="forearmF2" x="70" y="76" width="9" height="34" rx="4" fill={fill("forearmF")} opacity={op("forearmF")} />
-      <rect id="quads" x="37" y="90" width="11" height="44" rx="5" fill={fill("quads")} opacity={op("quads")} />
-      <rect id="quads2" x="52" y="90" width="11" height="44" rx="5" fill={fill("quads")} opacity={op("quads")} />
-      <rect id="calfF" x="38" y="140" width="10" height="40" rx="4" fill={fill("calfF")} opacity={op("calfF")} />
-      <rect id="calfF2" x="52" y="140" width="10" height="40" rx="4" fill={fill("calfF")} opacity={op("calfF")} />
-    </>
-  );
-
-  const back = (
-    <>
-      <rect id="traps" x="40" y="28" width="20" height="10" rx="4" fill={fill("traps")} opacity={op("traps")} />
-      <rect id="deltB" x="30" y="29" width="10" height="10" rx="4" fill={fill("deltB")} opacity={op("deltB")} />
-      <rect id="deltB2" x="60" y="29" width="10" height="10" rx="4" fill={fill("deltB")} opacity={op("deltB")} />
-      <rect id="lats" x="36" y="39" width="28" height="24" rx="5" fill={fill("lats")} opacity={op("lats")} />
-      <rect id="triceps" x="21" y="48" width="9" height="22" rx="4" fill={fill("triceps")} opacity={op("triceps")} />
-      <rect id="triceps2" x="70" y="48" width="9" height="22" rx="4" fill={fill("triceps")} opacity={op("triceps")} />
-      <rect id="forearmB" x="21" y="78" width="9" height="34" rx="4" fill={fill("forearmB")} opacity={op("forearmB")} />
-      <rect id="forearmB2" x="70" y="78" width="9" height="34" rx="4" fill={fill("forearmB")} opacity={op("forearmB")} />
-      <rect id="glutes" x="37" y="71" width="26" height="16" rx="5" fill={fill("glutes")} opacity={op("glutes")} />
-      <rect id="hams" x="37" y="90" width="11" height="44" rx="5" fill={fill("hams")} opacity={op("hams")} />
-      <rect id="hams2" x="52" y="90" width="11" height="44" rx="5" fill={fill("hams")} opacity={op("hams")} />
-      <rect id="calfB" x="38" y="140" width="10" height="40" rx="4" fill={fill("calfB")} opacity={op("calfB")} />
-      <rect id="calfB2" x="52" y="140" width="10" height="40" rx="4" fill={fill("calfB")} opacity={op("calfB")} />
-    </>
-  );
-
   return (
-    <div className="flex justify-center gap-6">
+    <div className="flex justify-center gap-8">
       <Body label="FRENTE" parts={front} />
       <Body label="COSTAS" parts={back} />
     </div>
