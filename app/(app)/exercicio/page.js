@@ -1,12 +1,49 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps, StarRating, Select, inputCls, textareaCls } from "@/components/ui";
 import { XP, award, getDateStr, shiftDate, weekdayShort, last7Dates, weekStartOf, isGymModality, gymProgress, gymExercises, gymPR, DOW_SHORT } from "@/lib/state";
+import { fetchExercises } from "@/lib/persistence";
 import { LineChart } from "@/components/charts";
 
 const GLOW = { boxShadow: "0 0 15px var(--brand-glow)" };
+
+// busca exercício no catálogo (com fallback: o texto digitado vira exercício custom)
+function ExercisePicker({ value, onChange, onSubmit, catalog }) {
+  const [open, setOpen] = useState(false);
+  const q = (value || "").trim().toLowerCase();
+  const matches = q ? catalog.filter((e) => e.name.toLowerCase().includes(q)).slice(0, 8) : [];
+  return (
+    <div className="relative flex-1">
+      <input
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 120)}
+        onKeyDown={(e) => { if (e.key === "Enter") { setOpen(false); onSubmit(); } }}
+        placeholder="Buscar exercício..."
+        className={`${inputCls} w-full text-[13px]`}
+      />
+      {open && matches.length > 0 && (
+        <ul className="absolute z-20 left-0 right-0 mt-1 bg-surface-container-highest border border-white/10 rounded-lg shadow-2xl max-h-56 overflow-auto ff-scroll">
+          {matches.map((e) => (
+            <li key={e.name}>
+              <button
+                type="button"
+                onMouseDown={(ev) => { ev.preventDefault(); onChange(e.name); setOpen(false); }}
+                className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-surface-variant/50 transition"
+              >
+                <span className="text-[13px] text-on-surface">{e.name}</span>
+                <Caps className="text-outline text-[9px] shrink-0">{e.muscle}</Caps>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 const TABS_EX = [
   { id: "registrar", label: "REGISTRAR", short: "REGISTRAR", icon: "edit_note" },
@@ -40,6 +77,10 @@ export default function ExercicioPage() {
   const [divForms, setDivForms] = useState({}); // { [modId]: nomeDaNovaDivisao }
   const [itemForms, setItemForms] = useState({}); // { [divId]: {name, detail} }
   const [newModality, setNewModality] = useState("");
+  const [catalog, setCatalog] = useState([]); // exercícios do banco pra busca
+  useEffect(() => {
+    fetchExercises().then(setCatalog);
+  }, []);
 
   // modalidade simples (sem divisões): jiu jitsu, corrida, etc — só pra registrar sessão
   function addModality() {
@@ -983,7 +1024,12 @@ export default function ExercicioPage() {
                         )}
 
                         <div className="flex flex-col sm:flex-row gap-2">
-                          <input value={f.name} onChange={setItemField(d.id, "name")} onKeyDown={(e) => e.key === "Enter" && addItem(m.id, d.id)} placeholder="Exercício" className={`${inputCls} flex-1 text-[13px]`} />
+                          <ExercisePicker
+                            value={f.name}
+                            onChange={(v) => setItemForms((fs) => ({ ...fs, [d.id]: { ...getItemForm(d.id), name: v } }))}
+                            onSubmit={() => addItem(m.id, d.id)}
+                            catalog={catalog}
+                          />
                           <input value={f.detail} onChange={setItemField(d.id, "detail")} onKeyDown={(e) => e.key === "Enter" && addItem(m.id, d.id)} placeholder="Detalhe (ex.: 4x12 · 30kg)" className={`${inputCls} flex-1 text-[13px]`} />
                           <button onClick={() => addItem(m.id, d.id)} aria-label="Adicionar exercício" className="px-3 py-2 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center gap-1 active:scale-95 transition font-label-caps text-[11px] shrink-0">
                             <MI name="add" className="text-lg" /> ADD

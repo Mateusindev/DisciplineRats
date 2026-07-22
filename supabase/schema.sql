@@ -341,3 +341,116 @@ create or replace view public.leaderboard as
   limit 100;
 
 grant select on public.leaderboard to anon, authenticated;
+
+-- ---------- Catálogo global de exercícios ----------
+create table if not exists public.exercises (
+  id     serial primary key,
+  name   text not null unique,
+  muscle text not null
+);
+alter table public.exercises enable row level security;
+drop policy if exists "exercises readable" on public.exercises;
+create policy "exercises readable" on public.exercises for select to authenticated using (true);
+
+-- Seed dos exercícios mais usados (idempotente). Rode uma vez no SQL editor.
+insert into public.exercises (name, muscle) values
+  -- Peito
+  ('Supino reto com barra', 'Peito'),
+  ('Supino inclinado com barra', 'Peito'),
+  ('Supino declinado com barra', 'Peito'),
+  ('Supino reto com halteres', 'Peito'),
+  ('Supino inclinado com halteres', 'Peito'),
+  ('Crucifixo reto com halteres', 'Peito'),
+  ('Crucifixo inclinado', 'Peito'),
+  ('Crossover na polia', 'Peito'),
+  ('Voador (peck deck)', 'Peito'),
+  ('Flexão de braço', 'Peito'),
+  ('Supino máquina', 'Peito'),
+  -- Costas
+  ('Puxada frente (pulldown)', 'Costas'),
+  ('Puxada aberta', 'Costas'),
+  ('Barra fixa', 'Costas'),
+  ('Remada curvada com barra', 'Costas'),
+  ('Remada curvada com halteres', 'Costas'),
+  ('Remada unilateral (serrote)', 'Costas'),
+  ('Remada cavalinho', 'Costas'),
+  ('Remada baixa na polia', 'Costas'),
+  ('Remada máquina', 'Costas'),
+  ('Pull-over', 'Costas'),
+  ('Levantamento terra', 'Costas'),
+  -- Ombros
+  ('Desenvolvimento com barra', 'Ombros'),
+  ('Desenvolvimento com halteres', 'Ombros'),
+  ('Desenvolvimento Arnold', 'Ombros'),
+  ('Elevação lateral', 'Ombros'),
+  ('Elevação frontal', 'Ombros'),
+  ('Crucifixo inverso', 'Ombros'),
+  ('Remada alta', 'Ombros'),
+  ('Desenvolvimento máquina', 'Ombros'),
+  -- Trapézio
+  ('Encolhimento com barra', 'Trapézio'),
+  ('Encolhimento com halteres', 'Trapézio'),
+  -- Bíceps
+  ('Rosca direta com barra', 'Bíceps'),
+  ('Rosca alternada com halteres', 'Bíceps'),
+  ('Rosca martelo', 'Bíceps'),
+  ('Rosca scott', 'Bíceps'),
+  ('Rosca concentrada', 'Bíceps'),
+  ('Rosca na polia', 'Bíceps'),
+  ('Rosca inversa', 'Bíceps'),
+  -- Tríceps
+  ('Tríceps testa', 'Tríceps'),
+  ('Tríceps corda na polia', 'Tríceps'),
+  ('Tríceps barra na polia', 'Tríceps'),
+  ('Tríceps francês', 'Tríceps'),
+  ('Tríceps coice', 'Tríceps'),
+  ('Mergulho no banco', 'Tríceps'),
+  ('Supino fechado', 'Tríceps'),
+  -- Antebraço
+  ('Rosca de punho', 'Antebraço'),
+  ('Rosca de punho inversa', 'Antebraço'),
+  -- Quadríceps
+  ('Agachamento livre', 'Quadríceps'),
+  ('Agachamento frontal', 'Quadríceps'),
+  ('Agachamento hack', 'Quadríceps'),
+  ('Leg press 45', 'Quadríceps'),
+  ('Cadeira extensora', 'Quadríceps'),
+  ('Afundo (avanço)', 'Quadríceps'),
+  ('Agachamento búlgaro', 'Quadríceps'),
+  -- Posterior de coxa
+  ('Mesa flexora', 'Posterior'),
+  ('Cadeira flexora', 'Posterior'),
+  ('Stiff', 'Posterior'),
+  ('Levantamento terra romeno', 'Posterior'),
+  -- Glúteos
+  ('Elevação pélvica (hip thrust)', 'Glúteos'),
+  ('Coice na máquina', 'Glúteos'),
+  ('Cadeira abdutora', 'Glúteos'),
+  ('Agachamento sumô', 'Glúteos'),
+  -- Panturrilha
+  ('Panturrilha em pé', 'Panturrilha'),
+  ('Panturrilha sentado', 'Panturrilha'),
+  ('Panturrilha no leg press', 'Panturrilha'),
+  -- Abdômen
+  ('Abdominal supra', 'Abdômen'),
+  ('Abdominal infra', 'Abdômen'),
+  ('Elevação de pernas', 'Abdômen'),
+  ('Prancha', 'Abdômen'),
+  ('Prancha lateral', 'Abdômen'),
+  ('Abdominal na roda', 'Abdômen'),
+  ('Russian twist', 'Abdômen'),
+  -- Cardio
+  ('Corrida', 'Cardio'),
+  ('Esteira', 'Cardio'),
+  ('Bicicleta ergométrica', 'Cardio'),
+  ('Elíptico', 'Cardio'),
+  ('Pular corda', 'Cardio'),
+  ('Remo ergômetro', 'Cardio'),
+  ('Escada (stairmaster)', 'Cardio'),
+  ('Caminhada', 'Cardio'),
+  -- Corpo inteiro
+  ('Burpee', 'Corpo inteiro'),
+  ('Kettlebell swing', 'Corpo inteiro'),
+  ('Agachamento com salto', 'Corpo inteiro'),
+  ('Clean and press', 'Corpo inteiro')
+on conflict (name) do nothing;
