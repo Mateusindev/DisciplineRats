@@ -31,7 +31,6 @@ export default function CarteiraPage() {
 
   const txs = state.transactions || [];
   const wallet = state.wallet || { fixed: [], goals: [] };
-  const budget = state.settings.walletBudget || 0;
   const customCats = state.settings.walletCats || [];
 
   const monthTxs = txs
@@ -40,13 +39,10 @@ export default function CarteiraPage() {
   const income = monthTxs.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
   const expense = monthTxs.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
   const balance = income - expense;
-  const budgetPct = budget > 0 ? Math.min(100, Math.round((expense / budget) * 100)) : 0;
-  const overBudget = budget > 0 && expense > budget;
   // fixas ainda não pagas neste mês = dinheiro comprometido → descontar do livre
   const pendingFixed = (wallet.fixed || []).filter((f) => !f.paid?.[selMonth]).reduce((s, f) => s + (f.amount || 0), 0);
-  // livre = o que você tem (orçamento do mês + receitas) − o que gastou − fixas ainda não pagas
-  const freeBase = (budget > 0 ? budget : 0) + income;
-  const free = freeBase - expense - pendingFixed;
+  // livre = receitas − despesas − fixas ainda não pagas
+  const free = balance - pendingFixed;
 
   // ---- dados dos gráficos ----
   // gasto por categoria no mês (desc)
@@ -210,50 +206,17 @@ export default function CarteiraPage() {
             </StatTile>
           </section>
 
-          {/* livre = orçamento (+ receitas) − gastos − fixas pendentes */}
+          {/* livre = receitas − gastos − fixas pendentes */}
           <section className="glass-card p-5 rounded-xl">
             <div className="flex items-center justify-between gap-3">
               <Caps className="text-outline text-[10px]">LIVRE PRA GASTAR</Caps>
               <div className={`font-headline-lg text-headline-lg ${free >= 0 ? "text-primary" : "text-error"}`}>{fmtMoney(free)}</div>
             </div>
             <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px] font-label-caps text-outline">
-              <span>{budget > 0 ? `Orçamento ${fmtMoney(budget)}` : "Sem orçamento"}</span>
-              {income > 0 && <span className="text-primary-container">+ receitas {fmtMoney(income)}</span>}
+              <span className="text-primary-container">Receitas {fmtMoney(income)}</span>
               <span className="text-error">− gastos {fmtMoney(expense)}</span>
               {pendingFixed > 0 && <span className="text-error">− fixas pendentes {fmtMoney(pendingFixed)}</span>}
             </div>
-          </section>
-
-          {/* orçamento */}
-          <section className="glass-card p-6 rounded-xl">
-            <div className="flex items-center justify-between mb-3 gap-3">
-              <Caps className="text-outline text-[10px]">ORÇAMENTO MENSAL</Caps>
-              <div className="flex items-center gap-2">
-                <span className="text-on-surface-variant text-[12px]">R$</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="50"
-                  value={budget || ""}
-                  onChange={(e) => setSetting("walletBudget", Math.max(0, parseInt(e.target.value) || 0))}
-                  placeholder="0"
-                  className="w-28 bg-surface-container-highest px-3 py-1.5 rounded-lg border border-white/10 focus:border-primary/50 outline-none text-on-surface font-headline-md text-headline-md text-right"
-                />
-              </div>
-            </div>
-            {budget > 0 ? (
-              <>
-                <div className="w-full bg-surface-variant h-2 rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full transition-all ${overBudget ? "bg-error" : "bg-primary-container"}`} style={{ width: `${budgetPct}%` }} />
-                </div>
-                <div className="flex justify-between text-[11px] font-label-caps mt-1.5">
-                  <span className={overBudget ? "text-error" : "text-on-surface-variant"}>{fmtMoney(expense)} gasto</span>
-                  <span className="text-outline">{overBudget ? `${fmtMoney(expense - budget)} acima` : `${fmtMoney(budget - expense)} restante`}</span>
-                </div>
-              </>
-            ) : (
-              <p className="text-[12px] text-outline">Defina um teto pra acompanhar seus gastos.</p>
-            )}
           </section>
 
           {/* lançamento */}
