@@ -41,6 +41,9 @@ export default function CarteiraPage() {
   const balance = income - expense;
   const budgetPct = budget > 0 ? Math.min(100, Math.round((expense / budget) * 100)) : 0;
   const overBudget = budget > 0 && expense > budget;
+  // fixas ainda não pagas neste mês = dinheiro comprometido → descontar do livre
+  const pendingFixed = (wallet.fixed || []).filter((f) => !f.paid?.[selMonth]).reduce((s, f) => s + (f.amount || 0), 0);
+  const free = balance - pendingFixed;
 
   // ---- lançamento ----
   const [form, setForm] = useState({ type: "expense", amount: "", date: getDateStr(0), category: "", note: "" });
@@ -184,6 +187,18 @@ export default function CarteiraPage() {
             <StatTile label="SALDO" value={fmtMoney(balance)}>
               <MI name={balance >= 0 ? "trending_up" : "trending_down"} className={balance >= 0 ? "text-primary-container" : "text-error"} />
             </StatTile>
+          </section>
+
+          {/* livre após descontar fixas pendentes */}
+          <section className="glass-card p-5 rounded-xl flex items-center justify-between gap-3">
+            <div>
+              <Caps className="text-outline text-[10px]">LIVRE (após fixas pendentes)</Caps>
+              <div className={`font-headline-lg text-headline-lg ${free >= 0 ? "text-primary" : "text-error"}`}>{fmtMoney(free)}</div>
+            </div>
+            <div className="text-right">
+              <Caps className="text-outline text-[9px]">FIXAS PENDENTES</Caps>
+              <div className="font-label-caps text-[13px] text-error">−{fmtMoney(pendingFixed)}</div>
+            </div>
           </section>
 
           {/* orçamento */}
