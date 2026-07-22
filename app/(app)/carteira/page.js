@@ -90,11 +90,29 @@ export default function CarteiraPage() {
   function removeFixed(id) {
     setState((prev) => ({ ...prev, wallet: { ...prev.wallet, fixed: (prev.wallet?.fixed || []).filter((f) => f.id !== id) } }));
   }
-  function launchFixed(f) {
-    const date = `${selMonth}-${pad2(Math.min(28, f.day || 1))}`;
-    const tx = { id: crypto.randomUUID(), date, type: "expense", amount: f.amount, category: f.category || "Contas", note: `Fixa: ${f.name}` };
-    setState((prev) => ({ ...prev, transactions: [tx, ...(prev.transactions || [])] }));
-    toast(`"${f.name}" lançada`, { sub: monthLabel(selMonth), icon: "event_available" });
+  const isPaid = (f) => !!f.paid?.[selMonth];
+  function togglePaid(f) {
+    const paidId = f.paid?.[selMonth];
+    setState((prev) => {
+      let transactions = prev.transactions || [];
+      let newId = null;
+      if (paidId) {
+        transactions = transactions.filter((t) => t.id !== paidId); // desmarca → remove a transação
+      } else {
+        const tx = { id: crypto.randomUUID(), date: `${selMonth}-${pad2(Math.min(28, f.day || 1))}`, type: "expense", amount: f.amount, category: f.category || "Contas", note: `Fixa: ${f.name}` };
+        transactions = [tx, ...transactions];
+        newId = tx.id;
+      }
+      const fixed = (prev.wallet?.fixed || []).map((x) => {
+        if (x.id !== f.id) return x;
+        const paid = { ...(x.paid || {}) };
+        if (paidId) delete paid[selMonth];
+        else paid[selMonth] = newId;
+        return { ...x, paid };
+      });
+      return { ...prev, transactions, wallet: { ...prev.wallet, fixed } };
+    });
+    toast(paidId ? `"${f.name}" desmarcada` : `"${f.name}" paga`, { sub: monthLabel(selMonth), icon: paidId ? "undo" : "check_circle" });
   }
 
   // ---- metas ----
@@ -261,6 +279,17 @@ export default function CarteiraPage() {
 
       {tab === "fixas" && (
         <>
+          {/* switcher de mês (define o mês que você está marcando como pago) */}
+          <div className="flex items-center justify-between">
+            <button onClick={() => setSelMonth((m) => shiftMonth(m, -1))} aria-label="Mês anterior" className="w-9 h-9 rounded-full bg-surface-container-high grid place-items-center active:scale-95 transition">
+              <MI name="chevron_left" />
+            </button>
+            <Caps className="text-primary text-[13px] capitalize">{monthLabel(selMonth)}</Caps>
+            <button onClick={() => setSelMonth((m) => shiftMonth(m, 1))} aria-label="Próximo mês" className="w-9 h-9 rounded-full bg-surface-container-high grid place-items-center active:scale-95 transition">
+              <MI name="chevron_right" />
+            </button>
+          </div>
+
           <section className="glass-card p-6 rounded-xl flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <Caps className="text-outline text-[10px]">DESPESAS FIXAS</Caps>
@@ -269,23 +298,29 @@ export default function CarteiraPage() {
             {(wallet.fixed || []).length === 0 ? (
               <p className="text-[12px] text-outline">Cadastre gastos que se repetem todo mês (aluguel, assinaturas...).</p>
             ) : (
-              <ul className="space-y-1.5">
-                {wallet.fixed.map((f) => (
-                  <li key={f.id} className="bg-surface-container-high rounded-lg p-3 flex items-center gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[13px] text-on-surface truncate">{f.name}</div>
-                      <Caps className="text-outline text-[9px]">{f.category} · dia {f.day}</Caps>
-                    </div>
-                    <span className="font-label-caps text-[13px] text-error shrink-0">{fmtMoney(f.amount)}</span>
-                    <button onClick={() => launchFixed(f)} title="Lançar este mês" className="px-2.5 py-1 rounded-lg bg-primary-container text-on-primary-container font-label-caps text-[9px] active:scale-95 transition shrink-0">
-                      LANÇAR
-                    </button>
-                    <button onClick={() => removeFixed(f.id)} aria-label="Excluir" className="text-outline hover:text-error transition shrink-0">
-                      <MI name="delete" className="text-lg" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <Caps className="text-outline text-[9px]">{wallet.fixed.filter(isPaid).length}/{wallet.fixed.length} pagas em {monthLabel(selMonth)}</Caps>
+                <ul className="space-y-1.5">
+                  {wallet.fixed.map((f) => {
+                    const paid = isPaid(f);
+                    return (
+                      <li key={f.id} className={`rounded-lg p-3 flex items-center gap-3 transition ${paid ? "bg-primary-container/10 border border-primary-container/30" : "bg-surface-container-high"}`}>
+                        <button onClick={() => togglePaid(f)} aria-label={paid ? "Desmarcar" : "Marcar como paga"} className="shrink-0">
+                          <MI name={paid ? "check_circle" : "radio_button_unchecked"} fill={paid} className={paid ? "text-primary-container" : "text-outline"} />
+                        </button>
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-[13px] truncate ${paid ? "text-on-surface-variant line-through" : "text-on-surface"}`}>{f.name}</div>
+                          <Caps className="text-outline text-[9px]">{f.category} · dia {f.day} · {paid ? "PAGA" : "PENDENTE"}</Caps>
+                        </div>
+                        <span className="font-label-caps text-[13px] text-error shrink-0">{fmtMoney(f.amount)}</span>
+                        <button onClick={() => removeFixed(f.id)} aria-label="Excluir" className="text-outline hover:text-error transition shrink-0">
+                          <MI name="delete" className="text-lg" />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
             )}
           </section>
 
