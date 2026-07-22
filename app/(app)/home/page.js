@@ -13,25 +13,29 @@ function greeting() {
   return "Boa noite";
 }
 
-const count = (div) => (div.items || []).length;
-
-// ---- Layout 5: painel (métrica grande + chips de exercícios) ----
+// painel do treino do dia — divisão da academia OU modalidade simples
 function WoDashboard({ workouts }) {
   return (
     <div className="space-y-3">
-      {workouts.map(({ mod, div }) => (
-        <div key={div.id} className="glass-card rounded-xl p-5 flex flex-col sm:flex-row gap-5">
+      {workouts.map((w) => (
+        <div key={w.id} className="glass-card rounded-xl p-5 flex flex-col sm:flex-row gap-5">
           <div className="sm:w-32 shrink-0 flex sm:flex-col items-center sm:items-start gap-3 sm:gap-1">
-            <div className="text-metric-mobile font-metric-mobile text-primary-container leading-none">{count(div)}</div>
+            {w.simple ? (
+              <MI name="sports_martial_arts" className="text-primary-container text-5xl" />
+            ) : (
+              <div className="text-metric-mobile font-metric-mobile text-primary-container leading-none">{w.items.length}</div>
+            )}
             <div>
-              <div className="font-headline-md text-[16px] text-primary leading-tight">{div.name}</div>
-              <Caps className="text-outline text-[9px]">{mod}</Caps>
+              <div className="font-headline-md text-[16px] text-primary leading-tight">{w.name}</div>
+              {!w.simple && <Caps className="text-outline text-[9px]">{w.mod}</Caps>}
             </div>
           </div>
           <div className="flex-1 border-t sm:border-t-0 sm:border-l border-white/5 sm:pl-5 pt-3 sm:pt-0">
-            {count(div) > 0 ? (
+            {w.simple ? (
+              <p className="text-[12px] text-on-surface-variant">Sessão de hoje — {w.name}.</p>
+            ) : w.items.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
-                {div.items.map((it) => (
+                {w.items.map((it) => (
                   <span key={it.id} className="px-2.5 py-1 rounded-full bg-surface-container-high text-[12px] text-on-surface-variant" title={it.detail || ""}>
                     {it.name}
                   </span>
@@ -55,11 +59,16 @@ export default function HomePage() {
   const todayIdx = (new Date().getDay() + 6) % 7; // 0=Seg … 6=Dom (casa com weekStartOf)
   const FULL_DATE = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
 
-  // treino do dia: todas as divisões (com modalidade) agendadas pra hoje
+  // treino do dia: divisões da academia OU modalidades simples agendadas pra hoje
   const todayWorkouts = [];
   for (const m of state.workoutPlan || []) {
-    for (const d of m.divisions || []) {
-      if ((d.weekdays || []).includes(todayIdx)) todayWorkouts.push({ mod: m.name, div: d });
+    const divs = m.divisions || [];
+    if (divs.length) {
+      for (const d of divs) {
+        if ((d.weekdays || []).includes(todayIdx)) todayWorkouts.push({ id: d.id, mod: m.name, name: d.name, items: d.items || [], simple: false });
+      }
+    } else if ((m.weekdays || []).includes(todayIdx)) {
+      todayWorkouts.push({ id: m.id, mod: m.name, name: m.name, items: [], simple: true });
     }
   }
 

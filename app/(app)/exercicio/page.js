@@ -44,8 +44,20 @@ export default function ExercicioPage() {
   // modalidade simples (sem divisões): jiu jitsu, corrida, etc — só pra registrar sessão
   function addModality() {
     const name = newModality.trim() || `Modalidade ${plan.length + 1}`;
-    setState((prev) => ({ ...prev, workoutPlan: [...(prev.workoutPlan || []), { id: Date.now(), name, divisions: [] }] }));
+    setState((prev) => ({ ...prev, workoutPlan: [...(prev.workoutPlan || []), { id: Date.now(), name, divisions: [], weekdays: [] }] }));
     setNewModality("");
+  }
+  // dias de prática da modalidade simples (sem divisões) → reflete na Home
+  function toggleModalityDay(modId, dayIdx) {
+    setState((prev) => ({
+      ...prev,
+      workoutPlan: (prev.workoutPlan || []).map((m) => {
+        if (m.id !== modId) return m;
+        const cur = m.weekdays || [];
+        const weekdays = cur.includes(dayIdx) ? cur.filter((x) => x !== dayIdx) : [...cur, dayIdx].sort((a, b) => a - b);
+        return { ...m, weekdays };
+      }),
+    }));
   }
   async function removeModality(id) {
     const m = (state.workoutPlan || []).find((x) => x.id === id);
@@ -998,7 +1010,27 @@ export default function ExercicioPage() {
                 </>
                 )}
                 {!gym && (
-                  <p className="text-[12px] text-outline">Modalidade simples — registre a sessão direto na aba REGISTRAR (sem divisões).</p>
+                  <div>
+                    <Caps className="text-outline text-[9px] block mb-2">DIAS QUE PRATICO (aparece na Home)</Caps>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {DOW_SHORT.map((label, idx) => {
+                        const on = (m.weekdays || []).includes(idx);
+                        return (
+                          <button
+                            key={idx}
+                            onClick={() => toggleModalityDay(m.id, idx)}
+                            aria-label={`${label}${on ? " (ativo)" : ""}`}
+                            aria-pressed={on}
+                            className={`w-9 h-9 rounded-full font-label-caps text-[9px] transition active:scale-95 ${
+                              on ? "bg-primary-container text-on-primary-container" : "bg-surface-container-lowest/60 text-outline hover:text-on-surface-variant"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 )}
               </div>
             );
