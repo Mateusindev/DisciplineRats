@@ -6,6 +6,7 @@ import { MI, Caps, StarRating, Select, inputCls, textareaCls } from "@/component
 import { XP, award, getDateStr, shiftDate, weekdayShort, last7Dates, weekStartOf, isGymModality, gymProgress, gymExercises, gymPR, DOW_SHORT } from "@/lib/state";
 import { fetchExercises } from "@/lib/persistence";
 import { LineChart } from "@/components/charts";
+import { ExerciseModal } from "@/components/ExerciseInfo";
 
 const GLOW = { boxShadow: "0 0 15px var(--brand-glow)" };
 
@@ -81,6 +82,8 @@ export default function ExercicioPage() {
   useEffect(() => {
     fetchExercises().then(setCatalog);
   }, []);
+  const [infoEx, setInfoEx] = useState(null); // { name, muscle } → modal vídeo + músculo
+  const openInfo = (name) => setInfoEx({ name, muscle: catalog.find((e) => e.name === name)?.muscle || "" });
 
   // modalidade simples (sem divisões): jiu jitsu, corrida, etc — só pra registrar sessão
   function addModality() {
@@ -505,7 +508,10 @@ export default function ExercicioPage() {
                           <div key={it.id} className="bg-surface-container-high rounded-lg border border-white/5 p-3">
                             <div className="flex items-center gap-2 mb-1.5">
                               <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${sets.length ? "bg-primary-container" : "bg-surface-variant"}`} />
-                              <span className="flex-1 min-w-0 text-[13px] font-bold text-on-surface truncate">{it.name}</span>
+                              <button onClick={() => openInfo(it.name)} className="flex-1 min-w-0 flex items-center gap-1 text-[13px] font-bold text-on-surface truncate text-left hover:text-primary transition" title="Ver músculo + vídeo">
+                                <span className="truncate">{it.name}</span>
+                                <MI name="info" className="text-sm text-outline shrink-0" />
+                              </button>
                               {pr && (
                                 <span
                                   title={`Recorde pessoal: ${pr.weight}kg${pr.reps ? ` × ${pr.reps}` : ""}`}
@@ -1001,7 +1007,10 @@ export default function ExercicioPage() {
                                     <MI name="drag_indicator" className="text-base" />
                                   </button>
                                   <div className="flex-1 min-w-0 text-[13px]">
-                                    <span className="text-on-surface font-bold">{it.name}</span>
+                                    <button onClick={() => openInfo(it.name)} className="font-bold text-on-surface hover:text-primary transition inline-flex items-center gap-1 text-left" title="Ver músculo + vídeo">
+                                      {it.name}
+                                      <MI name="info" className="text-sm text-outline" />
+                                    </button>
                                     {it.detail && <span className="text-outline"> — {it.detail}</span>}
                                   </div>
                                   {/* fallback de reordenação p/ touch (drag não funciona em mobile) */}
@@ -1097,6 +1106,8 @@ export default function ExercicioPage() {
           </div>
         </section>
       )}
+
+      {infoEx && <ExerciseModal name={infoEx.name} muscle={infoEx.muscle} onClose={() => setInfoEx(null)} />}
     </div>
   );
 }
