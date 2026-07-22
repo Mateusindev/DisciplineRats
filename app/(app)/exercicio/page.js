@@ -10,37 +10,52 @@ import { ExerciseModal, guessMuscle } from "@/components/ExerciseInfo";
 
 const GLOW = { boxShadow: "0 0 15px var(--brand-glow)" };
 
-// busca exercício no catálogo (com fallback: o texto digitado vira exercício custom)
+// busca/escolha de exercício no catálogo — abre no clique, agrupado por músculo
 function ExercisePicker({ value, onChange, onSubmit, catalog }) {
   const [open, setOpen] = useState(false);
   const q = (value || "").trim().toLowerCase();
-  const matches = q ? catalog.filter((e) => e.name.toLowerCase().includes(q)).slice(0, 8) : [];
+  const filtered = q ? catalog.filter((e) => e.name.toLowerCase().includes(q)) : catalog;
+  // agrupa por grupo muscular (catálogo já vem ordenado por músculo → nome)
+  const groups = [];
+  for (const e of filtered) {
+    let g = groups.find((x) => x.muscle === e.muscle);
+    if (!g) groups.push((g = { muscle: e.muscle, items: [] }));
+    g.items.push(e);
+  }
   return (
     <div className="relative flex-1">
       <input
         value={value}
         onChange={(e) => { onChange(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 120)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
         onKeyDown={(e) => { if (e.key === "Enter") { setOpen(false); onSubmit(); } }}
-        placeholder="Buscar exercício..."
+        placeholder="Buscar ou escolher exercício..."
         className={`${inputCls} w-full text-[13px]`}
       />
-      {open && matches.length > 0 && (
-        <ul className="absolute z-20 left-0 right-0 mt-1 bg-surface-container-highest border border-white/10 rounded-lg shadow-2xl max-h-56 overflow-auto ff-scroll">
-          {matches.map((e) => (
-            <li key={e.name}>
-              <button
-                type="button"
-                onMouseDown={(ev) => { ev.preventDefault(); onChange(e.name); setOpen(false); }}
-                className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-surface-variant/50 transition"
-              >
-                <span className="text-[13px] text-on-surface">{e.name}</span>
-                <Caps className="text-outline text-[9px] shrink-0">{e.muscle}</Caps>
-              </button>
-            </li>
+      {open && groups.length > 0 && (
+        <div className="absolute z-20 left-0 right-0 mt-1 bg-surface-container-highest border border-white/10 rounded-lg shadow-2xl max-h-72 overflow-auto ff-scroll">
+          {groups.map((g) => (
+            <div key={g.muscle}>
+              <div className="sticky top-0 bg-surface-container-highest px-3 py-1.5 border-b border-white/5">
+                <Caps className="text-primary-container text-[9px]">{g.muscle}</Caps>
+              </div>
+              <ul>
+                {g.items.map((e) => (
+                  <li key={e.name}>
+                    <button
+                      type="button"
+                      onMouseDown={(ev) => { ev.preventDefault(); onChange(e.name); setOpen(false); }}
+                      className="w-full px-3 py-2 text-left text-[13px] text-on-surface hover:bg-surface-variant/50 transition"
+                    >
+                      {e.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );
