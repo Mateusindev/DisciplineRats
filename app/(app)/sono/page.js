@@ -37,6 +37,7 @@ export default function SonoPage() {
   const [wake, setWake] = useState(existing?.wake || "07:00");
   const [quality, setQuality] = useState(existing?.quality || 3);
   const [note, setNote] = useState(existing?.note || "");
+  const [lateReason, setLateReason] = useState(existing?.lateReason || "");
 
   function computeDuration(bt, wk) {
     const [bh, bm] = bt.split(":").map(Number);
@@ -51,10 +52,15 @@ export default function SonoPage() {
   const hitsGoal = durationMin >= goalMin;
   const lateMin = bedtimeLateness(bedtime, limit); // >0 = deitou tarde
   const onTime = lateMin <= 0;
+  const needsReason = lateMin > 0 && !lateReason.trim(); // deitou tarde exige justificativa
   // XP líquido previsto p/ o registro atual (assinado): combina duração + horário
   const previewNet = computeSleepXp({ durationMin, bedtime, goalMin, limit, streak: state.stats.streak });
 
   function save() {
+    if (needsReason) {
+      toast("Justifique pra registrar", { sub: "Deitou tarde? Escreva o motivo.", type: "error", icon: "edit_note" });
+      return;
+    }
     setState((prev) => {
       const prevEntry = prev.sleep[today];
       // net anterior (assinado): prêmio − penalidade; fallback p/ entradas legadas
@@ -69,6 +75,7 @@ export default function SonoPage() {
         durationMin,
         quality,
         note: note.slice(0, 200),
+        lateReason: lateMin > 0 ? lateReason.slice(0, 200) : "",
         awardedXp: net > 0 ? net : 0,
         penaltyXp: net < 0 ? -net : 0,
       };
@@ -196,6 +203,20 @@ export default function SonoPage() {
                   {onTime ? `DEITOU NO HORÁRIO (ATÉ ${limit})` : `DEITOU ${Math.floor(lateMin / 60)}H${String(lateMin % 60).padStart(2, "0")} APÓS O LIMITE`}
                 </Caps>
               </div>
+              {/* justificativa obrigatória quando deitou tarde */}
+              {lateMin > 0 && (
+                <label className="block space-y-1 pt-1">
+                  <Caps className="text-[10px] text-error uppercase tracking-wider">Por que deitou tarde? (obrigatório)</Caps>
+                  <textarea
+                    value={lateReason}
+                    onChange={(e) => setLateReason(e.target.value)}
+                    placeholder="Ex.: trabalho atrasado, ansiedade, tela até tarde, saída..."
+                    maxLength={200}
+                    rows={2}
+                    className={`${inputCls} resize-none w-full border-error/40 focus:border-error`}
+                  />
+                </label>
+              )}
               {/* duração vs meta */}
               <div
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-full w-fit border ${
@@ -229,10 +250,12 @@ export default function SonoPage() {
 
           <button
             onClick={save}
-            className="w-full bg-primary py-4 rounded-lg text-on-primary font-headline-md text-headline-md tracking-widest hover:bg-primary-fixed hover:scale-[0.99] active:scale-95 transition-all"
+            disabled={needsReason}
+            className="w-full bg-primary py-4 rounded-lg text-on-primary font-headline-md text-headline-md tracking-widest hover:bg-primary-fixed hover:scale-[0.99] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
           >
             SALVAR REGISTRO
           </button>
+          {needsReason && <p className="text-[11px] text-error text-center -mt-2">Justifique por que deitou tarde pra registrar.</p>}
         </div>
 
         {/* Chart */}
@@ -256,6 +279,7 @@ export default function SonoPage() {
                 goal={{ value: goalMin, label: `META ${minutesToHm(goalMin)}` }}
                 format={minutesToHm}
                 flags={lateFlags}
+                reasons={days.map((d) => state.sleep[d]?.lateReason || "")}
                 ariaLabel="Duração do sono nos últimos 7 dias (pontos vermelhos = deitou tarde)"
               />
             ) : (
@@ -271,6 +295,25 @@ export default function SonoPage() {
               <MI name="trending_up" fill className="text-primary" />
             </div>
           </div>
+
+          {/* justificativas das noites que deitou tarde */}
+          {hasLate && (
+            <div className="mt-4 pt-4 border-t border-white/5">
+              <Caps className="text-[10px] text-error uppercase mb-2 block">Noites que deitou tarde</Caps>
+              <ul className="space-y-1.5">
+                {days
+                  .filter((d) => state.sleep[d] && bedtimeLateness(state.sleep[d].bedtime, limit) > 0)
+                  .map((d) => (
+                    <li key={d} className="flex gap-2 text-[12px]">
+                      <span className="font-label-caps text-error shrink-0 uppercase">{weekdayShort(d)}</span>
+                      <span className={state.sleep[d].lateReason ? "text-on-surface-variant" : "text-outline italic"}>
+                        {state.sleep[d].lateReason || "sem justificativa"}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         {/* Streak */}

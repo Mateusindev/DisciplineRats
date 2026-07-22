@@ -25,7 +25,7 @@ export function smoothPath(pts) {
 // days: ["YYYY-MM-DD"]; values: number|null alinhado a days (null = sem registro).
 // goal: { value, label } opcional — linha tracejada horizontal.
 // format(v): label do ponto (texto ou emoji).
-export function LineChart({ days, values, today, yMax, yMin = 0, goal = null, format = (v) => v, xLabel = weekdayShort, ariaLabel = "", height = 200, flags = null }) {
+export function LineChart({ days, values, today, yMax, yMin = 0, goal = null, format = (v) => v, xLabel = weekdayShort, ariaLabel = "", height = 200, flags = null, reasons = null }) {
   const gid = useId();
   // viewBox acompanha a largura real do container (escala 1:1) → altura fixa
   // e texto em tamanho nativo, em vez de esticar proporcionalmente com w-full.
@@ -47,7 +47,7 @@ export function LineChart({ days, values, today, yMax, yMin = 0, goal = null, fo
   const yFor = (v) => PAD_TOP + (1 - (Math.min(v, yMax) - yMin) / span) * (H - PAD_TOP - PAD_BOT);
 
   const pts = days
-    .map((d, i) => (values[i] != null ? { x: xFor(i), y: yFor(values[i]), date: d, v: values[i], flag: !!(flags && flags[i]) } : null))
+    .map((d, i) => (values[i] != null ? { x: xFor(i), y: yFor(values[i]), date: d, v: values[i], flag: !!(flags && flags[i]), reason: (reasons && reasons[i]) || "" } : null))
     .filter(Boolean);
 
   const line = smoothPath(pts);
@@ -91,7 +91,7 @@ export function LineChart({ days, values, today, yMax, yMin = 0, goal = null, fo
             <text x={p.x} y={p.y - 11} textAnchor="middle" className="fill-current" style={{ fontSize: 11, fontWeight: 700, fontFamily: "inherit", fill: p.flag ? "var(--color-error)" : "var(--color-on-surface)" }}>
               {format(p.v)}
             </text>
-            <title>{`${xLabel(p.date)} · ${format(p.v)}${p.flag ? " · deitou tarde (suja)" : ""}`}</title>
+            <title>{`${xLabel(p.date)} · ${format(p.v)}${p.flag ? " · deitou tarde (suja)" : ""}${p.flag && p.reason ? `\nMotivo: ${p.reason}` : ""}`}</title>
           </g>
         );
       })}

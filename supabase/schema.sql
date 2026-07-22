@@ -42,12 +42,14 @@ create table if not exists public.sleep_logs (
   duration_min integer not null default 0,
   quality      smallint,
   note         text,
+  late_reason  text,  -- justificativa quando deitou tarde
   xp_awarded   boolean not null default false,
   xp           integer not null default 0,  -- efeito líquido: +prêmio (meta) ou −penalidade (abaixo)
   updated_at   timestamptz not null default now(),
   primary key (user_id, date)
 );
 alter table public.sleep_logs add column if not exists xp integer not null default 0;
+alter table public.sleep_logs add column if not exists late_reason text;
 
 create table if not exists public.mood_logs (
   user_id  uuid not null references auth.users (id) on delete cascade,
