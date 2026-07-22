@@ -6,7 +6,8 @@ import { MI, Caps, Select, StatTile, inputCls } from "@/components/ui";
 import { fmtMoney, monthKey, getDateStr, EXPENSE_CATS, INCOME_CATS } from "@/lib/state";
 
 const TABS_W = [
-  { id: "resumo", label: "RESUMO", icon: "pie_chart" },
+  { id: "resumo", label: "RESUMO", icon: "receipt_long" },
+  { id: "graficos", label: "GRÁFICOS", icon: "bar_chart" },
   { id: "fixas", label: "FIXAS", icon: "event_repeat" },
   { id: "metas", label: "METAS", icon: "savings" },
 ];
@@ -43,7 +44,27 @@ export default function CarteiraPage() {
   const overBudget = budget > 0 && expense > budget;
   // fixas ainda não pagas neste mês = dinheiro comprometido → descontar do livre
   const pendingFixed = (wallet.fixed || []).filter((f) => !f.paid?.[selMonth]).reduce((s, f) => s + (f.amount || 0), 0);
-  const free = balance - pendingFixed;
+  // livre = o que você tem (orçamento do mês + receitas) − o que gastou − fixas ainda não pagas
+  const freeBase = (budget > 0 ? budget : 0) + income;
+  const free = freeBase - expense - pendingFixed;
+
+  // ---- dados dos gráficos ----
+  // gasto por categoria no mês (desc)
+  const catMap = {};
+  monthTxs.filter((t) => t.type === "expense").forEach((t) => { catMap[t.category] = (catMap[t.category] || 0) + t.amount; });
+  const cats = Object.entries(catMap).map(([name, val]) => ({ name, val })).sort((a, b) => b.val - a.val);
+  const catMax = Math.max(1, ...cats.map((c) => c.val));
+  // receita × despesa nos últimos 6 meses
+  const months6 = Array.from({ length: 6 }, (_, i) => shiftMonth(monthKey(getDateStr(0)), -(5 - i)));
+  const perMonth = months6.map((mk) => {
+    const mt = txs.filter((t) => monthKey(t.date) === mk);
+    return {
+      mk,
+      income: mt.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0),
+      expense: mt.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0),
+    };
+  });
+  const mMax = Math.max(1, ...perMonth.flatMap((m) => [m.income, m.expense]));
 
   // ---- lançamento ----
   const [form, setForm] = useState({ type: "expense", amount: "", date: getDateStr(0), category: "", note: "" });
@@ -189,15 +210,17 @@ export default function CarteiraPage() {
             </StatTile>
           </section>
 
-          {/* livre após descontar fixas pendentes */}
-          <section className="glass-card p-5 rounded-xl flex items-center justify-between gap-3">
-            <div>
-              <Caps className="text-outline text-[10px]">LIVRE (após fixas pendentes)</Caps>
+          {/* livre = orçamento (+ receitas) − gastos − fixas pendentes */}
+          <section className="glass-card p-5 rounded-xl">
+            <div className="flex items-center justify-between gap-3">
+              <Caps className="text-outline text-[10px]">LIVRE PRA GASTAR</Caps>
               <div className={`font-headline-lg text-headline-lg ${free >= 0 ? "text-primary" : "text-error"}`}>{fmtMoney(free)}</div>
             </div>
-            <div className="text-right">
-              <Caps className="text-outline text-[9px]">FIXAS PENDENTES</Caps>
-              <div className="font-label-caps text-[13px] text-error">−{fmtMoney(pendingFixed)}</div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px] font-label-caps text-outline">
+              <span>{budget > 0 ? `Orçamento ${fmtMoney(budget)}` : "Sem orçamento"}</span>
+              {income > 0 && <span className="text-primary-container">+ receitas {fmtMoney(income)}</span>}
+              <span className="text-error">− gastos {fmtMoney(expense)}</span>
+              {pendingFixed > 0 && <span className="text-error">− fixas pendentes {fmtMoney(pendingFixed)}</span>}
             </div>
           </section>
 
@@ -288,6 +311,65 @@ export default function CarteiraPage() {
                 ))}
               </ul>
             )}
+          </section>
+        </>
+      )}
+
+      {tab === "graficos" && (
+        <>
+          {/* switcher de mês (categoria usa o mês selecionado) */}
+          <div className="flex items-center justify-between">
+            <button onClick={() => setSelMonth((m) => shiftMonth(m, -1))} aria-label="Mês anterior" className="w-9 h-9 rounded-full bg-surface-container-high grid place-items-center active:scale-95 transition">
+              <MI name="chevron_left" />
+            </button>
+            <Caps className="text-primary text-[13px] capitalize">{monthLabel(selMonth)}</Caps>
+            <button onClick={() => setSelMonth((m) => shiftMonth(m, 1))} aria-label="Próximo mês" className="w-9 h-9 rounded-full bg-surface-container-high grid place-items-center active:scale-95 transition">
+              <MI name="chevron_right" />
+            </button>
+          </div>
+
+          {/* gasto por categoria */}
+          <section className="glass-card p-6 rounded-xl">
+            <Caps className="text-outline text-[10px] mb-4 block">GASTO POR CATEGORIA</Caps>
+            {cats.length === 0 ? (
+              <p className="text-[12px] text-outline">Sem despesas neste mês.</p>
+            ) : (
+              <div className="space-y-3">
+                {cats.map((c) => (
+                  <div key={c.name}>
+                    <div className="flex justify-between text-[12px] mb-1">
+                      <span className="text-on-surface">{c.name}</span>
+                      <span className="text-on-surface-variant font-label-caps">{fmtMoney(c.val)} · {Math.round((c.val / expense) * 100)}%</span>
+                    </div>
+                    <div className="w-full bg-surface-variant h-2.5 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-primary-container transition-all" style={{ width: `${Math.round((c.val / catMax) * 100)}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* receita x despesa 6 meses */}
+          <section className="glass-card p-6 rounded-xl">
+            <div className="flex items-center justify-between mb-4">
+              <Caps className="text-outline text-[10px]">RECEITA × DESPESA (6 MESES)</Caps>
+              <div className="flex items-center gap-3">
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-primary-container" /><Caps className="text-[9px] text-outline">RECEITA</Caps></span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-error" /><Caps className="text-[9px] text-outline">DESPESA</Caps></span>
+              </div>
+            </div>
+            <div className="flex items-end justify-between gap-2 h-44">
+              {perMonth.map((m) => (
+                <div key={m.mk} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
+                  <div className="flex items-end gap-1 w-full justify-center h-full">
+                    <div className="w-1/2 max-w-[16px] bg-primary-container rounded-t transition-all" style={{ height: `${Math.max(2, (m.income / mMax) * 100)}%` }} title={`Receita ${fmtMoney(m.income)}`} />
+                    <div className="w-1/2 max-w-[16px] bg-error rounded-t transition-all" style={{ height: `${Math.max(2, (m.expense / mMax) * 100)}%` }} title={`Despesa ${fmtMoney(m.expense)}`} />
+                  </div>
+                  <Caps className={`text-[9px] ${m.mk === selMonth ? "text-primary" : "text-outline"}`}>{m.mk.slice(5)}/{m.mk.slice(2, 4)}</Caps>
+                </div>
+              ))}
+            </div>
           </section>
         </>
       )}
