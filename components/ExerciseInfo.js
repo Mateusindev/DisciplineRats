@@ -21,6 +21,29 @@ const MAP = {
 };
 
 const FULL = new Set(["Cardio", "Corpo inteiro"]);
+
+// infere o grupo muscular pelo nome quando o exercício não está no catálogo
+export function guessMuscle(name) {
+  const n = (name || "").toLowerCase();
+  const has = (...ks) => ks.some((k) => n.includes(k));
+  if (has("punho")) return "Antebraço";
+  if (has("rosca inversa")) return "Antebraço";
+  if (has("rosca")) return "Bíceps";
+  if (has("tríceps", "triceps", "testa", "coice", "mergulho", "supino fechado")) return "Tríceps";
+  if (has("crucifixo inverso")) return "Ombros";
+  if (has("supino", "crucifixo", "crossover", "voador", "flexão", "flexao", "peck", "peitoral")) return "Peito";
+  if (has("encolhimento", "trapézio", "trapezio")) return "Trapézio";
+  if (has("desenvolvimento", "elevação lateral", "elevacao lateral", "elevação frontal", "arnold", "deltoid", "remada alta", "ombro")) return "Ombros";
+  if (has("puxada", "remada", "barra fixa", "pulldown", "pull-over", "pullover", "serrote", "terra", "dorsal", "costas")) return "Costas";
+  if (has("panturrilha", "gêmeos", "gemeos", "soleus")) return "Panturrilha";
+  if (has("stiff", "romeno", "flexora", "posterior")) return "Posterior";
+  if (has("glúteo", "gluteo", "hip thrust", "pélvica", "pelvica", "abdutora", "sumô", "sumo")) return "Glúteos";
+  if (has("agachamento", "leg press", "extensora", "afundo", "avanço", "avanco", "hack", "búlgaro", "bulgaro", "passada", "quadríceps", "quadriceps", "perna")) return "Quadríceps";
+  if (has("abdominal", "prancha", "abdômen", "abdomen", "russian", "elevação de pernas", "elevacao de pernas", "oblíquo", "obliquo")) return "Abdômen";
+  if (has("corrida", "esteira", "bicicleta", "bike", "elíptico", "eliptico", "corda", "remo", "escada", "caminhada", "cardio")) return "Cardio";
+  if (has("burpee", "kettlebell", "clean", "swing", "thruster")) return "Corpo inteiro";
+  return "";
+}
 const ALL_MUSCLES = [
   "trapezius", "upper-back", "lower-back", "chest", "biceps", "triceps", "forearm",
   "back-deltoids", "front-deltoids", "abs", "obliques", "hamstring", "quadriceps",
@@ -80,7 +103,7 @@ export function ExerciseModal({ name, muscle, onClose }) {
       role="dialog"
       aria-label={`Exercício ${name}`}
     >
-      <div className="glass-card rounded-2xl p-6 w-full max-w-lg shadow-2xl border border-white/10 max-h-[90vh] overflow-auto ff-scroll" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-surface-container-lowest rounded-2xl p-6 w-full max-w-lg shadow-2xl border border-white/10 max-h-[90vh] overflow-auto ff-scroll" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
             <h3 className="font-headline-md text-headline-md text-primary leading-tight">{name}</h3>

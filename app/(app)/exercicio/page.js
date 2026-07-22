@@ -6,7 +6,7 @@ import { MI, Caps, StarRating, Select, inputCls, textareaCls } from "@/component
 import { XP, award, getDateStr, shiftDate, weekdayShort, last7Dates, weekStartOf, isGymModality, gymProgress, gymExercises, gymPR, DOW_SHORT } from "@/lib/state";
 import { fetchExercises } from "@/lib/persistence";
 import { LineChart } from "@/components/charts";
-import { ExerciseModal } from "@/components/ExerciseInfo";
+import { ExerciseModal, guessMuscle } from "@/components/ExerciseInfo";
 
 const GLOW = { boxShadow: "0 0 15px var(--brand-glow)" };
 
@@ -83,7 +83,7 @@ export default function ExercicioPage() {
     fetchExercises().then(setCatalog);
   }, []);
   const [infoEx, setInfoEx] = useState(null); // { name, muscle } → modal vídeo + músculo
-  const openInfo = (name) => setInfoEx({ name, muscle: catalog.find((e) => e.name === name)?.muscle || "" });
+  const openInfo = (name) => setInfoEx({ name, muscle: catalog.find((e) => e.name === name)?.muscle || guessMuscle(name) });
 
   // modalidade simples (sem divisões): jiu jitsu, corrida, etc — só pra registrar sessão
   function addModality() {
