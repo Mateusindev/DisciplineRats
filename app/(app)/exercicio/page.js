@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps, StarRating, Select, inputCls, textareaCls } from "@/components/ui";
 import { XP, award, getDateStr, shiftDate, weekdayShort, last7Dates, weekStartOf, isGymModality, gymProgress, gymExercises, gymPR, DOW_SHORT } from "@/lib/state";
@@ -67,11 +67,16 @@ const TABS_EX = [
   { id: "treinos", label: "MEUS TREINOS", short: "TREINOS", icon: "assignment" },
 ];
 
+// divisão agendada pra hoje na modalidade (0=Seg…6=Dom) → auto-seleção no registrar
+const dowToday = () => (new Date().getDay() + 6) % 7;
+const scheduledDivName = (mod) => (mod?.divisions || []).find((d) => (d.weekdays || []).includes(dowToday()))?.name || "";
+const defaultDivName = (mod) => scheduledDivName(mod) || mod?.divisions?.[0]?.name || "";
+
 export default function ExercicioPage() {
   const { state, setState, toast, confirm } = useApp();
   const [tab, setTab] = useState("registrar");
   const [type, setType] = useState(state.workoutPlan?.[0]?.name || "");
-  const [division, setDivision] = useState(state.workoutPlan?.[0]?.divisions?.[0]?.name || "");
+  const [division, setDivision] = useState(() => defaultDivName(state.workoutPlan?.[0]));
   const [duration, setDuration] = useState("60");
   const [intensity, setIntensity] = useState(3);
   const [note, setNote] = useState("");
@@ -84,11 +89,10 @@ export default function ExercicioPage() {
   // anti-stale: divisão renomeada/excluída na aba Meus Treinos cai na 1ª válida
   const effectiveDivision = divisionNames.includes(division) ? division : divisionNames[0] || "";
 
-  // troca modalidade → reseta divisão pra 1ª da nova modalidade
+  // troca modalidade → seleciona a divisão agendada pra hoje (ou a 1ª)
   function changeType(name) {
     setType(name);
-    const mod = plan.find((m) => m.name === name);
-    setDivision(mod?.divisions?.[0]?.name || "");
+    setDivision(defaultDivName(plan.find((m) => m.name === name)));
   }
   const [divForms, setDivForms] = useState({}); // { [modId]: nomeDaNovaDivisao }
   const [itemForms, setItemForms] = useState({}); // { [divId]: {name, detail} }
@@ -97,6 +101,16 @@ export default function ExercicioPage() {
   useEffect(() => {
     fetchExercises().then(setCatalog);
   }, []);
+  // após carregar o plano (weekdays salvos), auto-seleciona a divisão de hoje 1×
+  const autoDiv = useRef(false);
+  useEffect(() => {
+    if (autoDiv.current) return;
+    const sched = scheduledDivName(plan.find((m) => m.name === type) || plan[0]);
+    if (sched) {
+      setDivision(sched);
+      autoDiv.current = true;
+    }
+  }, [plan, type]);
   const [infoEx, setInfoEx] = useState(null); // { name, muscle } → modal vídeo + músculo
   const openInfo = (name) => setInfoEx({ name, muscle: catalog.find((e) => e.name === name)?.muscle || guessMuscle(name) });
 
