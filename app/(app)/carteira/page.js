@@ -236,15 +236,15 @@ export default function CarteiraPage() {
               ))}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <input inputMode="decimal" value={form.amount} onChange={(e) => setF("amount", e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTx()} placeholder="Valor (R$)" className={`${inputCls} w-full`} />
+              <input inputMode="decimal" value={form.amount} onChange={(e) => setF("amount", e.target.value)} placeholder="Valor (R$)" className={`${inputCls} w-full`} />
               <input type="date" value={form.date} max={getDateStr(0)} onChange={(e) => setF("date", e.target.value || getDateStr(0))} className={`${inputCls} w-full`} />
             </div>
             <Select value={form.category} options={catOptions} onChange={(v) => setF("category", v)} placeholder="Categoria" />
             <div className="flex gap-2">
-              <input value={newCat} onChange={(e) => setNewCat(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addCategory()} placeholder="Nova categoria" className={`${inputCls} flex-1 text-[13px]`} />
-              <button onClick={addCategory} className="px-3 rounded-lg border border-primary/40 text-primary font-label-caps text-[11px] active:scale-95 transition shrink-0">+ CAT</button>
+              <input value={newCat} onChange={(e) => setNewCat(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCategory(); } }} placeholder="Nova categoria" className={`${inputCls} flex-1 text-[13px]`} />
+              <button type="button" onClick={addCategory} className="px-3 rounded-lg border border-primary/40 text-primary font-label-caps text-[11px] active:scale-95 transition shrink-0">+ CAT</button>
             </div>
-            <input value={form.note} onChange={(e) => setF("note", e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTx()} placeholder="Nota (opcional)" className={`${inputCls} w-full`} />
+            <input value={form.note} onChange={(e) => setF("note", e.target.value)} placeholder="Nota (opcional)" className={`${inputCls} w-full`} />
             <button onClick={addTx} className="w-full py-3 rounded-lg bg-primary text-on-primary font-label-caps text-[12px] tracking-widest active:scale-95 transition">
               LANÇAR
             </button>
