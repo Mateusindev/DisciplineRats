@@ -254,19 +254,7 @@ export function AppProvider({ children }) {
         const penalties = [];
         let penaltyXp = 0;
 
-        // missões: dia fechado com missão devida não concluída → −tasksMiss (só se havia missão)
-        if (s.tasksDate !== today) {
-          const oldDate = s.tasksDate;
-          const dueOld = (s.tasks || []).filter((t) => (t.date || oldDate) <= oldDate);
-          const allDone = dueOld.length > 0 && dueOld.every((t) => t.done);
-          if (dueOld.length > 0 && !allDone && s.tasksBonusDate !== oldDate) {
-            penaltyXp += XP.tasksMiss;
-            penalties.push(`missões (−${XP.tasksMiss})`);
-          }
-          // agendada (date >= hoje) sobrevive; resto morre no rollover
-          s.tasks = (s.tasks || []).filter((t) => (t.date || oldDate) >= today);
-          s.tasksDate = today;
-        }
+        // missões viraram quadro Trello (state.board) — sem penalidade/rollover.
 
         // rotina: itens não checados em dias fechados (normal −3, inegociável −15)
         const rp = computeRoutinePenalty(s.routine, s.routineChecks, today);
