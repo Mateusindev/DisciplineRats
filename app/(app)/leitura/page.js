@@ -11,6 +11,7 @@ const STATUS = {
   done: { label: "Lido", icon: "task_alt" },
 };
 const SPINE = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899", "#14b8a6"];
+const BOOK_CATS = ["Ficção", "Não-ficção", "Autoajuda", "Negócios", "Tecnologia", "Biografia", "História", "Fantasia", "Romance", "Outros"];
 const uid = () => crypto.randomUUID();
 const stop = (e) => e.stopPropagation();
 const initials = (t) => (t || "?").split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
@@ -64,6 +65,7 @@ function BookCard({ b, onOpen }) {
       <div className="mt-1.5">
         <div className="text-[12px] font-semibold text-on-surface leading-tight line-clamp-2">{b.title}</div>
         {b.author && <div className="text-[10px] text-outline truncate">{b.author}</div>}
+        {b.category && <div className="text-[9px] text-primary-container font-label-caps truncate mt-0.5">{b.category}</div>}
         {b.status === "done" && b.rating > 0 && (
           <div className="flex gap-0.5 mt-0.5">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -79,10 +81,14 @@ function BookCard({ b, onOpen }) {
 const GROUPS = [["want", "Quero ler"], ["reading", "Lendo"], ["done", "Lido"]];
 
 export default function LeituraPage() {
-  const { state, setState, confirm } = useApp();
+  const { state, setState, confirm, setSetting } = useApp();
   const books = state.books || [];
+  const customCats = state.settings.bookCats || [];
+  const allCats = [...new Set([...BOOK_CATS, ...customCats])];
   const [adding, setAdding] = useState(false);
   const [editId, setEditId] = useState(null);
+  const [catFilter, setCatFilter] = useState("all");
+  const usedCats = [...new Set(books.map((b) => b.category).filter(Boolean))];
 
   const setBooks = (fn) => setState((prev) => ({ ...prev, books: fn(prev.books || []) }));
   const updateBook = (id, patch) => setBooks((bs) => bs.map((b) => (b.id === id ? { ...b, ...patch } : b)));
@@ -123,6 +129,16 @@ export default function LeituraPage() {
         </button>
       </section>
 
+      {usedCats.length > 0 && (
+        <div className="flex gap-1.5 flex-wrap">
+          {["all", ...usedCats].map((c) => (
+            <button key={c} onClick={() => setCatFilter(c)} className={`px-3 py-1.5 rounded-full font-label-caps text-[10px] transition ${catFilter === c ? "bg-primary-container text-on-primary-container" : "bg-surface-container-high text-outline hover:text-on-surface-variant"}`}>
+              {c === "all" ? "Todas" : c}
+            </button>
+          ))}
+        </div>
+      )}
+
       {books.length === 0 ? (
         <div className="glass-card rounded-xl p-10 text-center">
           <MI name="menu_book" className="text-4xl text-outline mb-2" />
@@ -131,7 +147,7 @@ export default function LeituraPage() {
       ) : (
         <div className="space-y-8">
           {GROUPS.map(([st, lbl]) => {
-            const list = books.filter((b) => (b.status || "want") === st);
+            const list = books.filter((b) => (b.status || "want") === st && (catFilter === "all" || b.category === catFilter));
             if (list.length === 0) return null;
             return (
               <section key={st}>
@@ -155,6 +171,8 @@ export default function LeituraPage() {
       {editBook && (
         <BookModal
           book={editBook}
+          cats={allCats}
+          onAddCat={(name) => { if (name && !allCats.includes(name)) setSetting("bookCats", [...customCats, name]); }}
           onClose={() => setEditId(null)}
           onPatch={(patch) => updateBook(editBook.id, patch)}
           onStatus={(s) => setStatus(editBook.id, s)}
@@ -234,13 +252,22 @@ function AddModal({ onClose, onAdd }) {
   );
 }
 
-function BookModal({ book, onClose, onPatch, onStatus, onDelete }) {
+function BookModal({ book, cats = [], onAddCat, onClose, onPatch, onStatus, onDelete }) {
+  const [newCat, setNewCat] = useState("");
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   const pct = book.total ? Math.min(100, Math.round((book.page / book.total) * 100)) : 0;
+  const options = [...new Set([...cats, ...(book.category ? [book.category] : [])])];
+  function addCat() {
+    const c = newCat.trim();
+    if (!c) return;
+    onAddCat?.(c);
+    onPatch({ category: c });
+    setNewCat("");
+  }
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 animate-[fadeIn_.1s_ease-out]" onClick={onClose} role="dialog" aria-label="Detalhes do livro">
       <div className="bg-surface-container-lowest rounded-2xl p-6 w-full max-w-lg shadow-2xl border border-white/10 max-h-[90vh] overflow-auto ff-scroll" onClick={stop}>
@@ -278,6 +305,22 @@ function BookModal({ book, onClose, onPatch, onStatus, onDelete }) {
         <div className="flex items-center justify-between mb-4">
           <Caps className="text-outline text-[10px]">Nota</Caps>
           <StarRating value={book.rating || 0} onChange={(v) => onPatch({ rating: v })} />
+        </div>
+
+        {/* categoria */}
+        <div className="mb-4">
+          <Caps className="text-outline text-[10px]">Categoria</Caps>
+          <div className="flex flex-wrap gap-1.5 mt-1.5">
+            {options.map((c) => (
+              <button key={c} onClick={() => onPatch({ category: book.category === c ? "" : c })} className={`font-label-caps text-[10px] px-2.5 py-1 rounded-full transition ${book.category === c ? "bg-primary-container text-on-primary-container" : "bg-surface-container-high text-outline hover:text-on-surface-variant"}`}>
+                {c}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1 mt-2 border-2 border-dashed border-outline-variant/40 rounded-lg focus-within:border-primary/40 transition max-w-xs">
+            <input value={newCat} onChange={(e) => setNewCat(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addCat()} placeholder="Nova categoria" className="flex-1 min-w-0 bg-transparent px-3 py-1.5 text-[13px] text-on-surface placeholder:text-outline outline-none" />
+            <button onClick={addCat} aria-label="Adicionar categoria" className="mr-1 h-7 w-7 grid place-items-center rounded-md text-primary hover:bg-primary/10 transition shrink-0"><MI name="add" className="text-lg" /></button>
+          </div>
         </div>
 
         {/* resenha */}
