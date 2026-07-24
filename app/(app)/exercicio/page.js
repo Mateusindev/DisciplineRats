@@ -46,9 +46,10 @@ function ExercisePicker({ value, onChange, onSubmit, catalog }) {
                     <button
                       type="button"
                       onMouseDown={(ev) => { ev.preventDefault(); onChange(e.name); setOpen(false); }}
-                      className="w-full px-3 py-2 text-left text-[13px] text-on-surface hover:bg-surface-variant/50 transition"
+                      className="w-full px-3 py-2 text-left text-[13px] text-on-surface hover:bg-surface-variant/50 transition flex items-center gap-2"
                     >
-                      {e.name}
+                      <span className="flex-1 min-w-0 truncate">{e.name}</span>
+                      {e.video_id && <MI name="play_circle" className="text-sm text-primary-container shrink-0" title="Vídeo disponível" />}
                     </button>
                   </li>
                 ))}
@@ -112,7 +113,10 @@ export default function ExercicioPage() {
     }
   }, [plan, type]);
   const [infoEx, setInfoEx] = useState(null); // { name, muscle } → modal vídeo + músculo
-  const openInfo = (name) => setInfoEx({ name, muscle: catalog.find((e) => e.name === name)?.muscle || guessMuscle(name) });
+  const openInfo = (name) => {
+    const hit = catalog.find((e) => e.name === name);
+    setInfoEx({ name, muscle: hit?.muscle || guessMuscle(name), videoId: hit?.video_id || null });
+  };
 
   // modalidade simples (sem divisões): jiu jitsu, corrida, etc — só pra registrar sessão
   function addModality() {
@@ -1136,7 +1140,7 @@ export default function ExercicioPage() {
         </section>
       )}
 
-      {infoEx && <ExerciseModal name={infoEx.name} muscle={infoEx.muscle} onClose={() => setInfoEx(null)} />}
+      {infoEx && <ExerciseModal name={infoEx.name} muscle={infoEx.muscle} videoId={infoEx.videoId} onClose={() => setInfoEx(null)} />}
     </div>
   );
 }

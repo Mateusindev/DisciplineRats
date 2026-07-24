@@ -361,10 +361,12 @@ grant select on public.leaderboard to anon, authenticated;
 
 -- ---------- Catálogo global de exercícios ----------
 create table if not exists public.exercises (
-  id     serial primary key,
-  name   text not null unique,
-  muscle text not null
+  id       serial primary key,
+  name     text not null unique,
+  muscle   text not null,
+  video_id text                       -- id do vídeo YouTube de demonstração (opcional)
 );
+alter table public.exercises add column if not exists video_id text;
 alter table public.exercises enable row level security;
 drop policy if exists "exercises readable" on public.exercises;
 create policy "exercises readable" on public.exercises for select to authenticated using (true);
@@ -471,3 +473,6 @@ insert into public.exercises (name, muscle) values
   ('Agachamento com salto', 'Corpo inteiro'),
   ('Clean and press', 'Corpo inteiro')
 on conflict (name) do nothing;
+
+-- Catálogo grande com vídeos de demonstração: rode supabase/exercises_seed.sql
+-- (gerado de videos.json) depois deste arquivo.
