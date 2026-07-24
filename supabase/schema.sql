@@ -110,6 +110,7 @@ create table if not exists public.habits (
   direction  text,                                          -- weekly: 'min' (pelo menos Nx) | 'max' (no máximo Nx)
   weekly_target smallint,                                   -- weekly: N dias por semana (1-7)
   penalty_date date,                                        -- build: último dia fechado já avaliado p/ penalidade
+  detail     text,                                          -- anotações livres do usuário sobre o hábito
   created_at timestamptz not null default now()
 );
 alter table public.habits add column if not exists icon text;
@@ -119,6 +120,7 @@ alter table public.habits add column if not exists milestones jsonb not null def
 alter table public.habits add column if not exists direction text;
 alter table public.habits add column if not exists weekly_target smallint;
 alter table public.habits add column if not exists penalty_date date;
+alter table public.habits add column if not exists detail text;
 create index if not exists habits_user on public.habits (user_id);
 
 create table if not exists public.habit_checks (

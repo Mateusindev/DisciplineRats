@@ -55,6 +55,7 @@ export default function HabitosPage() {
   const [newDirection, setNewDirection] = useState("min"); // weekly: min | max
   const [newTarget, setNewTarget] = useState(3); // weekly: dias/semana
   const [edits, setEdits] = useState({}); // { [id]: nome em edição }
+  const [editDetails, setEditDetails] = useState({}); // { [id]: detalhe em edição }
   const [pickingIcon, setPickingIcon] = useState(null); // id do hábito com picker aberto
   const today = getDateStr(0);
 
@@ -115,6 +116,7 @@ export default function HabitosPage() {
           priority: newPriority,
           direction: newKind === "weekly" ? newDirection : null,
           weeklyTarget: newKind === "weekly" ? newTarget : null,
+          detail: "",
           createdAt: new Date().toISOString(),
           doneDates: [],
           checkXp: {},
@@ -166,16 +168,25 @@ export default function HabitosPage() {
     setState((prev) => ({ ...prev, habits: prev.habits.filter((h) => h.id !== id) }));
   }
 
-  const startEdit = (h) => setEdits((e) => ({ ...e, [h.id]: h.name }));
-  const cancelEdit = (id) =>
+  const startEdit = (h) => {
+    setEdits((e) => ({ ...e, [h.id]: h.name }));
+    setEditDetails((e) => ({ ...e, [h.id]: h.detail || "" }));
+  };
+  const cancelEdit = (id) => {
     setEdits((e) => {
       const { [id]: _, ...rest } = e;
       return rest;
     });
+    setEditDetails((e) => {
+      const { [id]: _, ...rest } = e;
+      return rest;
+    });
+  };
   function saveEdit(id) {
     const name = (edits[id] || "").trim();
     if (!name) return;
-    setState((prev) => ({ ...prev, habits: prev.habits.map((h) => (h.id === id ? { ...h, name: name.slice(0, 80) } : h)) }));
+    const detail = (editDetails[id] || "").trim().slice(0, 500);
+    setState((prev) => ({ ...prev, habits: prev.habits.map((h) => (h.id === id ? { ...h, name: name.slice(0, 80), detail } : h)) }));
     cancelEdit(id);
   }
 
@@ -240,16 +251,31 @@ export default function HabitosPage() {
           </div>
         </div>
         {editing ? (
-          <input
-            value={edits[h.id]}
-            onChange={(e) => setEdits((es) => ({ ...es, [h.id]: e.target.value }))}
-            onKeyDown={(e) => (e.key === "Enter" ? saveEdit(h.id) : e.key === "Escape" ? cancelEdit(h.id) : null)}
-            autoFocus
-            aria-label="Nome do hábito"
-            className={`${inputCls} w-full mb-2`}
-          />
+          <>
+            <input
+              value={edits[h.id]}
+              onChange={(e) => setEdits((es) => ({ ...es, [h.id]: e.target.value }))}
+              onKeyDown={(e) => (e.key === "Enter" ? saveEdit(h.id) : e.key === "Escape" ? cancelEdit(h.id) : null)}
+              autoFocus
+              aria-label="Nome do hábito"
+              className={`${inputCls} w-full mb-2`}
+            />
+            <textarea
+              value={editDetails[h.id] || ""}
+              onChange={(e) => setEditDetails((es) => ({ ...es, [h.id]: e.target.value }))}
+              onKeyDown={(e) => (e.key === "Escape" ? cancelEdit(h.id) : null)}
+              rows={3}
+              maxLength={500}
+              placeholder="Detalhes, motivação, como executar..."
+              aria-label="Detalhes do hábito"
+              className={`${inputCls} w-full mb-2 resize-y`}
+            />
+          </>
         ) : (
           <h4 className="font-headline-md text-headline-md mb-2">{h.name}</h4>
+        )}
+        {!editing && h.detail && (
+          <p className="text-[12px] text-on-surface-variant whitespace-pre-wrap mb-2">{h.detail}</p>
         )}
         <div className="mb-3">
           <PriorityChips value={h.priority || 2} onChange={(v) => setPriority(h.id, v)} />
