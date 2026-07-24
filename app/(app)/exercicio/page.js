@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useApp } from "../AppContext";
 import { MI, Caps, StarRating, Select, inputCls, textareaCls } from "@/components/ui";
 import { XP, award, getDateStr, shiftDate, weekdayShort, last7Dates, weekStartOf, isGymModality, gymProgress, gymExercises, gymPR, DOW_SHORT } from "@/lib/state";
@@ -13,6 +14,8 @@ const GLOW = { boxShadow: "0 0 15px var(--brand-glow)" };
 // busca/escolha de exercício no catálogo — abre no clique, agrupado por músculo
 function ExercisePicker({ value, onChange, onSubmit, catalog }) {
   const [open, setOpen] = useState(false);
+  const [rect, setRect] = useState(null); // posição do input p/ ancorar o dropdown no portal
+  const inputRef = useRef(null);
   const q = (value || "").trim().toLowerCase();
   const filtered = q ? catalog.filter((e) => e.name.toLowerCase().includes(q)) : catalog;
   // agrupa por grupo muscular (catálogo já vem ordenado por músculo → nome)
@@ -22,9 +25,26 @@ function ExercisePicker({ value, onChange, onSubmit, catalog }) {
     if (!g) groups.push((g = { muscle: e.muscle, items: [] }));
     g.items.push(e);
   }
+
+  // dropdown vai pro body (portal): .glass-card usa backdrop-filter e cria stacking
+  // context por card, então z-index interno ficaria atrás dos cards de modalidade irmãos.
+  const measure = () => inputRef.current && setRect(inputRef.current.getBoundingClientRect());
+  useEffect(() => {
+    if (!open) return;
+    measure();
+    const onScroll = () => measure();
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [open]);
+
   return (
     <div className="relative flex-1">
       <input
+        ref={inputRef}
         value={value}
         onChange={(e) => { onChange(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
@@ -33,8 +53,11 @@ function ExercisePicker({ value, onChange, onSubmit, catalog }) {
         placeholder="Buscar ou escolher exercício..."
         className={`${inputCls} w-full text-[13px]`}
       />
-      {open && groups.length > 0 && (
-        <div className="absolute z-20 left-0 right-0 mt-1 bg-surface-container-highest border border-white/10 rounded-lg shadow-2xl max-h-72 overflow-auto ff-scroll">
+      {open && rect && groups.length > 0 && createPortal(
+        <div
+          className="fixed z-[120] bg-surface-container-highest border border-white/10 rounded-lg shadow-2xl max-h-72 overflow-auto ff-scroll"
+          style={{ top: rect.bottom + 4, left: rect.left, width: rect.width }}
+        >
           {groups.map((g) => (
             <div key={g.muscle}>
               <div className="sticky top-0 bg-surface-container-highest px-3 py-1.5 border-b border-white/5">
@@ -56,7 +79,8 @@ function ExercisePicker({ value, onChange, onSubmit, catalog }) {
               </ul>
             </div>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
