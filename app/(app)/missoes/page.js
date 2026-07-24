@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useApp } from "../AppContext";
 import { MI } from "@/components/ui";
 
@@ -15,7 +15,7 @@ const uid = () => crypto.randomUUID();
 export default function MissoesPage() {
   const { state, setState, confirm } = useApp();
   const columns = state.board?.columns || [];
-  const [cardInput, setCardInput] = useState({}); // { [colId]: text }
+  const [cardInput, setCardInput] = useState({});
   const [newCol, setNewCol] = useState("");
 
   const setCols = (fn) => setState((prev) => ({ ...prev, board: { ...prev.board, columns: fn(prev.board?.columns || []) } }));
@@ -48,17 +48,67 @@ export default function MissoesPage() {
   function cyclePri(colId, cardId) {
     setCols((cols) => cols.map((c) => (c.id === colId ? { ...c, cards: c.cards.map((x) => (x.id === cardId ? { ...x, priority: ((x.priority || 2) % 3) + 1 } : x)) } : c)));
   }
-  function moveCard(colIdx, cardId, dir) {
+
+  // ---- drag & drop (pointer events → funciona no mouse E no touch) ----
+  const [drag, setDrag] = useState(null); // { colIdx, cardId }
+  const [over, setOver] = useState(null); // { colIdx, index }
+  const dragRef = useRef(null);
+  const overRef = useRef(null);
+  const colsRef = useRef(columns);
+  colsRef.current = columns;
+
+  function onMove(e) {
+    const p = e.touches ? e.touches[0] : e;
+    const el = document.elementFromPoint(p.clientX, p.clientY);
+    const colEl = el?.closest?.("[data-col-idx]");
+    if (!colEl) { overRef.current = null; setOver(null); return; }
+    const colIdx = Number(colEl.dataset.colIdx);
+    const cardEl = el.closest("[data-card-idx]");
+    let index;
+    if (cardEl) {
+      const idx = Number(cardEl.dataset.cardIdx);
+      const r = cardEl.getBoundingClientRect();
+      index = p.clientY < r.top + r.height / 2 ? idx : idx + 1;
+    } else {
+      index = colsRef.current[colIdx]?.cards.length ?? 0;
+    }
+    const o = { colIdx, index };
+    overRef.current = o;
+    setOver(o);
+  }
+  function onUp() {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    const d = dragRef.current, o = overRef.current;
+    if (d && o) commitMove(d, o);
+    dragRef.current = null; overRef.current = null;
+    setDrag(null); setOver(null);
+  }
+  function startDrag(colIdx, cardId, e) {
+    e.preventDefault();
+    dragRef.current = { colIdx, cardId };
+    setDrag({ colIdx, cardId });
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+  function commitMove(d, o) {
     setCols((cols) => {
-      const target = colIdx + dir;
-      if (target < 0 || target >= cols.length) return cols;
-      const card = cols[colIdx].cards.find((x) => x.id === cardId);
+      const src = cols[d.colIdx];
+      const card = src?.cards.find((x) => x.id === d.cardId);
       if (!card) return cols;
-      return cols.map((c, i) => (i === colIdx ? { ...c, cards: c.cards.filter((x) => x.id !== cardId) } : i === target ? { ...c, cards: [...c.cards, card] } : c));
+      let index = o.index;
+      if (d.colIdx === o.colIdx) {
+        const origIdx = src.cards.findIndex((x) => x.id === d.cardId);
+        if (origIdx < index) index -= 1;
+      }
+      const next = cols.map((c, i) => (i === d.colIdx ? { ...c, cards: c.cards.filter((x) => x.id !== d.cardId) } : { ...c, cards: [...c.cards] }));
+      next[o.colIdx].cards.splice(index, 0, card);
+      return next;
     });
   }
 
   const totalCards = columns.reduce((s, c) => s + c.cards.length, 0);
+  const Indicator = () => <div className="h-1 bg-primary rounded-full my-0.5" />;
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
@@ -67,13 +117,12 @@ export default function MissoesPage() {
           Missões
           <MI name="verified" className="text-primary-container text-xl" fill />
         </h1>
-        <p className="text-body-md text-on-surface-variant">Seu quadro · {totalCards} card(s) em {columns.length} coluna(s)</p>
+        <p className="text-body-md text-on-surface-variant">Seu quadro · {totalCards} card(s) · arraste pela alça pra mover</p>
       </section>
 
-      {/* board */}
       <div className="flex gap-4 overflow-x-auto ff-scroll pb-4 flex-1 items-start">
         {columns.map((col, colIdx) => (
-          <div key={col.id} className="glass-card rounded-2xl p-4 w-[300px] shrink-0 flex flex-col max-h-full">
+          <div key={col.id} data-col-idx={colIdx} className={`glass-card rounded-2xl p-4 w-[300px] shrink-0 flex flex-col max-h-full transition-colors ${over?.colIdx === colIdx && drag ? "ring-2 ring-primary/40" : ""}`}>
             <div className="flex items-center justify-between mb-4 px-1">
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <input
@@ -89,31 +138,39 @@ export default function MissoesPage() {
               </button>
             </div>
 
-            <div className="flex flex-col gap-3 overflow-y-auto ff-scroll pr-1 flex-1">
-              {col.cards.map((card) => {
+            <div className="flex flex-col overflow-y-auto ff-scroll pr-1 flex-1 min-h-[24px]">
+              {col.cards.map((card, i) => {
                 const p = PRI[card.priority] || PRI[2];
+                const isDragging = drag && drag.cardId === card.id;
+                const showBefore = over && over.colIdx === colIdx && over.index === i && drag;
                 return (
-                  <div key={card.id} className="bg-surface-container-lowest rounded-xl p-4 border border-outline-variant/30 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-start mb-2 gap-2">
-                      <button onClick={() => cyclePri(col.id, card.id)} className={`font-label-caps text-[9px] px-2 py-0.5 rounded uppercase ${p.chip}`} title="Trocar prioridade">
-                        {p.label}
-                      </button>
-                      <button onClick={() => removeCard(col.id, card.id)} aria-label="Excluir card" className="text-outline hover:text-error transition shrink-0">
-                        <MI name="close" className="text-base" />
-                      </button>
-                    </div>
-                    <p className="font-body-sm text-[14px] font-semibold text-on-surface leading-snug mb-3">{card.text}</p>
-                    <div className="flex items-center justify-end gap-1 border-t border-outline-variant/20 pt-2">
-                      <button onClick={() => moveCard(colIdx, card.id, -1)} disabled={colIdx === 0} aria-label="Mover pra esquerda" className="text-outline hover:text-primary transition disabled:opacity-25 p-1">
-                        <MI name="chevron_left" className="text-lg" />
-                      </button>
-                      <button onClick={() => moveCard(colIdx, card.id, 1)} disabled={colIdx === columns.length - 1} aria-label="Mover pra direita" className="text-outline hover:text-primary transition disabled:opacity-25 p-1">
-                        <MI name="chevron_right" className="text-lg" />
-                      </button>
+                  <div key={card.id} data-card-idx={i}>
+                    {showBefore && <Indicator />}
+                    <div className={`bg-surface-container-lowest rounded-xl p-4 border border-outline-variant/30 shadow-sm mb-3 transition ${isDragging ? "opacity-40" : "hover:shadow-md"}`}>
+                      <div className="flex justify-between items-start mb-2 gap-2">
+                        <button onClick={() => cyclePri(col.id, card.id)} className={`font-label-caps text-[9px] px-2 py-0.5 rounded uppercase ${p.chip}`} title="Trocar prioridade">
+                          {p.label}
+                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span
+                            onPointerDown={(e) => startDrag(colIdx, card.id, e)}
+                            role="button"
+                            aria-label="Arrastar card"
+                            className="text-outline hover:text-primary cursor-grab active:cursor-grabbing touch-none p-0.5"
+                          >
+                            <MI name="drag_indicator" className="text-base" />
+                          </span>
+                          <button onClick={() => removeCard(col.id, card.id)} aria-label="Excluir card" className="text-outline hover:text-error transition">
+                            <MI name="close" className="text-base" />
+                          </button>
+                        </div>
+                      </div>
+                      <p className="font-body-sm text-[14px] font-semibold text-on-surface leading-snug">{card.text}</p>
                     </div>
                   </div>
                 );
               })}
+              {over && over.colIdx === colIdx && over.index === col.cards.length && drag && <Indicator />}
             </div>
 
             <div className="flex gap-1.5 mt-3">
