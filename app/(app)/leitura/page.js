@@ -19,7 +19,7 @@ const spineColor = (t) => SPINE[[...(t || "")].reduce((a, c) => a + c.charCodeAt
 
 async function searchBooks(q) {
   try {
-    const r = await fetch(`https://openlibrary.org/search.json?title=${encodeURIComponent(q)}&limit=6&fields=key,title,author_name,cover_i,number_of_pages_median`);
+    const r = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=8&fields=key,title,author_name,cover_i,number_of_pages_median`);
     if (!r.ok) return [];
     const j = await r.json();
     return (j.docs || []).map((d) => ({
