@@ -83,7 +83,7 @@ export function MuscleMap({ muscle }) {
   );
 }
 
-export function ExerciseModal({ name, muscle, onClose }) {
+export function ExerciseModal({ name, muscle, videoId, onClose }) {
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -118,18 +118,32 @@ export function ExerciseModal({ name, muscle, onClose }) {
           </button>
         </div>
 
+        {videoId && (
+          <div className="rounded-xl overflow-hidden mb-4 border border-white/10 aspect-video bg-black">
+            <iframe
+              src={`https://www.youtube.com/embed/${videoId}`}
+              title={`Demonstração: ${name}`}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              className="w-full h-full"
+            />
+          </div>
+        )}
+
         <div className="bg-surface-container-high rounded-xl p-4 mb-4">
           <MuscleMap muscle={muscle} />
           {!known && <p className="text-[11px] text-outline text-center mt-2">Sem mapa muscular pra esse exercício.</p>}
           {full && <p className="text-[11px] text-outline text-center mt-2">Trabalha o corpo todo.</p>}
         </div>
 
-        <button
-          onClick={searchYoutube}
-          className="w-full py-3 rounded-lg bg-primary-container text-on-primary-container font-label-caps text-[11px] flex items-center justify-center gap-2 active:scale-95 transition"
-        >
-          <MI name="play_circle" className="text-lg" /> VER NO YOUTUBE
-        </button>
+        {!videoId && (
+          <button
+            onClick={searchYoutube}
+            className="w-full py-3 rounded-lg bg-primary-container text-on-primary-container font-label-caps text-[11px] flex items-center justify-center gap-2 active:scale-95 transition"
+          >
+            <MI name="play_circle" className="text-lg" /> VER NO YOUTUBE
+          </button>
+        )}
       </div>
     </div>
   );
