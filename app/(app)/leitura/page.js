@@ -10,7 +10,6 @@ const STATUS = {
   reading: { label: "Lendo", icon: "auto_stories" },
   done: { label: "Lido", icon: "task_alt" },
 };
-const FILTERS = [["all", "Todos"], ["want", "Quero ler"], ["reading", "Lendo"], ["done", "Lido"]];
 const SPINE = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899", "#14b8a6"];
 const uid = () => crypto.randomUUID();
 const stop = (e) => e.stopPropagation();
@@ -40,10 +39,48 @@ function Cover({ book, className = "" }) {
   );
 }
 
+function BookCard({ b, onOpen }) {
+  const pct = b.total ? Math.min(100, Math.round((b.page / b.total) * 100)) : 0;
+  return (
+    <button onClick={onOpen} className="text-left group">
+      <div className="aspect-[2/3] rounded-lg overflow-hidden border border-outline-variant/30 shadow-sm relative group-hover:shadow-md group-active:scale-[0.98] transition">
+        <Cover book={b} />
+        {b.status === "reading" && b.total > 0 && (
+          <div className="absolute bottom-0 left-0 w-full h-1.5 bg-black/30">
+            <div className="h-full bg-primary-container" style={{ width: `${pct}%` }} />
+          </div>
+        )}
+        {b.status === "done" && (
+          <div className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-primary-container text-on-primary-container grid place-items-center">
+            <MI name="check" className="text-sm" />
+          </div>
+        )}
+        {b.status === "want" && (
+          <div className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/50 text-white grid place-items-center">
+            <MI name="bookmark" className="text-sm" fill />
+          </div>
+        )}
+      </div>
+      <div className="mt-1.5">
+        <div className="text-[12px] font-semibold text-on-surface leading-tight line-clamp-2">{b.title}</div>
+        {b.author && <div className="text-[10px] text-outline truncate">{b.author}</div>}
+        {b.status === "done" && b.rating > 0 && (
+          <div className="flex gap-0.5 mt-0.5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <MI key={i} name="star" fill={i < b.rating} className={`text-[11px] ${i < b.rating ? "text-primary-container" : "text-outline-variant"}`} />
+            ))}
+          </div>
+        )}
+      </div>
+    </button>
+  );
+}
+
+const GROUPS = [["want", "Quero ler"], ["reading", "Lendo"], ["done", "Lido"]];
+
 export default function LeituraPage() {
   const { state, setState, confirm } = useApp();
   const books = state.books || [];
-  const [filter, setFilter] = useState("all");
   const [adding, setAdding] = useState(false);
   const [editId, setEditId] = useState(null);
 
@@ -67,7 +104,6 @@ export default function LeituraPage() {
     }));
   }
 
-  const shown = filter === "all" ? books : books.filter((b) => (b.status || "want") === filter);
   const year = String(new Date().getFullYear());
   const readingN = books.filter((b) => b.status === "reading").length;
   const doneYear = books.filter((b) => b.status === "done" && (b.finishedAt || "").startsWith(year)).length;
@@ -87,55 +123,29 @@ export default function LeituraPage() {
         </button>
       </section>
 
-      <div className="flex gap-1.5 flex-wrap">
-        {FILTERS.map(([k, lbl]) => (
-          <button key={k} onClick={() => setFilter(k)} className={`px-3 py-1.5 rounded-full font-label-caps text-[10px] transition ${filter === k ? "bg-primary-container text-on-primary-container" : "bg-surface-container-high text-outline hover:text-on-surface-variant"}`}>
-            {lbl}
-          </button>
-        ))}
-      </div>
-
-      {shown.length === 0 ? (
+      {books.length === 0 ? (
         <div className="glass-card rounded-xl p-10 text-center">
           <MI name="menu_book" className="text-4xl text-outline mb-2" />
-          <p className="text-[13px] text-outline">{books.length === 0 ? "Sua estante está vazia — adicione um livro." : "Nenhum livro nesse filtro."}</p>
+          <p className="text-[13px] text-outline">Sua estante está vazia — adicione um livro.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
-          {shown.map((b) => {
-            const pct = b.total ? Math.min(100, Math.round((b.page / b.total) * 100)) : 0;
+        <div className="space-y-8">
+          {GROUPS.map(([st, lbl]) => {
+            const list = books.filter((b) => (b.status || "want") === st);
+            if (list.length === 0) return null;
             return (
-              <button key={b.id} onClick={() => setEditId(b.id)} className="text-left group">
-                <div className="aspect-[2/3] rounded-lg overflow-hidden border border-outline-variant/30 shadow-sm relative group-hover:shadow-md group-active:scale-[0.98] transition">
-                  <Cover book={b} />
-                  {b.status === "reading" && b.total > 0 && (
-                    <div className="absolute bottom-0 left-0 w-full h-1.5 bg-black/30">
-                      <div className="h-full bg-primary-container" style={{ width: `${pct}%` }} />
-                    </div>
-                  )}
-                  {b.status === "done" && (
-                    <div className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-primary-container text-on-primary-container grid place-items-center">
-                      <MI name="check" className="text-sm" />
-                    </div>
-                  )}
-                  {b.status === "want" && (
-                    <div className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/50 text-white grid place-items-center">
-                      <MI name="bookmark" className="text-sm" fill />
-                    </div>
-                  )}
+              <section key={st}>
+                <div className="flex items-center gap-2 mb-3">
+                  <Caps className="text-primary text-[11px]">{lbl}</Caps>
+                  <div className="flex-1 h-px bg-outline-variant/30" />
+                  <Caps className="text-outline text-[10px]">{list.length}</Caps>
                 </div>
-                <div className="mt-1.5">
-                  <div className="text-[12px] font-semibold text-on-surface leading-tight line-clamp-2">{b.title}</div>
-                  {b.author && <div className="text-[10px] text-outline truncate">{b.author}</div>}
-                  {b.status === "done" && b.rating > 0 && (
-                    <div className="flex gap-0.5 mt-0.5">
-                      {Array.from({ length: 5 }).map((_, i) => (
-                        <MI key={i} name="star" fill={i < b.rating} className={`text-[11px] ${i < b.rating ? "text-primary-container" : "text-outline-variant"}`} />
-                      ))}
-                    </div>
-                  )}
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                  {list.map((b) => (
+                    <BookCard key={b.id} b={b} onOpen={() => setEditId(b.id)} />
+                  ))}
                 </div>
-              </button>
+              </section>
             );
           })}
         </div>

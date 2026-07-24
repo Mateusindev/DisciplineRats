@@ -79,6 +79,10 @@ export default function HomePage() {
     .sort((a, b) => rankTask(a) - rankTask(b) || ((a.due || "9999") < (b.due || "9999") ? -1 : 1) || (b.priority || 2) - (a.priority || 2));
   const priDot = (p) => (p === 3 ? "bg-error" : p === 1 ? "bg-outline" : "bg-primary-container");
 
+  // leitura: livros em andamento (bem enxuto)
+  const reading = (state.books || []).filter((b) => b.status === "reading");
+  const bookInitials = (t) => (t || "?").split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+
   // hábitos marcáveis (build + weekly; quit tem fluxo próprio)
   const habits = (state.habits || []).filter((h) => (h.kind || "build") !== "quit");
 
@@ -227,6 +231,41 @@ export default function HomePage() {
           </div>
         )}
       </section>
+
+      {/* leitura em andamento (enxuto) */}
+      {reading.length > 0 && (
+        <section className="mb-12">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-headline-md text-headline-md text-primary uppercase flex items-center gap-2">
+              <MI name="menu_book" className="text-primary-container" /> Lendo
+            </h3>
+            <Link href="/leitura" className="font-label-caps text-[10px] text-outline hover:text-primary transition">VER TUDO</Link>
+          </div>
+          <div className="flex gap-3 overflow-x-auto ff-scroll pb-1">
+            {reading.map((b) => {
+              const pct = b.total ? Math.min(100, Math.round((b.page / b.total) * 100)) : 0;
+              return (
+                <Link key={b.id} href="/leitura" className="w-28 shrink-0 group">
+                  <div className="aspect-[2/3] rounded-lg overflow-hidden border border-outline-variant/30 shadow-sm relative group-active:scale-[0.98] transition">
+                    {b.cover ? (
+                      <img src={b.cover} alt={b.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full grid place-items-center bg-surface-container-high text-on-surface-variant font-bold">{bookInitials(b.title)}</div>
+                    )}
+                    {b.total > 0 && (
+                      <div className="absolute bottom-0 left-0 w-full h-1.5 bg-black/30">
+                        <div className="h-full bg-primary-container" style={{ width: `${pct}%` }} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-on-surface leading-tight line-clamp-2 mt-1">{b.title}</div>
+                  {b.total > 0 && <div className="text-[9px] text-outline font-label-caps">{pct}%</div>}
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
     </>
   );
 }
