@@ -35,7 +35,7 @@ function CardBody({ card, onToggleDone, dragging }) {
         </div>
       )}
       <div className="flex items-start gap-2">
-        <button onPointerDown={stop} onClick={onToggleDone} aria-label={card.done ? "Reabrir" : "Concluir"} className="shrink-0 mt-0.5">
+        <button onPointerDown={stop} onClick={(e) => { e.stopPropagation(); onToggleDone(); }} aria-label={card.done ? "Reabrir" : "Concluir"} className="shrink-0 mt-0.5">
           <MI name={card.done ? "check_circle" : "radio_button_unchecked"} fill={card.done} className={card.done ? "text-primary-container" : "text-outline"} />
         </button>
         <p className={`flex-1 font-body-sm text-[14px] font-semibold leading-snug ${card.done ? "line-through text-on-surface-variant" : "text-on-surface"}`}>{card.text}</p>
