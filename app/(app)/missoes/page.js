@@ -173,15 +173,15 @@ export default function MissoesPage() {
               {over && over.colIdx === colIdx && over.index === col.cards.length && drag && <Indicator />}
             </div>
 
-            <div className="flex gap-1.5 mt-3">
+            <div className="flex items-center gap-1 mt-3 border-2 border-dashed border-outline-variant/40 rounded-lg focus-within:border-primary/40 transition">
               <input
                 value={cardInput[col.id] || ""}
                 onChange={(e) => setCardInput((s) => ({ ...s, [col.id]: e.target.value }))}
                 onKeyDown={(e) => e.key === "Enter" && addCard(col.id)}
-                placeholder="+ adicionar card"
-                className="flex-1 bg-transparent border-2 border-dashed border-primary/20 rounded-lg px-3 py-2 text-[13px] text-on-surface placeholder:text-primary/50 focus:border-primary/40 outline-none transition"
+                placeholder="Adicionar card"
+                className="flex-1 min-w-0 bg-transparent px-3 py-2 text-[13px] text-on-surface placeholder:text-outline outline-none"
               />
-              <button onClick={() => addCard(col.id)} aria-label="Adicionar card" className="px-2.5 rounded-lg bg-primary-container text-on-primary-container active:scale-95 transition shrink-0">
+              <button onClick={() => addCard(col.id)} aria-label="Adicionar card" className="mr-1 h-8 w-8 grid place-items-center rounded-md text-primary hover:bg-primary/10 active:scale-95 transition shrink-0">
                 <MI name="add" className="text-lg" />
               </button>
             </div>
@@ -189,20 +189,17 @@ export default function MissoesPage() {
         ))}
 
         {/* nova coluna */}
-        <div className="w-[260px] shrink-0 rounded-2xl p-4 flex flex-col items-center justify-center gap-3 border-2 border-dashed border-primary/20 hover:bg-primary/5 transition self-stretch min-h-[160px]">
-          <MI name="add" className="text-primary text-3xl" />
-          <div className="flex gap-1.5 w-full">
-            <input
-              value={newCol}
-              onChange={(e) => setNewCol(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addColumn()}
-              placeholder="Nova coluna"
-              className="flex-1 min-w-0 bg-surface-container-lowest rounded-lg px-3 py-2 text-[13px] text-on-surface border border-outline-variant/30 focus:border-primary/40 outline-none transition"
-            />
-            <button onClick={addColumn} aria-label="Adicionar coluna" className="px-2.5 rounded-lg bg-primary text-on-primary active:scale-95 transition shrink-0">
-              <MI name="add" className="text-lg" />
-            </button>
-          </div>
+        <div className="w-[260px] shrink-0 self-start flex items-center gap-1 rounded-2xl p-2 border-2 border-dashed border-outline-variant/40 hover:border-primary/40 focus-within:border-primary/40 transition">
+          <input
+            value={newCol}
+            onChange={(e) => setNewCol(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addColumn()}
+            placeholder="Nova coluna"
+            className="flex-1 min-w-0 bg-transparent px-3 py-2 text-[13px] text-on-surface placeholder:text-outline outline-none"
+          />
+          <button onClick={addColumn} aria-label="Adicionar coluna" className="h-8 w-8 grid place-items-center rounded-md text-primary hover:bg-primary/10 active:scale-95 transition shrink-0">
+            <MI name="add" className="text-lg" />
+          </button>
         </div>
       </div>
     </div>
