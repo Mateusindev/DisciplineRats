@@ -95,7 +95,26 @@ export default function MissoesPage() {
   }
   const removeCard = (colId, cardId) => setCols((cols) => cols.map((c) => (c.id === colId ? { ...c, cards: c.cards.filter((x) => x.id !== cardId) } : c)));
   const updateCard = (colId, cardId, patch) => setCols((cols) => cols.map((c) => (c.id === colId ? { ...c, cards: c.cards.map((x) => (x.id === cardId ? { ...x, ...patch } : x)) } : c)));
-  const toggleDone = (colId, cardId, done) => updateCard(colId, cardId, { done: !done });
+  function toggleDone(colId, cardId, done) {
+    const nd = !done;
+    setCols((cols) => {
+      const src = cols.find((c) => c.id === colId);
+      const card = src?.cards.find((k) => k.id === cardId);
+      if (!card) return cols;
+      const updated = { ...card, done: nd };
+      // reabrir, ou concluir já estando na coluna de concluídos → só atualiza no lugar
+      const doneCol = cols.find((c) => /conclu|feito|done/i.test(c.name)) || cols[cols.length - 1];
+      if (!nd || !doneCol || doneCol.id === colId) {
+        return cols.map((c) => (c.id === colId ? { ...c, cards: c.cards.map((k) => (k.id === cardId ? updated : k)) } : c));
+      }
+      // concluir → move pro fim da coluna de concluídos
+      return cols.map((c) => {
+        if (c.id === colId) return { ...c, cards: c.cards.filter((k) => k.id !== cardId) };
+        if (c.id === doneCol.id) return { ...c, cards: [...c.cards, updated] };
+        return c;
+      });
+    });
+  }
 
   // ---- dnd-kit ----
   const sensors = useSensors(
@@ -174,6 +193,7 @@ export default function MissoesPage() {
       {editCard && (
         <CardModal
           card={editCard}
+          onToggleDone={() => toggleDone(editing.colId, editing.cardId, editCard.done)}
           onClose={() => setEditing(null)}
           onPatch={(patch) => updateCard(editing.colId, editing.cardId, patch)}
           onDelete={async () => {
@@ -219,7 +239,7 @@ function Column({ col, renameColumn, removeColumn, toggleDone, openCard, cardInp
   );
 }
 
-function CardModal({ card, onClose, onPatch, onDelete }) {
+function CardModal({ card, onToggleDone, onClose, onPatch, onDelete }) {
   const [labelText, setLabelText] = useState("");
   const [labelColor, setLabelColor] = useState(LABEL_COLORS[0]);
   useEffect(() => {
@@ -238,7 +258,7 @@ function CardModal({ card, onClose, onPatch, onDelete }) {
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 animate-[fadeIn_.1s_ease-out]" onClick={onClose} role="dialog" aria-label="Detalhes do card">
       <div className="bg-surface-container-lowest rounded-2xl p-6 w-full max-w-lg shadow-2xl border border-white/10 max-h-[90vh] overflow-auto ff-scroll" onClick={stop}>
         <div className="flex items-center justify-between mb-4 gap-3">
-          <button onClick={() => onPatch({ done: !card.done })} className={`flex items-center gap-2 font-label-caps text-[11px] px-3 py-1.5 rounded-lg transition ${card.done ? "bg-primary-container text-on-primary-container" : "border border-outline-variant/50 text-on-surface-variant"}`}>
+          <button onClick={onToggleDone} className={`flex items-center gap-2 font-label-caps text-[11px] px-3 py-1.5 rounded-lg transition ${card.done ? "bg-primary-container text-on-primary-container" : "border border-outline-variant/50 text-on-surface-variant"}`}>
             <MI name={card.done ? "check_circle" : "radio_button_unchecked"} fill={card.done} className="text-base" /> {card.done ? "CONCLUÍDO" : "MARCAR CONCLUÍDO"}
           </button>
           <button onClick={onClose} aria-label="Fechar" className="text-outline hover:text-on-surface transition p-1">
