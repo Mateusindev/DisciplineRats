@@ -72,6 +72,13 @@ export default function HomePage() {
     }
   }
 
+  // missões pendentes (cards não concluídos do board) → lembrete sutil
+  const rankTask = (k) => (k.due ? (k.due < today ? 0 : 1) : 2); // atrasada, com prazo, sem prazo
+  const pendingTasks = (state.board?.columns || [])
+    .flatMap((c) => (c.cards || []).filter((k) => !k.done))
+    .sort((a, b) => rankTask(a) - rankTask(b) || ((a.due || "9999") < (b.due || "9999") ? -1 : 1) || (b.priority || 2) - (a.priority || 2));
+  const priDot = (p) => (p === 3 ? "bg-error" : p === 1 ? "bg-outline" : "bg-primary-container");
+
   // hábitos marcáveis (build + weekly; quit tem fluxo próprio)
   const habits = (state.habits || []).filter((h) => (h.kind || "build") !== "quit");
 
@@ -110,6 +117,39 @@ export default function HomePage() {
           <span>FALTAM {fmtK(g.toNext)} XP</span>
         </div>
       </div>
+
+      {/* missões pendentes (lembrete sutil) */}
+      {pendingTasks.length > 0 && (
+        <section className="mb-12">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-headline-md text-headline-md text-primary uppercase flex items-center gap-2">
+              <MI name="flag" className="text-primary-container" /> Missões · {pendingTasks.length}
+            </h3>
+            <Link href="/missoes" className="font-label-caps text-[10px] text-outline hover:text-primary transition">VER TUDO</Link>
+          </div>
+          <div className="glass-card rounded-xl divide-y divide-white/5">
+            {pendingTasks.slice(0, 5).map((k) => {
+              const overdue = k.due && k.due < today;
+              return (
+                <Link key={k.id} href="/missoes" className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-variant/30 transition first:rounded-t-xl last:rounded-b-xl">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${priDot(k.priority || 2)}`} />
+                  <span className="flex-1 min-w-0 text-[13px] text-on-surface truncate">{k.text}</span>
+                  {k.due && (
+                    <span className={`flex items-center gap-1 text-[10px] font-label-caps shrink-0 ${overdue ? "text-error" : "text-outline"}`}>
+                      <MI name="event" className="text-[13px]" /> {k.due.slice(8, 10)}/{k.due.slice(5, 7)}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+            {pendingTasks.length > 5 && (
+              <Link href="/missoes" className="block px-4 py-2 text-[11px] font-label-caps text-outline hover:text-primary transition text-center">
+                +{pendingTasks.length - 5} MAIS
+              </Link>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* treino do dia */}
       <section className="mb-12">
