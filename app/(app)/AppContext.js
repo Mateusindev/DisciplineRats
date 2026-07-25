@@ -14,7 +14,6 @@ import {
   formatTime,
   playChime,
   playAlarm,
-  computeRoutinePenalty,
   computeExercisePenalty,
   computeHabitDailyPenalty,
   computeActivityStreak,
@@ -255,16 +254,7 @@ export function AppProvider({ children }) {
         let penaltyXp = 0;
 
         // missões viraram quadro Trello (state.board) — sem penalidade/rollover.
-
-        // rotina: itens não checados em dias fechados (normal −3, inegociável −15)
-        const rp = computeRoutinePenalty(s.routine, s.routineChecks, today);
-        if (rp) {
-          s.routine = { ...(s.routine || {}), penaltyDate: rp.lastEvaluated };
-          if (rp.xp > 0) {
-            penaltyXp += rp.xp;
-            penalties.push(`rotina (−${rp.xp})`);
-          }
-        }
+        // rotina removida do app — sem penalidade de XP.
 
         // exercício: treinos faltantes na meta semanal, por semana fechada
         const ep = computeExercisePenalty(s.exerciseLogs, s.settings?.exerciseWeeklyGoal, s.settings?.exercisePenaltyWeek, today);
