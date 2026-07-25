@@ -57,10 +57,12 @@ alter table public.sleep_logs add column if not exists late_reason text;
 create table if not exists public.mood_logs (
   user_id  uuid not null references auth.users (id) on delete cascade,
   date     date not null,
-  mood     smallint not null,
+  mood     smallint not null,                 -- média (arredondada) dos períodos do dia; legado = registro único
   note     text,
+  periods  jsonb,                             -- { morning?, afternoon?, evening? } cada um { mood, note?, tags?[] }
   primary key (user_id, date)
 );
+alter table public.mood_logs add column if not exists periods jsonb;
 
 create table if not exists public.focus_days (
   user_id  uuid not null references auth.users (id) on delete cascade,
