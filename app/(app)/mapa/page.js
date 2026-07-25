@@ -48,7 +48,6 @@ export default function MapaPage() {
 
   const [editingId, setEditingId] = useState(null);
   const [showLanes, setShowLanes] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
   const [dragging, setDragging] = useState(null);
 
   // raias visíveis: as do usuário + "Sem área" só quando tem órfão (senão é linha morta)
@@ -213,14 +212,6 @@ export default function MapaPage() {
         <h1 className="font-headline-lg text-headline-lg text-primary flex items-center gap-2 uppercase">
           Mapa
           <MI name="explore" className="text-primary-container text-xl" fill />
-          <button
-            onClick={() => setShowHelp(true)}
-            aria-label="Como o Mapa funciona"
-            title="Como o Mapa funciona"
-            className="ml-1 w-6 h-6 rounded-full grid place-items-center text-outline hover:text-primary hover:bg-surface-variant/40 transition"
-          >
-            <MI name="help" className="text-[18px]" />
-          </button>
         </h1>
         <p className="text-body-md text-on-surface-variant">
           Horizonte nas colunas, área da vida nas faixas · {metaCount} meta(s) · {mirrorCount} espelho(s)
@@ -229,12 +220,12 @@ export default function MapaPage() {
 
       <Toolbar onAdd={(kind) => addNode(kind)} onLanes={() => setShowLanes(true)} />
 
-      {/* mapa novo: convite discreto pra explicação, desaparece depois do primeiro item */}
+      {/* mapa novo: aponta pra ajuda global, desaparece depois do primeiro item */}
       {nodes.length === 0 && rows.length > 0 && (
-        <button onClick={() => setShowHelp(true)} className="mb-5 flex items-center gap-1.5 text-[12px] text-outline hover:text-primary transition">
+        <p className="mb-5 flex items-center gap-1.5 text-[12px] text-outline">
           <MI name="lightbulb" className="text-[15px]" />
-          Primeira vez aqui? Veja como o Mapa funciona
-        </button>
+          Primeira vez aqui? Toque no <MI name="help" className="text-[15px]" /> no topo da tela pra entender os eixos.
+        </p>
       )}
 
       {rows.length === 0 ? (
@@ -344,7 +335,6 @@ export default function MapaPage() {
         <LaneManager lanes={lanes} nodes={nodes} onAdd={addLane} onPatch={patchLane} onMove={moveLane} onRemove={removeLane} onClose={() => setShowLanes(false)} />
       )}
 
-      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
     </div>
   );
 }
@@ -368,98 +358,6 @@ function Toolbar({ onAdd, onLanes }) {
         <MI name="category" className="text-[18px]" /> ÁREAS
       </button>
     </div>
-  );
-}
-
-// ---------- ajuda ----------
-const MIRROR_SOURCES = [
-  { icon: "check_circle", what: "Hábito diário", bar: "sequência atual / 21 dias" },
-  { icon: "repeat", what: "Hábito semanal", bar: "dias na semana / meta da semana" },
-  { icon: "block", what: "Vício em corte", bar: "dias limpo / próximo marco" },
-  { icon: "flag", what: "Missão", bar: "0% ou 100%, com coluna e prazo" },
-  { icon: "savings", what: "Meta de economia", bar: "guardado / alvo" },
-  { icon: "menu_book", what: "Livro", bar: "página atual / total" },
-];
-
-function HelpModal({ onClose }) {
-  return createPortal(
-    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 animate-[fadeIn_.1s_ease-out]" onClick={onClose} role="dialog" aria-label="Como o Mapa funciona">
-      <div className="bg-surface-container-lowest rounded-2xl p-6 w-full max-w-lg shadow-2xl border border-white/10 max-h-[90vh] overflow-auto ff-scroll" onClick={stop}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-headline-md text-headline-md text-primary">Como o Mapa funciona</h3>
-          <button onClick={onClose} aria-label="Fechar" className="text-outline hover:text-on-surface transition p-1">
-            <MI name="close" />
-          </button>
-        </div>
-
-        <div className="space-y-5 text-body-md text-on-surface-variant">
-          <div>
-            <Caps className="text-primary text-[10px] mb-1.5 block">OS DOIS EIXOS</Caps>
-            <p>
-              <strong className="text-on-surface">Colunas = horizonte de tempo.</strong> De <em>Agora</em> até <em>3+ / algum dia</em>. Arrastar um item pra
-              esquerda é se comprometer com ele mais cedo — a posição não é decoração.
-            </p>
-            <p className="mt-1.5">
-              <strong className="text-on-surface">Faixas = área da vida.</strong> Editáveis em ÁREAS. A ordem dos cards dentro de uma célula é a prioridade.
-            </p>
-          </div>
-
-          <div>
-            <Caps className="text-primary text-[10px] mb-1.5 block">TRÊS TIPOS DE ITEM</Caps>
-            <div className="space-y-2">
-              <p>
-                <MI name="add_circle" className="text-[15px] align-middle mr-1 text-on-surface-variant" />
-                <strong className="text-on-surface">Meta</strong> — o que você quer. Texto seu; ninguém mede pra você.
-              </p>
-              <p>
-                <MI name="link" className="text-[15px] align-middle mr-1 text-primary" />
-                <strong className="text-on-surface">Espelho</strong> — atalho vivo pra algo que <em>já existe</em> no app. A barra é lida de lá na hora: marca o
-                hábito em Hábitos e ela mexe aqui sozinha. Renomeia lá, renomeia aqui. Não é cópia.
-              </p>
-              <p>
-                <MI name="note_alt" className="text-[15px] align-middle mr-1 text-on-surface-variant" />
-                <strong className="text-on-surface">Nota</strong> — ideia solta, pergunta, lembrete.
-              </p>
-            </div>
-          </div>
-
-          <div>
-            <Caps className="text-primary text-[10px] mb-1.5 block">DE ONDE O ESPELHO TIRA A BARRA</Caps>
-            <div className="rounded-lg border border-white/10 divide-y divide-white/5 overflow-hidden">
-              {MIRROR_SOURCES.map((s) => (
-                <div key={s.what} className="flex items-center gap-2 px-3 py-2">
-                  <MI name={s.icon} className="text-[16px] text-primary-container shrink-0" />
-                  <span className="text-[13px] text-on-surface w-[130px] shrink-0">{s.what}</span>
-                  <span className="text-[12px] text-outline truncate">{s.bar}</span>
-                </div>
-              ))}
-            </div>
-            <p className="mt-2 text-[12px]">
-              Apagou o item original? O card fica vermelho com <em>Referência perdida</em> e oferece reapontar ou excluir — a posição e as ligações não se perdem
-              junto.
-            </p>
-          </div>
-
-          <div>
-            <Caps className="text-primary text-[10px] mb-1.5 block">POR QUE ISSO IMPORTA</Caps>
-            <p>
-              Uma meta sozinha não se move. Coloque ao lado dela o espelho do hábito que a sustenta e ligue os dois com <em>leva a</em> — aí o mapa mostra não só o
-              que você quer, mas se o comportamento que leva até lá está de fato acontecendo.
-            </p>
-          </div>
-
-          <div>
-            <Caps className="text-primary text-[10px] mb-1.5 block">FOCO DO TRIMESTRE</Caps>
-            <p>Fixe um item (botão dentro dele) e ele aparece no topo da Home, com progresso, todo dia.</p>
-          </div>
-        </div>
-
-        <button onClick={onClose} className="mt-6 w-full py-2.5 rounded-lg border border-primary/40 text-primary hover:bg-primary/10 font-label-caps text-[11px] active:scale-95 transition">
-          ENTENDI
-        </button>
-      </div>
-    </div>,
-    document.body
   );
 }
 

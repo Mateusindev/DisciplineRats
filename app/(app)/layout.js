@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AppProvider, useApp } from "./AppContext";
 import { MI, Caps } from "@/components/ui";
+import { HelpButton } from "@/components/help";
 import { TABS, NAV_SECTIONS, gamify, fmtK } from "@/lib/state";
 import { hasSupabase } from "@/lib/persistence";
 import { DEFAULT_MODE } from "@/lib/themes";
@@ -51,15 +52,18 @@ function Chrome({ children }) {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* toggle de tema sutil (canto) */}
-      <button
-        onClick={() => setSetting("mode", mode === "light" ? "dark" : "light")}
-        aria-label={mode === "light" ? "Ativar modo escuro" : "Ativar modo claro"}
-        title="Alternar tema"
-        className="fixed top-3 right-3 z-[60] w-8 h-8 rounded-full grid place-items-center text-on-surface-variant/50 hover:text-on-surface hover:bg-surface-variant/50 transition"
-      >
-        <MI name={mode === "light" ? "dark_mode" : "light_mode"} className="text-[18px]" />
-      </button>
+      {/* ações de canto: ajuda da página atual + toggle de tema */}
+      <div className="fixed top-3 right-3 z-[60] flex items-center gap-1">
+        <HelpButton pathname={pathname} />
+        <button
+          onClick={() => setSetting("mode", mode === "light" ? "dark" : "light")}
+          aria-label={mode === "light" ? "Ativar modo escuro" : "Ativar modo claro"}
+          title="Alternar tema"
+          className="w-8 h-8 rounded-full grid place-items-center text-on-surface-variant/50 hover:text-on-surface hover:bg-surface-variant/50 transition"
+        >
+          <MI name={mode === "light" ? "dark_mode" : "light_mode"} className="text-[18px]" />
+        </button>
+      </div>
 
       {/* Side nav (desktop) — clássica */}
       <aside className="hidden md:flex flex-col bg-surface-container border-r border-outline-variant w-64 fixed left-0 top-0 bottom-0 pt-6 pb-6 z-40">
