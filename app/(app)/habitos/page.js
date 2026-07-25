@@ -47,6 +47,234 @@ function PriorityChips({ value, onChange, size = "text-[10px]" }) {
   );
 }
 
+// ---- header comum do card (ícone + editar/excluir + nome) ----
+// Componentes em escopo de módulo (não aninhados na página): identidade estável
+// entre renders, então os inputs de edição não remontam a cada tecla (evita o
+// foco pular pro título ao digitar os detalhes).
+function CardHeader({ h, i, ctx }) {
+  const { edits, editDetails, setEdits, setEditDetails, pickingIcon, setPickingIcon, setIcon, saveEdit, cancelEdit, startEdit, removeHabit, setPriority } = ctx;
+  const editing = edits[h.id] !== undefined;
+  const picking = pickingIcon === h.id;
+  return (
+    <>
+      <div className="flex items-start justify-between mb-3">
+        <button
+          onClick={() => setPickingIcon(picking ? null : h.id)}
+          aria-label="Escolher ícone"
+          title="Escolher ícone"
+          className={`w-12 h-12 rounded flex items-center justify-center active:scale-95 transition ${
+            (h.kind || "build") === "quit"
+              ? "bg-error/10 text-error hover:bg-error/20"
+              : "bg-primary-container/20 text-primary-container hover:bg-primary-container/30"
+          }`}
+        >
+          <MI name={h.icon || HABIT_ICONS[i % HABIT_ICONS.length]} className="text-3xl" />
+        </button>
+        {picking && <div className="fixed inset-0 z-20" onClick={() => setPickingIcon(null)} />}
+        {picking && (
+          <div className="absolute left-4 top-20 z-30 bg-surface-container-highest rounded-xl border border-white/10 shadow-2xl shadow-black/60 p-3 grid grid-cols-6 gap-1 w-64 animate-[fadeIn_.1s_ease-out]">
+            {HABIT_ICONS.map((ic) => (
+              <button
+                key={ic}
+                onClick={() => setIcon(h.id, ic)}
+                aria-label={ic}
+                className={`w-9 h-9 rounded-lg flex items-center justify-center transition ${
+                  (h.icon || HABIT_ICONS[i % HABIT_ICONS.length]) === ic
+                    ? "bg-primary-container text-on-primary-container"
+                    : "text-on-surface-variant hover:bg-surface-variant/60"
+                }`}
+              >
+                <MI name={ic} className="text-xl" />
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-1">
+          {editing ? (
+            <>
+              <button onClick={() => saveEdit(h.id)} aria-label="Salvar" className="text-outline hover:text-primary-container transition">
+                <MI name="check" className="text-xl" />
+              </button>
+              <button onClick={() => cancelEdit(h.id)} aria-label="Cancelar" className="text-outline hover:text-on-surface transition">
+                <MI name="close" className="text-xl" />
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => startEdit(h)} aria-label="Editar" className="text-outline hover:text-primary-container transition">
+                <MI name="edit" className="text-xl" />
+              </button>
+              <button onClick={() => removeHabit(h.id)} aria-label="Remover" className="text-outline hover:text-error transition">
+                <MI name="delete" className="text-xl" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      {editing ? (
+        <>
+          <input
+            value={edits[h.id]}
+            onChange={(e) => setEdits((es) => ({ ...es, [h.id]: e.target.value }))}
+            onKeyDown={(e) => (e.key === "Enter" ? saveEdit(h.id) : e.key === "Escape" ? cancelEdit(h.id) : null)}
+            autoFocus
+            aria-label="Nome do hábito"
+            className={`${inputCls} w-full mb-2`}
+          />
+          <textarea
+            value={editDetails[h.id] || ""}
+            onChange={(e) => setEditDetails((es) => ({ ...es, [h.id]: e.target.value }))}
+            onKeyDown={(e) => (e.key === "Escape" ? cancelEdit(h.id) : null)}
+            rows={3}
+            maxLength={500}
+            placeholder="Detalhes, motivação, como executar..."
+            aria-label="Detalhes do hábito"
+            className={`${inputCls} w-full mb-2 resize-y`}
+          />
+        </>
+      ) : (
+        <h4 className="font-headline-md text-headline-md mb-2">{h.name}</h4>
+      )}
+      {!editing && h.detail && (
+        <p className="text-[12px] text-on-surface-variant whitespace-pre-wrap mb-2">{h.detail}</p>
+      )}
+      <div className="mb-3">
+        <PriorityChips value={h.priority || 2} onChange={(v) => setPriority(h.id, v)} />
+      </div>
+    </>
+  );
+}
+
+function BuildCard({ h, i, ctx }) {
+  const { today, toggleHabit } = ctx;
+  const done = h.doneDates.includes(today);
+  const streak = computeHabitStreak(h.doneDates);
+  const prio = habitPriority(h);
+  return (
+    <div className="glass-card p-6 rounded-xl relative">
+      <CardHeader h={h} i={i} ctx={ctx} />
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-1 text-outline-variant font-label-caps text-[10px]">
+          <MI name="local_fire_department" className={`text-sm ${streak > 0 ? "text-primary-container" : ""}`} /> {streak} DIAS
+        </div>
+        <Caps className="text-outline text-[10px]">+{prio.xp} XP/DIA</Caps>
+      </div>
+      <button
+        onClick={() => toggleHabit(h.id)}
+        className={`w-full py-2 font-label-caps text-[10px] rounded transition-colors ${
+          done ? "bg-primary-container text-on-primary-container" : "border border-primary text-primary hover:bg-primary/10"
+        }`}
+      >
+        {done ? "CONCLUÍDO HOJE" : "MARCAR AGORA"}
+      </button>
+    </div>
+  );
+}
+
+function WeeklyCard({ h, i, ctx }) {
+  const { today, toggleHabit } = ctx;
+  const target = h.weeklyTarget || 3;
+  const dir = h.direction || "min";
+  const count = weekCount(h);
+  const done = h.doneDates.includes(today);
+  const prio = habitPriority(h);
+  const bonus = Math.round(WEEKLY_BONUS[dir] * prio.mult);
+  const pct = Math.min(100, Math.round((count / Math.max(1, target)) * 100));
+  const over = dir === "max" && count > target;
+  const hit = dir === "min" && count >= target;
+  return (
+    <div className="glass-card p-6 rounded-xl relative border-l-4 border-l-primary-container/40">
+      <CardHeader h={h} i={i} ctx={ctx} />
+      <div className="flex items-end justify-between mb-1">
+        <Caps className="text-outline text-[10px]">
+          {dir === "min" ? "PELO MENOS" : "NO MÁXIMO"} {target}×/SEMANA
+        </Caps>
+        <span className={`font-headline-md text-headline-md ${over ? "text-error" : hit ? "text-primary-container" : "text-on-surface"}`}>
+          {count}/{target}
+        </span>
+      </div>
+      <div className="w-full h-2 bg-surface-variant rounded-full overflow-hidden mb-2">
+        <div className={`h-full rounded-full ${over ? "bg-error" : "bg-primary-container"}`} style={{ width: `${pct}%` }} />
+      </div>
+      <div className="flex justify-between items-center mb-4">
+        <Caps className={`text-[10px] ${over ? "text-error" : hit ? "text-primary-container" : "text-outline-variant"}`}>
+          {dir === "min" ? (hit ? "META BATIDA ✓" : `FALTAM ${target - count}`) : over ? "LIMITE ESTOURADO" : `RESTAM ${target - count}`}
+        </Caps>
+        <Caps className="text-outline text-[10px]">+{bonus} XP/SEMANA NA META</Caps>
+      </div>
+      <button
+        onClick={() => toggleHabit(h.id)}
+        className={`w-full py-2 font-label-caps text-[10px] rounded transition-colors ${
+          dir === "min"
+            ? done
+              ? "bg-primary-container text-on-primary-container"
+              : "border border-primary text-primary hover:bg-primary/10"
+            : done
+              ? "bg-error/15 text-error border border-error/40"
+              : "border border-error/40 text-error hover:bg-error/10"
+        }`}
+      >
+        {dir === "min" ? (done ? "PRATICADO HOJE ✓" : "PRATIQUEI HOJE") : done ? "CONSUMIDO HOJE · DESFAZER" : "CONSUMI HOJE"}
+      </button>
+    </div>
+  );
+}
+
+function QuitCard({ h, i, ctx }) {
+  const { today, logRelapse, undoRelapse } = ctx;
+  const clean = cleanDays(h);
+  const best = bestCleanRun(h);
+  const relapsedToday = h.doneDates.includes(today);
+  const last30 = relapsesInWindow(h.doneDates, shiftDate(today, -29), today);
+  const prev30 = relapsesInWindow(h.doneDates, shiftDate(today, -59), shiftDate(today, -30));
+  const trend = prev30 > 0 ? last30 - prev30 : null;
+  const next = QUIT_MILESTONES.find((m) => m.days > clean);
+  const prio = habitPriority(h);
+  return (
+    <div className="glass-card p-6 rounded-xl relative border-l-4 border-l-error/40">
+      <CardHeader h={h} i={i} ctx={ctx} />
+      <div className="text-center my-3">
+        <div className="font-display-timer text-[44px] leading-none text-primary tabular-nums">{clean}</div>
+        <Caps className="text-outline">{clean === 1 ? "DIA LIMPO" : "DIAS LIMPO"}</Caps>
+      </div>
+      <div className="flex justify-between items-center mb-1 text-[11px]">
+        <Caps className="text-outline-variant text-[10px]">RECORDE: {best} {best === 1 ? "DIA" : "DIAS"}</Caps>
+        {next && (
+          <Caps className="text-outline text-[10px]">
+            PRÓX. MARCO: {next.days}D (+{Math.round(next.xp * prio.mult)} XP)
+          </Caps>
+        )}
+      </div>
+      <div className="flex justify-between items-center mb-4 text-[11px]">
+        <Caps className="text-outline-variant text-[10px]">30D: {last30} RECAÍDA(S)</Caps>
+        {trend !== null && (
+          <Caps className={`text-[10px] ${trend <= 0 ? "text-primary-container" : "text-error"}`}>
+            {trend <= 0 ? "▼" : "▲"} {Math.abs(trend)} VS 30D ANTERIORES
+          </Caps>
+        )}
+      </div>
+      {relapsedToday ? (
+        <div className="flex gap-2">
+          <div className="flex-1 py-2 text-center font-label-caps text-[10px] rounded bg-error/15 text-error">RECAÍDA HOJE</div>
+          <button
+            onClick={() => undoRelapse(h.id)}
+            className="px-3 py-2 rounded font-label-caps text-[10px] border border-white/15 text-on-surface-variant hover:border-white/30 transition"
+          >
+            DESFAZER
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => logRelapse(h)}
+          className="w-full py-2 font-label-caps text-[10px] rounded border border-error/40 text-error hover:bg-error/10 transition-colors"
+        >
+          RECAÍ HOJE
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function HabitosPage() {
   const { state, setState, confirm, toast } = useApp();
   const [newHabit, setNewHabit] = useState("");
@@ -190,226 +418,25 @@ export default function HabitosPage() {
     cancelEdit(id);
   }
 
-  // ---- header comum do card (ícone + editar/excluir + nome) ----
-  function CardHeader({ h, i }) {
-    const editing = edits[h.id] !== undefined;
-    const picking = pickingIcon === h.id;
-    return (
-      <>
-        <div className="flex items-start justify-between mb-3">
-          <button
-            onClick={() => setPickingIcon(picking ? null : h.id)}
-            aria-label="Escolher ícone"
-            title="Escolher ícone"
-            className={`w-12 h-12 rounded flex items-center justify-center active:scale-95 transition ${
-              (h.kind || "build") === "quit"
-                ? "bg-error/10 text-error hover:bg-error/20"
-                : "bg-primary-container/20 text-primary-container hover:bg-primary-container/30"
-            }`}
-          >
-            <MI name={h.icon || HABIT_ICONS[i % HABIT_ICONS.length]} className="text-3xl" />
-          </button>
-          {picking && <div className="fixed inset-0 z-20" onClick={() => setPickingIcon(null)} />}
-          {picking && (
-            <div className="absolute left-4 top-20 z-30 bg-surface-container-highest rounded-xl border border-white/10 shadow-2xl shadow-black/60 p-3 grid grid-cols-6 gap-1 w-64 animate-[fadeIn_.1s_ease-out]">
-              {HABIT_ICONS.map((ic) => (
-                <button
-                  key={ic}
-                  onClick={() => setIcon(h.id, ic)}
-                  aria-label={ic}
-                  className={`w-9 h-9 rounded-lg flex items-center justify-center transition ${
-                    (h.icon || HABIT_ICONS[i % HABIT_ICONS.length]) === ic
-                      ? "bg-primary-container text-on-primary-container"
-                      : "text-on-surface-variant hover:bg-surface-variant/60"
-                  }`}
-                >
-                  <MI name={ic} className="text-xl" />
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="flex items-center gap-1">
-            {editing ? (
-              <>
-                <button onClick={() => saveEdit(h.id)} aria-label="Salvar" className="text-outline hover:text-primary-container transition">
-                  <MI name="check" className="text-xl" />
-                </button>
-                <button onClick={() => cancelEdit(h.id)} aria-label="Cancelar" className="text-outline hover:text-on-surface transition">
-                  <MI name="close" className="text-xl" />
-                </button>
-              </>
-            ) : (
-              <>
-                <button onClick={() => startEdit(h)} aria-label="Editar" className="text-outline hover:text-primary-container transition">
-                  <MI name="edit" className="text-xl" />
-                </button>
-                <button onClick={() => removeHabit(h.id)} aria-label="Remover" className="text-outline hover:text-error transition">
-                  <MI name="delete" className="text-xl" />
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-        {editing ? (
-          <>
-            <input
-              value={edits[h.id]}
-              onChange={(e) => setEdits((es) => ({ ...es, [h.id]: e.target.value }))}
-              onKeyDown={(e) => (e.key === "Enter" ? saveEdit(h.id) : e.key === "Escape" ? cancelEdit(h.id) : null)}
-              autoFocus
-              aria-label="Nome do hábito"
-              className={`${inputCls} w-full mb-2`}
-            />
-            <textarea
-              value={editDetails[h.id] || ""}
-              onChange={(e) => setEditDetails((es) => ({ ...es, [h.id]: e.target.value }))}
-              onKeyDown={(e) => (e.key === "Escape" ? cancelEdit(h.id) : null)}
-              rows={3}
-              maxLength={500}
-              placeholder="Detalhes, motivação, como executar..."
-              aria-label="Detalhes do hábito"
-              className={`${inputCls} w-full mb-2 resize-y`}
-            />
-          </>
-        ) : (
-          <h4 className="font-headline-md text-headline-md mb-2">{h.name}</h4>
-        )}
-        {!editing && h.detail && (
-          <p className="text-[12px] text-on-surface-variant whitespace-pre-wrap mb-2">{h.detail}</p>
-        )}
-        <div className="mb-3">
-          <PriorityChips value={h.priority || 2} onChange={(v) => setPriority(h.id, v)} />
-        </div>
-      </>
-    );
-  }
-
-  function BuildCard({ h, i }) {
-    const done = h.doneDates.includes(today);
-    const streak = computeHabitStreak(h.doneDates);
-    const prio = habitPriority(h);
-    return (
-      <div className="glass-card p-6 rounded-xl relative">
-        <CardHeader h={h} i={i} />
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-1 text-outline-variant font-label-caps text-[10px]">
-            <MI name="local_fire_department" className={`text-sm ${streak > 0 ? "text-primary-container" : ""}`} /> {streak} DIAS
-          </div>
-          <Caps className="text-outline text-[10px]">+{prio.xp} XP/DIA</Caps>
-        </div>
-        <button
-          onClick={() => toggleHabit(h.id)}
-          className={`w-full py-2 font-label-caps text-[10px] rounded transition-colors ${
-            done ? "bg-primary-container text-on-primary-container" : "border border-primary text-primary hover:bg-primary/10"
-          }`}
-        >
-          {done ? "CONCLUÍDO HOJE" : "MARCAR AGORA"}
-        </button>
-      </div>
-    );
-  }
-
-  function WeeklyCard({ h, i }) {
-    const target = h.weeklyTarget || 3;
-    const dir = h.direction || "min";
-    const count = weekCount(h);
-    const done = h.doneDates.includes(today);
-    const prio = habitPriority(h);
-    const bonus = Math.round(WEEKLY_BONUS[dir] * prio.mult);
-    const pct = Math.min(100, Math.round((count / Math.max(1, target)) * 100));
-    const over = dir === "max" && count > target;
-    const hit = dir === "min" && count >= target;
-    return (
-      <div className="glass-card p-6 rounded-xl relative border-l-4 border-l-primary-container/40">
-        <CardHeader h={h} i={i} />
-        <div className="flex items-end justify-between mb-1">
-          <Caps className="text-outline text-[10px]">
-            {dir === "min" ? "PELO MENOS" : "NO MÁXIMO"} {target}×/SEMANA
-          </Caps>
-          <span className={`font-headline-md text-headline-md ${over ? "text-error" : hit ? "text-primary-container" : "text-on-surface"}`}>
-            {count}/{target}
-          </span>
-        </div>
-        <div className="w-full h-2 bg-surface-variant rounded-full overflow-hidden mb-2">
-          <div className={`h-full rounded-full ${over ? "bg-error" : "bg-primary-container"}`} style={{ width: `${pct}%` }} />
-        </div>
-        <div className="flex justify-between items-center mb-4">
-          <Caps className={`text-[10px] ${over ? "text-error" : hit ? "text-primary-container" : "text-outline-variant"}`}>
-            {dir === "min" ? (hit ? "META BATIDA ✓" : `FALTAM ${target - count}`) : over ? "LIMITE ESTOURADO" : `RESTAM ${target - count}`}
-          </Caps>
-          <Caps className="text-outline text-[10px]">+{bonus} XP/SEMANA NA META</Caps>
-        </div>
-        <button
-          onClick={() => toggleHabit(h.id)}
-          className={`w-full py-2 font-label-caps text-[10px] rounded transition-colors ${
-            dir === "min"
-              ? done
-                ? "bg-primary-container text-on-primary-container"
-                : "border border-primary text-primary hover:bg-primary/10"
-              : done
-                ? "bg-error/15 text-error border border-error/40"
-                : "border border-error/40 text-error hover:bg-error/10"
-          }`}
-        >
-          {dir === "min" ? (done ? "PRATICADO HOJE ✓" : "PRATIQUEI HOJE") : done ? "CONSUMIDO HOJE · DESFAZER" : "CONSUMI HOJE"}
-        </button>
-      </div>
-    );
-  }
-
-  function QuitCard({ h, i }) {
-    const clean = cleanDays(h);
-    const best = bestCleanRun(h);
-    const relapsedToday = h.doneDates.includes(today);
-    const last30 = relapsesInWindow(h.doneDates, shiftDate(today, -29), today);
-    const prev30 = relapsesInWindow(h.doneDates, shiftDate(today, -59), shiftDate(today, -30));
-    const trend = prev30 > 0 ? last30 - prev30 : null;
-    const next = QUIT_MILESTONES.find((m) => m.days > clean);
-    const prio = habitPriority(h);
-    return (
-      <div className="glass-card p-6 rounded-xl relative border-l-4 border-l-error/40">
-        <CardHeader h={h} i={i} />
-        <div className="text-center my-3">
-          <div className="font-display-timer text-[44px] leading-none text-primary tabular-nums">{clean}</div>
-          <Caps className="text-outline">{clean === 1 ? "DIA LIMPO" : "DIAS LIMPO"}</Caps>
-        </div>
-        <div className="flex justify-between items-center mb-1 text-[11px]">
-          <Caps className="text-outline-variant text-[10px]">RECORDE: {best} {best === 1 ? "DIA" : "DIAS"}</Caps>
-          {next && (
-            <Caps className="text-outline text-[10px]">
-              PRÓX. MARCO: {next.days}D (+{Math.round(next.xp * prio.mult)} XP)
-            </Caps>
-          )}
-        </div>
-        <div className="flex justify-between items-center mb-4 text-[11px]">
-          <Caps className="text-outline-variant text-[10px]">30D: {last30} RECAÍDA(S)</Caps>
-          {trend !== null && (
-            <Caps className={`text-[10px] ${trend <= 0 ? "text-primary-container" : "text-error"}`}>
-              {trend <= 0 ? "▼" : "▲"} {Math.abs(trend)} VS 30D ANTERIORES
-            </Caps>
-          )}
-        </div>
-        {relapsedToday ? (
-          <div className="flex gap-2">
-            <div className="flex-1 py-2 text-center font-label-caps text-[10px] rounded bg-error/15 text-error">RECAÍDA HOJE</div>
-            <button
-              onClick={() => undoRelapse(h.id)}
-              className="px-3 py-2 rounded font-label-caps text-[10px] border border-white/15 text-on-surface-variant hover:border-white/30 transition"
-            >
-              DESFAZER
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => logRelapse(h)}
-            className="w-full py-2 font-label-caps text-[10px] rounded border border-error/40 text-error hover:bg-error/10 transition-colors"
-          >
-            RECAÍ HOJE
-          </button>
-        )}
-      </div>
-    );
-  }
+  // handlers/estado compartilhados com os cards (identidade estável evita remount dos inputs)
+  const ctx = {
+    edits,
+    editDetails,
+    setEdits,
+    setEditDetails,
+    pickingIcon,
+    setPickingIcon,
+    setIcon,
+    saveEdit,
+    cancelEdit,
+    startEdit,
+    removeHabit,
+    setPriority,
+    today,
+    toggleHabit,
+    logRelapse,
+    undoRelapse,
+  };
 
   const buildHabits = state.habits.filter((h) => (h.kind || "build") === "build");
   const weeklyHabits = state.habits.filter((h) => (h.kind || "build") === "weekly");
@@ -518,7 +545,7 @@ export default function HabitosPage() {
               )}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
                 {buildHabits.map((h, i) => (
-                  <BuildCard key={h.id} h={h} i={i} />
+                  <BuildCard key={h.id} h={h} i={i} ctx={ctx} />
                 ))}
               </div>
             </section>
@@ -533,7 +560,7 @@ export default function HabitosPage() {
               )}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
                 {weeklyHabits.map((h, i) => (
-                  <WeeklyCard key={h.id} h={h} i={i} />
+                  <WeeklyCard key={h.id} h={h} i={i} ctx={ctx} />
                 ))}
               </div>
             </section>
@@ -548,7 +575,7 @@ export default function HabitosPage() {
               )}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
                 {quitHabits.map((h, i) => (
-                  <QuitCard key={h.id} h={h} i={i} />
+                  <QuitCard key={h.id} h={h} i={i} ctx={ctx} />
                 ))}
               </div>
             </section>
