@@ -34,6 +34,7 @@ alter table public.profiles add column if not exists journal      jsonb not null
 alter table public.profiles add column if not exists wallet       jsonb not null default '{"fixed":[],"goals":[]}'::jsonb;  -- carteira: despesas fixas + metas
 alter table public.profiles add column if not exists board        jsonb not null default '{"columns":[]}'::jsonb;  -- quadro Trello das missões
 alter table public.profiles add column if not exists books        jsonb not null default '[]'::jsonb;  -- estante de leitura
+alter table public.profiles add column if not exists calendar     jsonb not null default '{}'::jsonb;  -- agenda: { [date]: [eventos] }
 alter table public.profiles drop column if exists state;           -- blob legado removido
 
 -- ---------- LOGS por data/entrada ----------
