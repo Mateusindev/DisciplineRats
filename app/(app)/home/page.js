@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useApp } from "../AppContext";
 import { MI, Caps, StatTile } from "@/components/ui";
-import { gamify, fmtK, getDateStr, toggleHabitState, habitPriority, computeHabitStreak } from "@/lib/state";
+import { gamify, fmtK, getDateStr, toggleHabitState, habitPriority, computeHabitStreak, bookPct, mapaFocus } from "@/lib/state";
 
 function greeting() {
   const h = new Date().getHours();
@@ -79,6 +79,9 @@ export default function HomePage() {
     .sort((a, b) => rankTask(a) - rankTask(b) || ((a.due || "9999") < (b.due || "9999") ? -1 : 1) || (b.priority || 2) - (a.priority || 2));
   const priDot = (p) => (p === 3 ? "bg-error" : p === 1 ? "bg-outline" : "bg-primary-container");
 
+  // foco do trimestre: nó fixado no Mapa — amarra o longo prazo no dia
+  const focus = mapaFocus(state);
+
   // leitura: livros em andamento (bem enxuto)
   const reading = (state.books || []).filter((b) => b.status === "reading");
   const bookInitials = (t) => (t || "?").split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
@@ -121,6 +124,40 @@ export default function HomePage() {
           <span>FALTAM {fmtK(g.toNext)} XP</span>
         </div>
       </div>
+
+      {/* foco do trimestre (nó fixado no Mapa) — item de maior altitude da página */}
+      {focus && (
+        <Link href="/mapa" className="block glass-card rounded-xl p-6 mb-12 border-l-4 hover:brightness-110 transition" style={{ borderLeftColor: focus.lane?.color || "var(--color-primary-container)" }}>
+          <div className="flex items-center gap-2 mb-2">
+            <MI name="explore" className="text-primary-container text-lg" fill />
+            <Caps className="text-outline text-[10px]">FOCO DO TRIMESTRE</Caps>
+            <span className="ml-auto flex items-center gap-1.5 text-[10px] font-label-caps text-outline">
+              {focus.lane && <span className="w-2 h-2 rounded-full" style={{ background: focus.lane.color }} />}
+              {focus.lane?.label ? `${focus.lane.label} · ` : ""}{focus.horizon.label}
+            </span>
+          </div>
+
+          <div className="font-headline-md text-headline-md text-primary">
+            {focus.mirror ? focus.mirror.label : focus.node.title || focus.node.text || "Sem título"}
+          </div>
+
+          {focus.node.why && <p className="text-body-md text-on-surface-variant mt-1">{focus.node.why}</p>}
+          {focus.node.target && <Caps className="text-outline text-[10px] mt-1 block">META: {focus.node.target}</Caps>}
+
+          {focus.mirror?.ok && (
+            <div className="mt-4">
+              <div className="w-full bg-surface-variant h-1.5 rounded-full">
+                <div className="bg-primary-container h-full rounded-full transition-all" style={{ width: `${focus.mirror.pct}%` }} />
+              </div>
+              <div className="flex justify-between text-[10px] font-label-caps text-outline mt-1.5">
+                <span>{focus.mirror.sub}</span>
+                <span>{focus.mirror.pct}%</span>
+              </div>
+            </div>
+          )}
+          {focus.mirror && !focus.mirror.ok && <Caps className="text-error text-[10px] mt-2 block">REFERÊNCIA PERDIDA — REAPONTE NO MAPA</Caps>}
+        </Link>
+      )}
 
       {/* missões pendentes (lembrete sutil) */}
       {pendingTasks.length > 0 && (
@@ -243,7 +280,7 @@ export default function HomePage() {
           </div>
           <div className="flex gap-3 overflow-x-auto ff-scroll pb-1">
             {reading.map((b) => {
-              const pct = b.total ? Math.min(100, Math.round((b.page / b.total) * 100)) : 0;
+              const pct = bookPct(b);
               return (
                 <Link key={b.id} href="/leitura" className="w-28 shrink-0 group">
                   <div className="aspect-[2/3] rounded-lg overflow-hidden border border-outline-variant/30 shadow-sm relative group-active:scale-[0.98] transition">

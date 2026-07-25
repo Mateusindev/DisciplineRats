@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps, Select, StatTile, inputCls } from "@/components/ui";
-import { fmtMoney, monthKey, getDateStr, EXPENSE_CATS, INCOME_CATS } from "@/lib/state";
+import { fmtMoney, monthKey, getDateStr, goalPct, EXPENSE_CATS, INCOME_CATS } from "@/lib/state";
 
 const TABS_W = [
   { id: "resumo", label: "RESUMO", icon: "receipt_long" },
@@ -404,7 +404,7 @@ export default function CarteiraPage() {
               <p className="text-[13px] text-outline glass-card rounded-xl p-6 text-center">Nenhuma meta ainda. Crie um objetivo de economia abaixo.</p>
             ) : (
               wallet.goals.map((g) => {
-                const pct = g.target > 0 ? Math.min(100, Math.round((g.saved / g.target) * 100)) : 0;
+                const pct = goalPct(g);
                 return (
                   <div key={g.id} className="glass-card p-5 rounded-xl">
                     <div className="flex items-center justify-between mb-2">

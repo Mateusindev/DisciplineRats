@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps, StarRating, inputCls } from "@/components/ui";
-import { getDateStr } from "@/lib/state";
+import { getDateStr, bookPct } from "@/lib/state";
 
 const STATUS = {
   want: { label: "Quero ler", icon: "bookmark" },
@@ -41,7 +41,7 @@ function Cover({ book, className = "" }) {
 }
 
 function BookCard({ b, onOpen }) {
-  const pct = b.total ? Math.min(100, Math.round((b.page / b.total) * 100)) : 0;
+  const pct = bookPct(b);
   return (
     <button onClick={onOpen} className="text-left group">
       <div className="aspect-[2/3] rounded-lg overflow-hidden border border-outline-variant/30 shadow-sm relative group-hover:shadow-md group-active:scale-[0.98] transition">
@@ -259,7 +259,7 @@ function BookModal({ book, cats = [], onAddCat, onClose, onPatch, onStatus, onDe
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-  const pct = book.total ? Math.min(100, Math.round((book.page / book.total) * 100)) : 0;
+  const pct = bookPct(book);
   const options = [...new Set([...cats, ...(book.category ? [book.category] : [])])];
   function addCat() {
     const c = newCat.trim();
