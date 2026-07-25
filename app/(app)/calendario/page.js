@@ -10,6 +10,11 @@ import { CALENDAR_CATS, calCat, sortEvents, eventTimeLabel } from "@/lib/state";
 
 const ds = (d) => format(d, "yyyy-MM-dd");
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const HOUR_H = 56; // altura de 1 hora na timeline (px)
+const toMin = (t) => {
+  const [h, m] = (t || "0:0").split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+};
 const VIEWS = [
   { id: "month", label: "Mês", icon: "calendar_month" },
   { id: "week", label: "Semana", icon: "calendar_view_week" },
@@ -50,6 +55,7 @@ export default function CalendarioPage() {
   // ---- CRUD ----
   const openNew = (d) => setForm({ date: ds(d), title: "", cat: "pessoal", allDay: false, start: "09:00", end: "10:00", note: "" });
   const openEdit = (dateStr, ev) => setForm({ ...ev, date: dateStr, start: ev.start || "09:00", end: ev.end || "10:00", note: ev.note || "" });
+  const openSlot = (d, hour) => setForm({ date: ds(d), title: "", cat: "pessoal", allDay: false, start: `${String(hour).padStart(2, "0")}:00`, end: `${String((hour + 1) % 24).padStart(2, "0")}:00`, note: "" });
 
   function saveForm() {
     if (!form.title.trim()) return;
@@ -184,7 +190,7 @@ export default function CalendarioPage() {
               <button onClick={() => setSelected(addDays(selected, 1))} aria-label="Próximo dia" className="w-8 h-8 rounded-lg grid place-items-center text-on-surface-variant hover:bg-surface-variant/60 transition"><MI name="chevron_right" /></button>
             </div>
           </div>
-          <DayAgenda date={selected} events={eventsOn(selected)} onAdd={() => openNew(selected)} onEdit={(ev) => openEdit(ds(selected), ev)} hideHeader />
+          <DayTimeline date={selected} events={eventsOn(selected)} onSlot={(h) => openSlot(selected, h)} onAdd={() => openNew(selected)} onEdit={(ev) => openEdit(ds(selected), ev)} />
         </div>
       )}
 
@@ -360,6 +366,92 @@ function Upcoming({ calendar, onEdit }) {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// ===== visão de dia: timeline por hora (tipo Google Agenda) =====
+function DayTimeline({ date, events, onSlot, onAdd, onEdit }) {
+  const allDay = events.filter((e) => e.allDay || !e.start);
+  const timed = events.filter((e) => !e.allDay && e.start);
+
+  // atribui "lanes" p/ eventos sobrepostos ficarem lado a lado
+  const items = timed
+    .map((e) => {
+      const s = toMin(e.start);
+      const en = Math.max(e.end ? toMin(e.end) : s + 60, s + 30);
+      return { e, s, en };
+    })
+    .sort((a, b) => a.s - b.s || a.en - b.en);
+  const laneEnds = [];
+  for (const it of items) {
+    let idx = laneEnds.findIndex((end) => end <= it.s);
+    if (idx === -1) {
+      idx = laneEnds.length;
+      laneEnds.push(it.en);
+    } else laneEnds[idx] = it.en;
+    it.lane = idx;
+  }
+  const laneCount = Math.max(1, laneEnds.length);
+
+  const today = isToday(date);
+  const now = new Date();
+  const nowMin = today ? now.getHours() * 60 + now.getMinutes() : null;
+
+  return (
+    <div className="glass-card rounded-xl overflow-hidden">
+      {allDay.length > 0 && (
+        <div className="p-3 border-b border-white/5 space-y-1">
+          <Caps className="text-outline text-[9px] mb-1 block">DIA INTEIRO</Caps>
+          {allDay.map((ev) => (
+            <EventRow key={ev.id} ev={ev} onClick={() => onEdit(ev)} />
+          ))}
+        </div>
+      )}
+      <div className="relative overflow-y-auto max-h-[68vh]">
+        <div className="relative" style={{ height: 24 * HOUR_H }}>
+          {Array.from({ length: 24 }, (_, h) => (
+            <button
+              key={h}
+              onClick={() => onSlot(h)}
+              className="absolute left-0 right-0 border-t border-white/5 flex text-left hover:bg-surface-variant/20 transition group"
+              style={{ top: h * HOUR_H, height: HOUR_H }}
+            >
+              <span className="w-14 shrink-0 -mt-2 pl-2 text-[10px] text-outline font-label-caps">{String(h).padStart(2, "0")}:00</span>
+              <span className="flex-1 grid place-items-center opacity-0 group-hover:opacity-100"><MI name="add" className="text-sm text-outline" /></span>
+            </button>
+          ))}
+
+          {items.map(({ e, s, en, lane }) => {
+            const cat = calCat(e.cat);
+            const top = (s / 60) * HOUR_H;
+            const height = Math.max(20, ((en - s) / 60) * HOUR_H);
+            const width = `calc((100% - 3.5rem) / ${laneCount})`;
+            const left = `calc(3.5rem + ${lane} * (100% - 3.5rem) / ${laneCount})`;
+            return (
+              <button
+                key={e.id}
+                onClick={() => onEdit(e)}
+                className="absolute rounded-lg px-2 py-1 text-left overflow-hidden hover:brightness-110 transition z-10"
+                style={{ top, height, left, width, background: `${cat.color}26`, borderLeft: `3px solid ${cat.color}` }}
+              >
+                <p className="text-[11px] text-on-surface truncate font-medium leading-tight">{e.title}</p>
+                {height > 32 && <p className="text-[9px] text-outline">{eventTimeLabel(e)}</p>}
+              </button>
+            );
+          })}
+
+          {nowMin !== null && (
+            <div className="absolute left-14 right-0 flex items-center z-20 pointer-events-none" style={{ top: (nowMin / 60) * HOUR_H }}>
+              <span className="w-2 h-2 rounded-full bg-error -ml-1" />
+              <span className="flex-1 h-px bg-error" />
+            </div>
+          )}
+        </div>
+      </div>
+      <button onClick={onAdd} className="w-full py-2.5 border-t border-white/5 text-outline hover:text-primary hover:bg-surface-variant/20 transition font-label-caps text-[11px] flex items-center justify-center gap-1">
+        <MI name="add" className="text-base" /> NOVO EVENTO
+      </button>
     </div>
   );
 }
