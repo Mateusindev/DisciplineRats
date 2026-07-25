@@ -1,16 +1,19 @@
 "use client";
 
-// Mapa — planejamento de longo prazo num grid semântico.
-// x = horizonte de tempo (bandas), y = área da vida (raias). Posição carrega significado:
-// arrastar pra esquerda é se comprometer. Nós "espelho" apontam pra hábitos/missões/metas/livros
-// que já existem e mostram progresso vivo — o mapa é lente do app, não silo paralelo.
+// Mapa — planejamento de longo prazo em swimlanes.
+// Colunas = horizonte de tempo, faixas = área da vida. Card na coluna da esquerda é
+// compromisso mais próximo; ordem dentro da célula é prioridade. Arrastar tem consequência.
+// Nós "espelho" apontam pra hábitos/missões/metas/livros que já existem e mostram progresso
+// vivo lido do state — o mapa é lente do app, não silo paralelo.
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useApp } from "../AppContext";
 import { MI, Caps, Select, inputCls, textareaCls } from "@/components/ui";
-import { useCanvas } from "@/components/canvas";
+import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCorners, DragOverlay, useDroppable } from "@dnd-kit/core";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   MAPA_HORIZONS,
   MAPA_META_STATUS,
@@ -19,106 +22,21 @@ import {
   MAPA_NOTE_COLORS,
   MAPA_MAX_NODES,
   MAPA_LIMITS,
-  mapaHorizon,
   mapaStatus,
   resolveMirror,
   mapaRefOptions,
 } from "@/lib/state";
 
 const uid = () => crypto.randomUUID();
-const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-const clamp01 = (v) => clamp(Number.isFinite(+v) ? +v : 0.5, 0, 1);
-const quant = (v, steps) => Math.round(clamp01(v) * steps) / steps;
+const stop = (e) => e.stopPropagation();
 
-// geometria do mundo (px)
-const BAND_W = 400;
-const LANE_H = 260;
-const HEADER_H = 46; // faixa de rótulos de horizonte, no topo do mundo
-const GUTTER_W = 136; // coluna de rótulos de raia, à esquerda
-const NODE_W = 244;
-const NODE_H = 96;
-const PAD = 16;
-const RANGE_X = BAND_W - NODE_W - PAD * 2; // amplitude livre do ox dentro da célula
-const RANGE_Y = LANE_H - NODE_H - PAD * 2;
-
-// raia sintética: sempre presente, é onde caem os nós de raia apagada
+// célula = cruzamento horizonte × área. "none" = raia "Sem área".
+const cellKey = (h, lane) => `${h}::${lane ?? "none"}`;
+const parseCell = (key) => {
+  const [h, lane] = key.split("::");
+  return { h, lane: lane === "none" ? null : lane };
+};
 const NO_LANE = { id: null, label: "Sem área", icon: "help", color: "#b0b6be" };
-
-// posições de cortesia pra nó novo não nascer empilhado
-const SLOTS = [
-  [0.08, 0.06],
-  [0.86, 0.58],
-  [0.46, 0.3],
-  [0.06, 0.88],
-  [0.88, 0.06],
-  [0.5, 0.94],
-];
-
-function makeLayout(lanes) {
-  const rows = [...lanes, NO_LANE];
-  const WORLD_W = GUTTER_W + MAPA_HORIZONS.length * BAND_W;
-  const WORLD_H = HEADER_H + rows.length * LANE_H;
-  const bandIdx = (h) => {
-    const i = MAPA_HORIZONS.findIndex((x) => x.id === h);
-    return i < 0 ? 0 : i;
-  };
-  const rowIdx = (lane) => {
-    const i = rows.findIndex((r) => r.id === (lane ?? null));
-    return i < 0 ? rows.length - 1 : i;
-  };
-  const cell = (h, lane) => ({ x: GUTTER_W + bandIdx(h) * BAND_W, y: HEADER_H + rowIdx(lane) * LANE_H, w: BAND_W, h: LANE_H });
-  const nodeRect = (n) => {
-    const c = cell(n.h, n.lane);
-    return { x: c.x + PAD + clamp01(n.ox) * RANGE_X, y: c.y + PAD + clamp01(n.oy) * RANGE_Y, w: NODE_W, h: NODE_H };
-  };
-  // px do canto do nó → banda/raia/offset. Decide banda e raia pelo CENTRO do card.
-  const fromWorld = (wx, wy) => {
-    const bi = clamp(Math.floor((wx + NODE_W / 2 - GUTTER_W) / BAND_W), 0, MAPA_HORIZONS.length - 1);
-    const ri = clamp(Math.floor((wy + NODE_H / 2 - HEADER_H) / LANE_H), 0, rows.length - 1);
-    const cx = GUTTER_W + bi * BAND_W;
-    const cy = HEADER_H + ri * LANE_H;
-    return { h: MAPA_HORIZONS[bi].id, lane: rows[ri].id, ox: (wx - cx - PAD) / RANGE_X, oy: (wy - cy - PAD) / RANGE_Y };
-  };
-  return { rows, WORLD_W, WORLD_H, cell, nodeRect, fromWorld };
-}
-
-function freeSlot(nodes, h, lane) {
-  const used = (nodes || []).filter((n) => n.h === h && (n.lane ?? null) === (lane ?? null));
-  for (const [ox, oy] of SLOTS) {
-    if (!used.some((n) => Math.abs(clamp01(n.ox) - ox) < 0.14 && Math.abs(clamp01(n.oy) - oy) < 0.14)) return { ox, oy };
-  }
-  return { ox: quant(0.1 + used.length * 0.06, 12), oy: quant(0.45 + used.length * 0.05, 8) };
-}
-
-// ponto na borda do retângulo na direção de (tx,ty)
-function borderPoint(r, tx, ty) {
-  const cx = r.x + r.w / 2;
-  const cy = r.y + r.h / 2;
-  const dx = tx - cx;
-  const dy = ty - cy;
-  if (!dx && !dy) return { x: cx, y: cy };
-  const s = Math.min(dx ? r.w / 2 / Math.abs(dx) : Infinity, dy ? r.h / 2 / Math.abs(dy) : Infinity);
-  return { x: cx + dx * s, y: cy + dy * s };
-}
-
-// caminho da aresta: reta clipada nas bordas + arco de 8% (sinal por id, pra par A↔B não sobrepor).
-// null quando os cards estão perto demais e a seta inverteria — a UI mostra badge no lugar.
-function edgeGeom(a, b, flip) {
-  if (!a || !b) return null;
-  const ac = { x: a.x + a.w / 2, y: a.y + a.h / 2 };
-  const bc = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
-  const A = borderPoint(a, bc.x, bc.y);
-  const B = borderPoint(b, ac.x, ac.y);
-  const vx = B.x - A.x;
-  const vy = B.y - A.y;
-  if (vx * (bc.x - ac.x) + vy * (bc.y - ac.y) <= 16) return null; // sobrepostos
-  const len = Math.hypot(vx, vy) || 1;
-  const k = 0.08 * len * (flip ? -1 : 1);
-  const cx = (A.x + B.x) / 2 + (-vy / len) * k;
-  const cy = (A.y + B.y) / 2 + (vx / len) * k;
-  return { d: `M ${A.x} ${A.y} Q ${cx} ${cy} ${B.x} ${B.y}`, mx: (A.x + 2 * cx + B.x) / 4, my: (A.y + 2 * cy + B.y) / 4 };
-}
-
 const emptyMapa = () => ({ lanes: [], nodes: [], edges: [], focusId: null });
 
 export default function MapaPage() {
@@ -128,89 +46,46 @@ export default function MapaPage() {
   const nodes = mapa.nodes || [];
   const edges = mapa.edges || [];
 
-  const [isWide, setIsWide] = useState(false);
-  const [view, setView] = useState("canvas");
   const [editingId, setEditingId] = useState(null);
   const [showLanes, setShowLanes] = useState(false);
-  const [linking, setLinking] = useState(null); // null | { from: id|null, kind }
+  const [dragging, setDragging] = useState(null);
 
-  const viewportRef = useRef(null);
-  const worldRef = useRef(null);
-  const dragRef = useRef(null);
-  const justDragged = useRef(false);
-  const rectsRef = useRef(new Map());
-  const markerId = useId().replace(/:/g, "");
-
-  const canvasOn = isWide && view === "canvas"; // canvas só no desktop; celular usa a lista
-
-  const { cam, camRef, bind, zoomBy, fitTo, screenToWorld } = useCanvas(viewportRef, worldRef, { enabled: canvasOn });
-  const layout = useMemo(() => makeLayout(lanes), [lanes]);
-
-  const rects = useMemo(() => {
-    const m = new Map();
-    for (const n of nodes) m.set(n.id, layout.nodeRect(n));
-    return m;
-  }, [nodes, layout]);
-  rectsRef.current = rects;
-
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 768px)");
-    const sync = () => setIsWide(mq.matches);
-    sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
-
-  // enquadra ao entrar no canvas: no foco fixado, senão no mapa todo
-  useEffect(() => {
-    if (!canvasOn) return;
-    const f = mapa.focusId && rectsRef.current.get(mapa.focusId);
-    if (f) fitTo({ x: f.x - 220, y: f.y - 150, w: NODE_W + 440, h: NODE_H + 300 });
-    else fitTo({ x: 0, y: 0, w: layout.WORLD_W, h: layout.WORLD_H });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canvasOn]);
-
-  useEffect(() => {
-    if (!linking) return;
-    const onKey = (e) => e.key === "Escape" && setLinking(null);
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [linking]);
+  // raias visíveis: as do usuário + "Sem área" só quando tem órfão (senão é linha morta)
+  const rows = useMemo(() => {
+    const orphans = nodes.some((n) => (n.lane ?? null) === null);
+    return orphans ? [...lanes, NO_LANE] : lanes;
+  }, [lanes, nodes]);
 
   // ---- mutações ----
   const setMapa = (fn) => setState((p) => ({ ...p, mapa: fn(p.mapa || emptyMapa()) }));
   const patchNode = (id, patch) => setMapa((m) => ({ ...m, nodes: (m.nodes || []).map((n) => (n.id === id ? { ...n, ...patch } : n)) }));
 
-  function cellAtCenter() {
-    const vp = viewportRef.current;
-    if (!vp) return { h: MAPA_HORIZONS[0].id, lane: lanes[0]?.id ?? null };
-    const r = vp.getBoundingClientRect();
-    const w = screenToWorld(r.left + r.width / 2, r.top + r.height / 2);
-    const p = layout.fromWorld(w.x - NODE_W / 2, w.y - NODE_H / 2);
-    return { h: p.h, lane: p.lane };
-  }
-
-  function addNode(kind) {
+  function addNode(kind, at) {
     if (nodes.length >= MAPA_MAX_NODES) {
-      toast("Mapa cheio", { sub: `Limite de ${MAPA_MAX_NODES} nós — apague algo antes.`, icon: "warning" });
+      toast("Mapa cheio", { sub: `Limite de ${MAPA_MAX_NODES} itens — apague algo antes.`, icon: "warning" });
       return;
     }
-    const at = canvasOn ? cellAtCenter() : { h: MAPA_HORIZONS[0].id, lane: lanes[0]?.id ?? null };
     const payload =
       kind === "meta"
         ? { title: "", why: "", status: "ideia", target: "" }
         : kind === "mirror"
         ? { ref: null, fallbackLabel: "", note: "" }
         : { text: "", color: MAPA_NOTE_COLORS[0] };
-    const n = { id: uid(), kind, h: at.h, lane: at.lane, ...freeSlot(nodes, at.h, at.lane), ...payload };
+    const n = { id: uid(), kind, h: at?.h || MAPA_HORIZONS[0].id, lane: at?.lane ?? lanes[0]?.id ?? null, ...payload };
     setMapa((m) => ({ ...m, nodes: [...(m.nodes || []), n] }));
     setEditingId(n.id);
   }
 
-  async function removeNode(id) {
+  const nodeLabel = (id) => {
     const n = nodes.find((x) => x.id === id);
-    const label = n?.kind === "meta" ? n.title : n?.kind === "note" ? n.text : n?.fallbackLabel;
-    const ok = await confirm({ title: "Excluir nó?", body: label || "Este item sai do mapa junto com as ligações dele.", confirmLabel: "EXCLUIR" });
+    if (!n) return "?";
+    if (n.kind === "meta") return n.title || "meta sem título";
+    if (n.kind === "note") return n.text || "nota";
+    return resolveMirror(state, n.ref).label;
+  };
+
+  async function removeNode(id) {
+    const ok = await confirm({ title: "Excluir item?", body: nodeLabel(id) || "Sai do mapa junto com as ligações dele.", confirmLabel: "EXCLUIR" });
     if (!ok) return;
     setMapa((m) => ({
       ...m,
@@ -223,30 +98,23 @@ export default function MapaPage() {
 
   const toggleFocus = (id) => setMapa((m) => ({ ...m, focusId: m.focusId === id ? null : id }));
 
+  async function removeEdge(id) {
+    const e = edges.find((x) => x.id === id);
+    const ok = await confirm({
+      title: "Remover ligação?",
+      body: e ? `${nodeLabel(e.from)} ${MAPA_EDGE_KINDS.find((k) => k.id === e.kind)?.label || ""} ${nodeLabel(e.to)}` : "",
+      confirmLabel: "REMOVER",
+    });
+    if (ok) setMapa((m) => ({ ...m, edges: (m.edges || []).filter((x) => x.id !== id) }));
+  }
+
   function addEdge(from, to, kind) {
-    if (from === to) return;
+    if (!from || !to || from === to) return;
     if (edges.some((e) => e.from === from && e.to === to && e.kind === kind)) {
       toast("Ligação já existe");
       return;
     }
     setMapa((m) => ({ ...m, edges: [...(m.edges || []), { id: uid(), from, to, kind }] }));
-  }
-
-  async function removeEdge(id) {
-    const e = edges.find((x) => x.id === id);
-    const name = (nid) => {
-      const n = nodes.find((x) => x.id === nid);
-      if (!n) return "?";
-      if (n.kind === "meta") return n.title || "meta sem título";
-      if (n.kind === "note") return n.text || "nota";
-      return resolveMirror(state, n.ref).label;
-    };
-    const ok = await confirm({
-      title: "Remover ligação?",
-      body: e ? `${name(e.from)} ${MAPA_EDGE_KINDS.find((k) => k.id === e.kind)?.label || ""} ${name(e.to)}` : "",
-      confirmLabel: "REMOVER",
-    });
-    if (ok) setMapa((m) => ({ ...m, edges: (m.edges || []).filter((x) => x.id !== id) }));
   }
 
   const addLane = () =>
@@ -281,171 +149,161 @@ export default function MapaPage() {
     }));
   }
 
-  // ---- drag de nó (imperativo: 2 setState por arraste, zero por frame) ----
-  function redrawEdges(id, rect) {
-    rectsRef.current.set(id, rect);
-    const root = worldRef.current;
-    if (!root) return;
-    root.querySelectorAll(`path[data-from="${id}"], path[data-to="${id}"]`).forEach((p) => {
-      const g = edgeGeom(rectsRef.current.get(p.dataset.from), rectsRef.current.get(p.dataset.to), p.dataset.from < p.dataset.to);
-      p.style.opacity = g ? "" : "0";
-      if (g) p.setAttribute("d", g.d);
+  // ---- dnd-kit: mesma configuração de /missoes ----
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } })
+  );
+
+  // id pode ser de nó ou de célula (o droppable vazio)
+  const cellOf = (id) => {
+    if (typeof id === "string" && id.includes("::")) return id;
+    const n = nodes.find((x) => x.id === id);
+    return n ? cellKey(n.h, n.lane) : null;
+  };
+
+  // Move na lista global e reposiciona. Uma função serve pros dois casos: trocar de célula
+  // (onDragOver) e reordenar dentro dela (onDragEnd) — inserir no índice do `over` é o mesmo.
+  function moveNode(activeId, overId, targetKey) {
+    const { h, lane } = parseCell(targetKey);
+    setMapa((m) => {
+      const ns = [...(m.nodes || [])];
+      const ai = ns.findIndex((n) => n.id === activeId);
+      if (ai < 0) return m;
+      const node = { ...ns[ai], h, lane };
+      ns.splice(ai, 1);
+      let oi = ns.findIndex((n) => n.id === overId);
+      if (oi < 0) {
+        // soltou na célula (não sobre um card) → vai pro fim da célula
+        let last = -1;
+        ns.forEach((n, i) => {
+          if (n.h === h && (n.lane ?? null) === lane) last = i;
+        });
+        oi = last + 1;
+      }
+      ns.splice(oi, 0, node);
+      return { ...m, nodes: ns };
     });
   }
 
-  function onNodeDown(e, n) {
-    if (linking) return; // no modo aresta o card inteiro é alvo de clique
-    e.stopPropagation(); // senão o pan do fundo começa junto
-    const el = e.currentTarget;
-    el.setPointerCapture?.(e.pointerId);
-    const r = rectsRef.current.get(n.id) || layout.nodeRect(n);
-    dragRef.current = { id: n.id, pid: e.pointerId, sx: e.clientX, sy: e.clientY, x0: r.x, y0: r.y, cur: { x: r.x, y: r.y }, moved: false, el };
-    el.style.zIndex = "50";
+  function onDragOver({ active, over }) {
+    if (!over) return;
+    const from = cellOf(active.id);
+    const to = cellOf(over.id);
+    if (!from || !to || from === to) return;
+    moveNode(active.id, over.id, to);
   }
 
-  function onNodeMove(e) {
-    const d = dragRef.current;
-    if (!d || d.pid !== e.pointerId) return;
-    if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 5) d.moved = true;
-    const z = camRef.current.z || 1; // dividir por z é toda a correção de zoom
-    const x = clamp(d.x0 + (e.clientX - d.sx) / z, 0, layout.WORLD_W - NODE_W);
-    const y = clamp(d.y0 + (e.clientY - d.sy) / z, 0, layout.WORLD_H - NODE_H);
-    d.cur = { x, y };
-    d.el.style.left = `${x}px`;
-    d.el.style.top = `${y}px`;
-    redrawEdges(d.id, { x, y, w: NODE_W, h: NODE_H });
+  function onDragEnd({ active, over }) {
+    setDragging(null);
+    if (!over || active.id === over.id) return;
+    const to = cellOf(over.id);
+    if (to && cellOf(active.id) === to) moveNode(active.id, over.id, to);
   }
 
-  // idempotente: pointerup e lostpointercapture chamam os dois
-  function onNodeUp(e) {
-    const d = dragRef.current;
-    if (!d || d.pid !== e.pointerId) return;
-    dragRef.current = null;
-    d.el.style.zIndex = "";
-    justDragged.current = d.moved;
-    if (!d.moved) return;
-    const p = layout.fromWorld(d.cur.x, d.cur.y);
-    const free = e.altKey; // Alt solta do sub-grid
-    patchNode(d.id, { h: p.h, lane: p.lane, ox: free ? clamp01(p.ox) : quant(p.ox, 12), oy: free ? clamp01(p.oy) : quant(p.oy, 8) });
-  }
-
-  function onNodeClick(n) {
-    if (justDragged.current) {
-      justDragged.current = false;
-      return;
-    }
-    if (linking) {
-      if (!linking.from) setLinking({ ...linking, from: n.id });
-      else {
-        addEdge(linking.from, n.id, linking.kind);
-        setLinking({ ...linking, from: null });
-      }
-      return;
-    }
-    setEditingId(n.id);
-  }
-
+  const degreeOf = (id) => edges.filter((e) => e.from === id || e.to === id).length;
   const editing = nodes.find((n) => n.id === editingId) || null;
   const metaCount = nodes.filter((n) => n.kind === "meta").length;
   const mirrorCount = nodes.filter((n) => n.kind === "mirror").length;
 
   return (
-    <div className="flex flex-col">
+    <div className="relative">
       <section className="mb-5">
-        <h1 className="font-headline-lg text-headline-lg text-primary flex items-center gap-2">
+        <h1 className="font-headline-lg text-headline-lg text-primary flex items-center gap-2 uppercase">
           Mapa
           <MI name="explore" className="text-primary-container text-xl" fill />
         </h1>
         <p className="text-body-md text-on-surface-variant">
-          Horizonte no eixo horizontal, área da vida no vertical · {metaCount} meta(s) · {mirrorCount} espelho(s)
+          Horizonte nas colunas, área da vida nas faixas · {metaCount} meta(s) · {mirrorCount} espelho(s)
         </p>
       </section>
 
-      <Toolbar
-        canvasOn={canvasOn}
-        isWide={isWide}
-        view={view}
-        setView={setView}
-        onAdd={addNode}
-        linking={linking}
-        setLinking={setLinking}
-        onLanes={() => setShowLanes(true)}
-        zoomBy={zoomBy}
-        onFit={() => fitTo({ x: 0, y: 0, w: layout.WORLD_W, h: layout.WORLD_H })}
-        zoom={cam.z}
-      />
+      <Toolbar onAdd={(kind) => addNode(kind)} onLanes={() => setShowLanes(true)} />
 
-      {linking && (
-        <div className="mb-3 flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2">
-          <MI name="polyline" className="text-primary text-lg" />
-          <span className="text-[13px] text-on-surface">
-            {linking.from ? "Agora clique no nó de destino" : "Clique no nó de origem"} · Esc cancela
-          </span>
+      {rows.length === 0 ? (
+        <div className="glass-card rounded-2xl p-8 text-center">
+          <MI name="explore" className="text-outline text-3xl" />
+          <p className="mt-2 text-[13px] text-outline">Nenhuma área da vida configurada.</p>
+          <button onClick={() => setShowLanes(true)} className="mt-4 px-4 py-2 rounded-lg border border-primary/40 text-primary font-label-caps text-[11px]">
+            CONFIGURAR ÁREAS
+          </button>
         </div>
-      )}
-
-      {canvasOn ? (
-        <div
-          ref={viewportRef}
-          {...bind}
-          className="relative overflow-hidden rounded-2xl border border-outline-variant/25 bg-surface-container-lowest h-[calc(100vh-22rem)] min-h-[420px] select-none cursor-grab active:cursor-grabbing"
-          style={{ touchAction: "none", overscrollBehavior: "contain" }}
-        >
-          <div
-            ref={worldRef}
-            className="absolute top-0 left-0 origin-top-left"
-            style={{ width: layout.WORLD_W, height: layout.WORLD_H, transform: `translate3d(${cam.x}px, ${cam.y}px, 0) scale(${cam.z})` }}
-          >
-            <Grid layout={layout} />
-            <Edges layout={layout} edges={edges} rects={rects} markerId={markerId} onPick={removeEdge} />
-
-            {nodes.map((n) => {
-              const r = rects.get(n.id);
-              if (!r) return null;
-              return (
-                <div
-                  key={n.id}
-                  className="absolute"
-                  style={{ left: r.x, top: r.y, width: NODE_W, height: NODE_H, zIndex: 10 }}
-                  onPointerDown={(e) => onNodeDown(e, n)}
-                  onPointerMove={onNodeMove}
-                  onPointerUp={onNodeUp}
-                  onPointerCancel={onNodeUp}
-                  onLostPointerCapture={onNodeUp}
-                  onClick={() => onNodeClick(n)}
-                >
-                  <NodeBody
-                    node={n}
-                    lane={layout.rows.find((l) => l.id === (n.lane ?? null))}
-                    state={state}
-                    focused={mapa.focusId === n.id}
-                    linkingFrom={linking?.from === n.id}
-                    degree={edges.filter((e) => e.from === n.id || e.to === n.id).length}
-                  />
+      ) : (
+        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={({ active }) => setDragging(nodes.find((n) => n.id === active.id) || null)} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
+          {/* cabeçalho dos horizontes — some no mobile, onde cada célula rotula a si mesma */}
+          <div className="hidden lg:block sticky top-0 z-20 -mx-1 px-1 py-3 mb-2 bg-background/95 backdrop-blur-md border-b border-outline-variant/20">
+            <div className="grid grid-cols-4 gap-4">
+              {MAPA_HORIZONS.map((h, i) => (
+                <div key={h.id} className="flex flex-col gap-1">
+                  <Caps className={`uppercase tracking-widest ${i === 0 ? "text-primary" : "text-on-surface-variant"}`}>{h.label}</Caps>
+                  <span className="text-[10px] text-outline leading-none">{h.hint}</span>
                 </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-10">
+            {rows.map((lane) => {
+              const laneNodes = nodes.filter((n) => (n.lane ?? null) === (lane.id ?? null));
+              return (
+              <section key={lane.id || "none"}>
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="w-1.5 h-7 rounded-full shrink-0" style={{ background: lane.color }} />
+                  <MI name={lane.icon} className="text-lg shrink-0" style={{ color: lane.color }} />
+                  <h3 className="font-headline-md text-headline-md uppercase tracking-tight text-on-surface truncate">{lane.label}</h3>
+                  <span className="h-px flex-1 bg-outline-variant/20" />
+                  {lane.id && (
+                    <button onClick={() => setShowLanes(true)} aria-label="Gerenciar áreas" className="w-8 h-8 rounded-full grid place-items-center text-outline hover:text-on-surface hover:bg-surface-variant/40 transition shrink-0">
+                      <MI name="more_horiz" className="text-xl" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-start">
+                  {MAPA_HORIZONS.map((h) => (
+                    <Cell
+                      key={h.id}
+                      horizon={h}
+                      lane={lane}
+                      nodes={nodes.filter((n) => n.h === h.id && (n.lane ?? null) === (lane.id ?? null))}
+                      state={state}
+                      focusId={mapa.focusId}
+                      degreeOf={degreeOf}
+                      onOpen={setEditingId}
+                      onAdd={() => addNode("meta", { h: h.id, lane: lane.id })}
+                    />
+                  ))}
+                </div>
+
+                {/* área sem nada: no mobile as células ficam escondidas, então dá um CTA só */}
+                {laneNodes.length === 0 && (
+                  <button
+                    onClick={() => addNode("meta", { h: MAPA_HORIZONS[0].id, lane: lane.id })}
+                    className="lg:hidden w-full py-4 rounded-xl border-2 border-dashed border-outline-variant/25 text-outline-variant hover:border-primary/40 hover:text-primary transition-colors flex items-center justify-center gap-2"
+                  >
+                    <MI name="add_circle" className="text-lg" />
+                    <Caps className="text-[10px]">NOVO OBJETIVO EM {lane.label.toUpperCase()}</Caps>
+                  </button>
+                )}
+              </section>
               );
             })}
           </div>
 
-          {nodes.length === 0 && (
-            <div className="absolute inset-0 grid place-items-center pointer-events-none">
-              <p className="text-[13px] text-outline text-center max-w-xs">
-                Mapa vazio. Crie uma meta e arraste pra banda de horizonte em que você se compromete com ela.
-              </p>
-            </div>
-          )}
-        </div>
-      ) : (
-        <MapaList
-          layout={layout}
-          nodes={nodes}
-          edges={edges}
-          state={state}
-          focusId={mapa.focusId}
-          onOpen={(id) => setEditingId(id)}
-          onAdd={addNode}
-        />
+          <DragOverlay>
+            {dragging ? (
+              <div className="w-[264px] rotate-2">
+                <NodeCard node={dragging} lane={rows.find((l) => (l.id ?? null) === (dragging.lane ?? null))} state={state} focused={false} degree={degreeOf(dragging.id)} />
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       )}
+
+      {/* marca d'água */}
+      <div className="fixed bottom-0 right-0 pointer-events-none select-none z-0 hidden lg:block overflow-hidden">
+        <div className="font-headline-lg text-[240px] leading-none text-on-surface/[0.04] -mb-16 -mr-12 rotate-[-12deg]">EVOLUÇÃO</div>
+      </div>
 
       {editing && (
         <Inspector
@@ -454,9 +312,11 @@ export default function MapaPage() {
           state={state}
           edges={edges}
           nodes={nodes}
+          nodeLabel={nodeLabel}
           focused={mapa.focusId === editing.id}
           onPatch={(patch) => patchNode(editing.id, patch)}
           onToggleFocus={() => toggleFocus(editing.id)}
+          onAddEdge={(to, kind) => addEdge(editing.id, to, kind)}
           onRemoveEdge={removeEdge}
           onDelete={() => removeNode(editing.id)}
           onClose={() => setEditingId(null)}
@@ -464,195 +324,113 @@ export default function MapaPage() {
       )}
 
       {showLanes && (
-        <LaneManager
-          lanes={lanes}
-          nodes={nodes}
-          onAdd={addLane}
-          onPatch={patchLane}
-          onMove={moveLane}
-          onRemove={removeLane}
-          onClose={() => setShowLanes(false)}
-        />
+        <LaneManager lanes={lanes} nodes={nodes} onAdd={addLane} onPatch={patchLane} onMove={moveLane} onRemove={removeLane} onClose={() => setShowLanes(false)} />
       )}
     </div>
   );
 }
 
 // ---------- barra de ferramentas ----------
-function Toolbar({ canvasOn, isWide, view, setView, onAdd, linking, setLinking, onLanes, zoomBy, onFit, zoom }) {
-  const btn = "px-3 py-2 rounded-lg border border-primary/30 text-primary hover:bg-primary/10 active:scale-95 transition font-label-caps text-[11px] flex items-center gap-1.5";
-  const ghost = "px-2.5 py-2 rounded-lg border border-white/10 text-on-surface-variant hover:border-white/25 transition flex items-center gap-1.5 text-[11px] font-label-caps";
+function Toolbar({ onAdd, onLanes }) {
+  const primary = "px-4 py-2 rounded-lg border border-primary text-primary hover:bg-primary hover:text-on-primary transition-all font-label-caps text-label-caps flex items-center gap-2";
+  const ghost = "px-4 py-2 rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container-high transition-all font-label-caps text-label-caps flex items-center gap-2";
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-2">
-      <button onClick={() => onAdd("meta")} className={btn}>
-        <MI name="add" className="text-base" /> META
+    <div className="mb-6 flex flex-wrap items-center gap-2">
+      <button onClick={() => onAdd("meta")} className={primary}>
+        <MI name="add_circle" className="text-[18px]" /> META
       </button>
-      <button onClick={() => onAdd("mirror")} className={btn}>
-        <MI name="link" className="text-base" /> ESPELHO
+      <button onClick={() => onAdd("mirror")} className={ghost}>
+        <MI name="link" className="text-[18px]" /> ESPELHO
       </button>
       <button onClick={() => onAdd("note")} className={ghost}>
-        <MI name="sticky_note_2" className="text-base" /> NOTA
+        <MI name="note_alt" className="text-[18px]" /> NOTA
       </button>
       <button onClick={onLanes} className={ghost}>
-        <MI name="view_agenda" className="text-base" /> ÁREAS
+        <MI name="category" className="text-[18px]" /> ÁREAS
       </button>
+    </div>
+  );
+}
 
-      {canvasOn && (
+// ---------- célula (horizonte × área) ----------
+function Cell({ horizon, lane, nodes, state, focusId, degreeOf, onOpen, onAdd }) {
+  const id = cellKey(horizon.id, lane.id);
+  const { setNodeRef, isOver } = useDroppable({ id });
+  const empty = nodes.length === 0;
+  return (
+    // célula vazia só aparece no desktop: no celular, 4 colunas × N áreas de tracejado
+    // vazio viraria uma parede de nada
+    <div ref={setNodeRef} className={`rounded-xl transition ${empty ? "hidden lg:block" : ""} ${isOver ? "ring-2 ring-primary/40 bg-primary/[0.04]" : ""}`}>
+      {/* no mobile não existe o cabeçalho de colunas, então a célula se rotula */}
+      {!empty && <Caps className="lg:hidden text-outline text-[10px] uppercase tracking-widest mb-2 block">{horizon.label}</Caps>}
+
+      {empty ? (
+        <button
+          onClick={onAdd}
+          className="w-full h-32 rounded-xl border-2 border-dashed border-outline-variant/25 hover:border-primary/40 text-outline-variant hover:text-primary transition-colors flex flex-col items-center justify-center gap-1.5"
+        >
+          <MI name="add_circle" className="text-xl" />
+          <Caps className="text-[10px]">NOVO OBJETIVO</Caps>
+        </button>
+      ) : (
         <>
-          <div className="w-px h-6 bg-white/10 mx-1" />
-          <button
-            onClick={() => setLinking(linking ? null : { from: null, kind: "leva" })}
-            className={linking ? `${btn} bg-primary/15` : ghost}
-          >
-            <MI name="polyline" className="text-base" /> LIGAR
-          </button>
-          {linking && (
-            <Select
-              value={linking.kind}
-              options={MAPA_EDGE_KINDS.map((k) => ({ value: k.id, label: k.label }))}
-              onChange={(kind) => setLinking({ ...linking, kind })}
-              className="w-36"
-            />
-          )}
-          <div className="w-px h-6 bg-white/10 mx-1" />
-          <button onClick={() => zoomBy(1 / 1.2)} aria-label="Diminuir zoom" className={ghost}>
-            <MI name="remove" className="text-base" />
-          </button>
-          <span className="text-[11px] font-label-caps text-outline w-10 text-center">{Math.round(zoom * 100)}%</span>
-          <button onClick={() => zoomBy(1.2)} aria-label="Aumentar zoom" className={ghost}>
+          <SortableContext items={nodes.map((n) => n.id)} strategy={verticalListSortingStrategy}>
+            {nodes.map((n) => (
+              <SortableNode
+                key={n.id}
+                node={n}
+                lane={lane}
+                state={state}
+                focused={focusId === n.id}
+                degree={degreeOf(n.id)}
+                onOpen={() => onOpen(n.id)}
+              />
+            ))}
+          </SortableContext>
+          <button onClick={onAdd} aria-label="Adicionar nesta célula" className="w-full py-2 rounded-lg text-outline-variant hover:text-primary hover:bg-surface-variant/30 transition flex items-center justify-center gap-1.5">
             <MI name="add" className="text-base" />
-          </button>
-          <button onClick={onFit} className={ghost}>
-            <MI name="fit_screen" className="text-base" /> AJUSTAR
+            <Caps className="text-[10px]">ADICIONAR</Caps>
           </button>
         </>
-      )}
-
-      {isWide && (
-        <button onClick={() => setView(view === "canvas" ? "list" : "canvas")} className={`${ghost} ml-auto`}>
-          <MI name={view === "canvas" ? "list" : "account_tree"} className="text-base" />
-          {view === "canvas" ? "LISTA" : "MAPA"}
-        </button>
       )}
     </div>
   );
 }
 
-// ---------- grid de fundo ----------
-function Grid({ layout }) {
+function SortableNode({ node, lane, state, focused, degree, onOpen }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: node.id });
   return (
-    <>
-      {MAPA_HORIZONS.map((h, i) => (
-        <div
-          key={h.id}
-          className={`absolute top-0 border-l border-outline-variant/20 ${i === 0 ? "bg-primary/[0.03]" : ""}`}
-          style={{ left: GUTTER_W + i * BAND_W, width: BAND_W, height: layout.WORLD_H }}
-        />
-      ))}
-      {layout.rows.map((r, i) => (
-        <div
-          key={r.id || "none"}
-          className="absolute left-0 border-t border-outline-variant/20"
-          style={{ top: HEADER_H + i * LANE_H, width: layout.WORLD_W, height: LANE_H }}
-        />
-      ))}
-
-      {/* rótulos de horizonte */}
-      {MAPA_HORIZONS.map((h, i) => (
-        <div key={`h-${h.id}`} className="absolute flex flex-col justify-center px-4" style={{ left: GUTTER_W + i * BAND_W, top: 0, width: BAND_W, height: HEADER_H }}>
-          <Caps className={i === 0 ? "text-primary text-[11px]" : "text-on-surface-variant text-[11px]"}>{h.label}</Caps>
-          <span className="text-[10px] text-outline leading-none">{h.hint}</span>
-        </div>
-      ))}
-
-      {/* rótulos de raia */}
-      {layout.rows.map((r, i) => (
-        <div
-          key={`l-${r.id || "none"}`}
-          className="absolute flex items-center gap-2 px-4"
-          style={{ left: 0, top: HEADER_H + i * LANE_H, width: GUTTER_W, height: LANE_H }}
-        >
-          <span className="w-1.5 h-10 rounded-full shrink-0" style={{ background: r.color }} />
-          <div className="min-w-0">
-            <MI name={r.icon} className="text-lg block" style={{ color: r.color }} />
-            <span className="text-[11px] font-label-caps uppercase tracking-wide text-on-surface-variant break-words leading-tight">{r.label}</span>
-          </div>
-        </div>
-      ))}
-    </>
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      {...attributes}
+      {...listeners}
+      onClick={onOpen}
+      className="mb-3 cursor-grab active:cursor-grabbing group"
+    >
+      <NodeCard node={node} lane={lane} state={state} focused={focused} degree={degree} dragging={isDragging} />
+    </div>
   );
 }
 
-// ---------- arestas ----------
-// duas camadas: a visível fica ABAIXO dos nós (nunca come clique); a de hit fica acima com
-// svg pointer-events:none e paths pointer-events:stroke (alvo gordo sem bloquear o drag).
-function Edges({ layout, edges, rects, markerId, onPick }) {
-  const geoms = edges.map((e) => ({ e, g: edgeGeom(rects.get(e.from), rects.get(e.to), e.from < e.to) })).filter((x) => x.g);
-  const svgProps = {
-    width: layout.WORLD_W,
-    height: layout.WORLD_H,
-    className: "absolute top-0 left-0",
-    style: { pointerEvents: "none" },
-  };
-  return (
-    <>
-      <svg {...svgProps} style={{ ...svgProps.style, zIndex: 0 }}>
-        <defs>
-          <marker id={`arrow-${markerId}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" className="text-outline" />
-          </marker>
-        </defs>
-        {geoms.map(({ e, g }) => (
-          <g key={e.id}>
-            <path
-              data-from={e.from}
-              data-to={e.to}
-              d={g.d}
-              fill="none"
-              stroke="currentColor"
-              className={e.kind === "depende" ? "text-outline-variant" : "text-primary-container/70"}
-              strokeWidth="1.75"
-              strokeDasharray={e.kind === "depende" ? "5 4" : undefined}
-              markerEnd={`url(#arrow-${markerId})`}
-            />
-          </g>
-        ))}
-      </svg>
-
-      <svg {...svgProps} style={{ ...svgProps.style, zIndex: 20 }}>
-        {geoms.map(({ e, g }) => (
-          <path
-            key={e.id}
-            data-from={e.from}
-            data-to={e.to}
-            d={g.d}
-            fill="none"
-            stroke="transparent"
-            strokeWidth="14"
-            style={{ pointerEvents: "stroke", cursor: "pointer" }}
-            onClick={() => onPick(e.id)}
-          />
-        ))}
-      </svg>
-    </>
-  );
-}
-
-// ---------- corpo do nó (compartilhado entre canvas e lista) ----------
-function NodeBody({ node, lane, state, focused, linkingFrom, degree = 0 }) {
+// ---------- card ----------
+function NodeCard({ node, lane, state, focused, degree = 0, dragging = false }) {
   const color = lane?.color || "#b0b6be";
-  const ring = linkingFrom ? "border-primary ring-2 ring-primary/40" : "border-outline-variant/30";
+  const shell = `bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/10 transition-all ${
+    dragging ? "opacity-40" : "hover:shadow-md hover:-translate-y-0.5"
+  }`;
 
   if (node.kind === "note") {
+    const c = node.color || MAPA_NOTE_COLORS[0];
     return (
-      <div
-        className={`h-full w-full rounded-xl border p-3 overflow-hidden ${ring}`}
-        style={{ background: `${node.color || MAPA_NOTE_COLORS[0]}1f`, borderColor: linkingFrom ? undefined : `${node.color || MAPA_NOTE_COLORS[0]}66` }}
-      >
-        <div className="flex items-start gap-1.5">
-          <MI name="sticky_note_2" className="text-base shrink-0" style={{ color: node.color }} />
-          <p className="text-[12px] text-on-surface leading-snug line-clamp-4">{node.text || <span className="text-outline">Nota vazia</span>}</p>
+      <div className={`rounded-xl p-4 shadow-sm transition-all ${dragging ? "opacity-40" : "hover:shadow-md hover:-translate-y-0.5"}`} style={{ background: `${c}1f`, border: `1px solid ${c}55` }}>
+        <div className="flex items-start justify-between mb-1.5">
+          <MI name="sticky_note_2" className="text-[16px]" style={{ color: c }} />
+          <MI name="drag_indicator" className="text-[16px] text-outline opacity-0 group-hover:opacity-100 transition-opacity" />
         </div>
+        <p className="font-label-sm text-on-surface leading-snug whitespace-pre-line line-clamp-5">
+          {node.text || <span className="text-outline italic">Nota vazia</span>}
+        </p>
       </div>
     );
   }
@@ -661,141 +439,97 @@ function NodeBody({ node, lane, state, focused, linkingFrom, degree = 0 }) {
     const m = resolveMirror(state, node.ref);
     if (!m.ok) {
       return (
-        <div className={`h-full w-full rounded-xl border border-error/40 bg-error/5 p-3 overflow-hidden ${linkingFrom ? "ring-2 ring-primary/40" : ""}`}>
-          <div className="flex items-center gap-1.5 mb-1">
-            <MI name="link_off" className="text-error text-base" />
-            <Caps className="text-error text-[10px]">REFERÊNCIA PERDIDA</Caps>
+        <div className={`rounded-xl p-4 shadow-sm border border-error/40 bg-error/5 transition-all ${dragging ? "opacity-40" : "hover:shadow-md"}`}>
+          <div className="flex items-center justify-between mb-2">
+            <Caps className="text-error text-[10px] uppercase">Referência perdida</Caps>
+            <MI name="link_off" className="text-[16px] text-error" />
           </div>
-          <p className="text-[12px] text-on-surface-variant truncate">{node.fallbackLabel || m.label}</p>
-          <p className="text-[10px] text-outline mt-0.5">Toque pra reapontar ou excluir</p>
+          <h4 className="font-body-md font-semibold text-on-surface truncate">{node.fallbackLabel || m.label}</h4>
+          <p className="font-label-sm text-on-surface-variant mt-1">Toque pra reapontar ou excluir</p>
         </div>
       );
     }
     return (
-      <div className={`h-full w-full rounded-xl border bg-surface-container-lowest p-3 overflow-hidden border-l-4 ${ring}`} style={{ borderLeftColor: color }}>
-        <div className="flex items-center gap-1.5">
-          <MI name={m.icon} className="text-base shrink-0 text-primary-container" />
-          <span className="text-[13px] text-on-surface truncate flex-1">{m.label}</span>
-          {focused && <MI name="push_pin" fill className="text-primary text-sm shrink-0" />}
-          {degree > 0 && <span className="text-[10px] text-outline shrink-0">{degree}</span>}
+      <div className={`${shell} p-4 border-l-4`} style={{ borderLeftColor: color }}>
+        <div className="flex items-center justify-between mb-2">
+          <Caps className="text-primary text-[10px] uppercase flex items-center gap-1">
+            <MI name={m.icon} className="text-[14px]" /> Espelho
+          </Caps>
+          <div className="flex items-center gap-1.5">
+            {focused && <MI name="push_pin" fill className="text-[14px] text-primary" />}
+            {degree > 0 && (
+              <span className="flex items-center gap-0.5 text-[10px] text-on-surface-variant">
+                <MI name="link" className="text-[12px]" />
+                {degree}
+              </span>
+            )}
+            <MI name="drag_indicator" className="text-[16px] text-outline opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
         </div>
-        <div className="mt-2 h-1.5 w-full rounded-full bg-surface-variant overflow-hidden">
-          <div className={`h-full rounded-full ${m.done ? "bg-primary" : "bg-primary-container"}`} style={{ width: `${m.pct}%` }} />
+        <h4 className="font-body-md font-semibold text-on-surface mb-3 leading-snug">{m.label}</h4>
+        <div className="bg-surface-container h-1.5 rounded-full w-full overflow-hidden">
+          <div className={`h-full rounded-full transition-all ${m.done ? "bg-primary" : "bg-primary-container"}`} style={{ width: `${m.pct}%` }} />
         </div>
-        <div className="mt-1.5 flex items-center justify-between gap-2">
-          <span className="text-[10px] text-outline truncate">{m.sub}</span>
-          <span className="text-[10px] font-label-caps text-on-surface-variant shrink-0">{m.pct}%</span>
+        <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-outline-variant/10">
+          <span className="font-label-sm text-on-surface-variant truncate">{m.sub}</span>
+          <span className="font-label-caps text-[10px] text-primary shrink-0">{m.pct}%</span>
         </div>
       </div>
     );
   }
 
   const st = mapaStatus(node.status);
+  const done = node.status === "feito";
   return (
-    <div className={`h-full w-full rounded-xl border bg-surface-container-lowest p-3 overflow-hidden border-l-4 ${ring}`} style={{ borderLeftColor: color }}>
-      <div className="flex items-center gap-1.5">
-        <MI name={st.icon} className={`text-base shrink-0 ${node.status === "feito" ? "text-primary" : "text-primary-container"}`} />
-        <span className={`text-[13px] truncate flex-1 ${node.status === "feito" ? "text-outline line-through" : "text-on-surface"}`}>
-          {node.title || <span className="text-outline italic">Sem título</span>}
-        </span>
-        {focused && <MI name="push_pin" fill className="text-primary text-sm shrink-0" />}
-        {degree > 0 && <span className="text-[10px] text-outline shrink-0">{degree}</span>}
+    <div className={`${shell} p-4 border-l-4`} style={{ borderLeftColor: done ? "var(--color-primary)" : color }}>
+      <div className="flex items-center justify-between mb-2">
+        <Caps className={`text-[10px] uppercase flex items-center gap-1 ${done ? "text-primary" : "text-on-surface-variant"}`}>
+          <MI name={st.icon} className="text-[14px]" /> {st.label}
+        </Caps>
+        <div className="flex items-center gap-1.5">
+          {focused && <MI name="push_pin" fill className="text-[14px] text-primary" />}
+          {degree > 0 && (
+            <span className="flex items-center gap-0.5 text-[10px] text-on-surface-variant">
+              <MI name="link" className="text-[12px]" />
+              {degree}
+            </span>
+          )}
+          <MI name="drag_indicator" className="text-[16px] text-outline opacity-0 group-hover:opacity-100 transition-opacity" />
+        </div>
       </div>
-      {node.why && <p className="mt-1 text-[11px] text-on-surface-variant leading-snug line-clamp-2">{node.why}</p>}
+      <h4 className={`font-body-md font-semibold leading-snug ${done ? "text-on-surface-variant line-through" : "text-on-surface"}`}>
+        {node.title || <span className="text-outline italic font-normal">Sem título</span>}
+      </h4>
+      {node.why && <p className="font-label-sm text-on-surface-variant line-clamp-2 mt-1.5">{node.why}</p>}
       {node.target && (
-        <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-surface-container-high px-2 py-0.5 text-[10px] text-on-surface-variant">
-          <MI name="target" className="text-[12px]" /> {node.target}
-        </span>
+        <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-outline-variant/10 text-on-surface-variant">
+          <MI name="target" className="text-[14px]" />
+          <span className="font-label-sm truncate">{node.target}</span>
+        </div>
       )}
     </div>
   );
 }
 
-// ---------- view de lista (mobile + toggle no desktop) ----------
-// Mesmo state, mesmo inspetor. Também é o caminho de teclado/leitor de tela:
-// posicionar só por arraste seria inacessível.
-function MapaList({ layout, nodes, edges, state, focusId, onOpen, onAdd }) {
-  if (!nodes.length) {
-    return (
-      <div className="glass-card rounded-2xl p-8 text-center">
-        <MI name="explore" className="text-outline text-3xl" />
-        <p className="mt-2 text-[13px] text-outline">Nada no mapa ainda. Comece por uma meta do trimestre.</p>
-        <button onClick={() => onAdd("meta")} className="mt-4 px-4 py-2 rounded-lg border border-primary/40 text-primary font-label-caps text-[11px]">
-          CRIAR META
-        </button>
-      </div>
-    );
-  }
-  return (
-    <div className="space-y-6">
-      {MAPA_HORIZONS.map((h) => {
-        const inBand = nodes.filter((n) => n.h === h.id);
-        return (
-          <section key={h.id}>
-            <div className="flex items-baseline gap-2 mb-2">
-              <Caps className="text-primary text-[11px]">{h.label}</Caps>
-              <span className="text-[10px] text-outline">{h.hint}</span>
-              <span className="text-[10px] text-outline ml-auto">{inBand.length}</span>
-            </div>
-            {inBand.length === 0 ? (
-              <p className="text-[12px] text-outline border border-dashed border-outline-variant/30 rounded-xl px-3 py-4">Nada neste horizonte.</p>
-            ) : (
-              <div className="space-y-3">
-                {layout.rows.map((r) => {
-                  const items = inBand.filter((n) => (n.lane ?? null) === r.id);
-                  if (!items.length) return null;
-                  return (
-                    <div key={r.id || "none"}>
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        <span className="w-2 h-2 rounded-full" style={{ background: r.color }} />
-                        <Caps className="text-outline text-[10px]">{r.label}</Caps>
-                      </div>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {items.map((n) => (
-                          <button key={n.id} onClick={() => onOpen(n.id)} className="text-left h-[96px] active:scale-[0.99] transition">
-                            <NodeBody
-                              node={n}
-                              lane={r}
-                              state={state}
-                              focused={focusId === n.id}
-                              degree={edges.filter((e) => e.from === n.id || e.to === n.id).length}
-                            />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        );
-      })}
-    </div>
-  );
-}
-
 // ---------- inspetor ----------
-function Inspector({ node, lanes, state, edges, nodes, focused, onPatch, onToggleFocus, onRemoveEdge, onDelete, onClose }) {
+function Inspector({ node, lanes, state, edges, nodes, nodeLabel, focused, onPatch, onToggleFocus, onAddEdge, onRemoveEdge, onDelete, onClose }) {
+  const [linkTo, setLinkTo] = useState(null);
+  const [linkKind, setLinkKind] = useState("leva");
+
   const refOptions = useMemo(() => {
     const flat = [];
     for (const g of mapaRefOptions(state)) for (const it of g.items) flat.push({ value: it.value, label: `${g.group} · ${it.label}` });
     return flat;
   }, [state]);
+
   const mirror = node.kind === "mirror" ? resolveMirror(state, node.ref) : null;
   const myEdges = edges.filter((e) => e.from === node.id || e.to === node.id);
-  const nodeLabel = (id) => {
-    const n = nodes.find((x) => x.id === id);
-    if (!n) return "?";
-    if (n.kind === "meta") return n.title || "meta sem título";
-    if (n.kind === "note") return n.text || "nota";
-    return resolveMirror(state, n.ref).label;
-  };
+  const linkOptions = nodes.filter((n) => n.id !== node.id).map((n) => ({ value: n.id, label: nodeLabel(n.id) }));
   const title = node.kind === "meta" ? "Meta" : node.kind === "mirror" ? "Espelho" : "Nota";
 
   return createPortal(
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 animate-[fadeIn_.1s_ease-out]" onClick={onClose} role="dialog" aria-label={title}>
-      <div className="bg-surface-container-lowest rounded-2xl p-6 w-full max-w-md shadow-2xl border border-white/10 max-h-[90vh] overflow-auto ff-scroll" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-surface-container-lowest rounded-2xl p-6 w-full max-w-md shadow-2xl border border-white/10 max-h-[90vh] overflow-auto ff-scroll" onClick={stop}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-headline-md text-headline-md text-primary">{title}</h3>
           <button onClick={onClose} aria-label="Fechar" className="text-outline hover:text-on-surface transition p-1">
@@ -867,9 +601,8 @@ function Inspector({ node, lanes, state, edges, nodes, focused, onPatch, onToggl
                   placeholder="Escolha um hábito, missão, meta ou livro"
                   onChange={(v) => {
                     const [type, ...rest] = v.split(":");
-                    const id = rest.join(":");
                     const label = refOptions.find((o) => o.value === v)?.label || "";
-                    onPatch({ ref: { type, id }, fallbackLabel: label.split(" · ").slice(1).join(" · ") || label });
+                    onPatch({ ref: { type, id: rest.join(":") }, fallbackLabel: label.split(" · ").slice(1).join(" · ") || label });
                   }}
                 />
                 {!refOptions.length && <p className="mt-1.5 text-[11px] text-outline">Nada pra espelhar ainda — crie um hábito, missão ou meta primeiro.</p>}
@@ -928,7 +661,7 @@ function Inspector({ node, lanes, state, edges, nodes, focused, onPatch, onToggl
             </>
           )}
 
-          {/* posição — único caminho sem arraste (e o caminho do mobile) */}
+          {/* posição — caminho sem arraste (teclado, leitor de tela, celular) */}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Caps className="text-outline text-[10px] mb-1.5 block">HORIZONTE</Caps>
@@ -954,19 +687,18 @@ function Inspector({ node, lanes, state, edges, nodes, focused, onPatch, onToggl
             {focused ? "FIXADO COMO FOCO DO TRIMESTRE" : "FIXAR COMO FOCO DO TRIMESTRE"}
           </button>
 
-          {myEdges.length > 0 && (
-            <div>
-              <Caps className="text-outline text-[10px] mb-1.5 block">LIGAÇÕES</Caps>
-              <div className="space-y-1.5">
+          {/* ligações: sem seta desenhada, a relação vive aqui */}
+          <div>
+            <Caps className="text-outline text-[10px] mb-1.5 block">LIGAÇÕES</Caps>
+            {myEdges.length > 0 && (
+              <div className="space-y-1.5 mb-2">
                 {myEdges.map((e) => {
                   const out = e.from === node.id;
                   const kind = MAPA_EDGE_KINDS.find((k) => k.id === e.kind)?.label || e.kind;
                   return (
                     <div key={e.id} className="flex items-center gap-2 rounded-lg bg-surface-container-high px-2.5 py-2">
                       <MI name={out ? "arrow_forward" : "arrow_back"} className="text-outline text-base shrink-0" />
-                      <span className="text-[12px] text-on-surface-variant truncate flex-1">
-                        {out ? `${kind} ${nodeLabel(e.to)}` : `${nodeLabel(e.from)} ${kind} isto`}
-                      </span>
+                      <span className="text-[12px] text-on-surface-variant truncate flex-1">{out ? `${kind} ${nodeLabel(e.to)}` : `${nodeLabel(e.from)} ${kind} isto`}</span>
                       <button onClick={() => onRemoveEdge(e.id)} aria-label="Remover ligação" className="text-outline hover:text-error transition shrink-0">
                         <MI name="close" className="text-base" />
                       </button>
@@ -974,8 +706,28 @@ function Inspector({ node, lanes, state, edges, nodes, focused, onPatch, onToggl
                   );
                 })}
               </div>
-            </div>
-          )}
+            )}
+            {linkOptions.length > 0 ? (
+              <div className="flex items-center gap-2">
+                <Select value={linkKind} options={MAPA_EDGE_KINDS.map((k) => ({ value: k.id, label: k.label }))} onChange={setLinkKind} className="w-32 shrink-0" />
+                <Select value={linkTo} options={linkOptions} placeholder="Escolha um item" onChange={setLinkTo} className="flex-1 min-w-0" />
+                <button
+                  onClick={() => {
+                    if (!linkTo) return;
+                    onAddEdge(linkTo, linkKind);
+                    setLinkTo(null);
+                  }}
+                  disabled={!linkTo}
+                  aria-label="Criar ligação"
+                  className="w-10 h-10 shrink-0 rounded-lg border border-primary/40 text-primary hover:bg-primary/10 disabled:opacity-30 transition grid place-items-center"
+                >
+                  <MI name="add" className="text-lg" />
+                </button>
+              </div>
+            ) : (
+              <p className="text-[11px] text-outline">Precisa de outro item no mapa pra criar ligação.</p>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-2 mt-6">
@@ -996,14 +748,14 @@ function Inspector({ node, lanes, state, edges, nodes, focused, onPatch, onToggl
 function LaneManager({ lanes, nodes, onAdd, onPatch, onMove, onRemove, onClose }) {
   return createPortal(
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 animate-[fadeIn_.1s_ease-out]" onClick={onClose} role="dialog" aria-label="Áreas da vida">
-      <div className="bg-surface-container-lowest rounded-2xl p-6 w-full max-w-md shadow-2xl border border-white/10 max-h-[90vh] overflow-auto ff-scroll" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-surface-container-lowest rounded-2xl p-6 w-full max-w-md shadow-2xl border border-white/10 max-h-[90vh] overflow-auto ff-scroll" onClick={stop}>
         <div className="flex items-center justify-between mb-1">
           <h3 className="font-headline-md text-headline-md text-primary">Áreas da vida</h3>
           <button onClick={onClose} aria-label="Fechar" className="text-outline hover:text-on-surface transition p-1">
             <MI name="close" />
           </button>
         </div>
-        <p className="text-[12px] text-outline mb-4">São as raias do eixo vertical. Reordenar não move nenhum item de área.</p>
+        <p className="text-[12px] text-outline mb-4">São as faixas do mapa. Reordenar não move nenhum item de área.</p>
 
         <div className="space-y-2">
           {lanes.map((l, i) => (
