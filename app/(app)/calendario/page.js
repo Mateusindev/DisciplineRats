@@ -105,7 +105,7 @@ export default function CalendarioPage() {
               key={v.id}
               onClick={() => setView(v.id)}
               className={`px-3 py-1.5 font-label-caps text-[10px] flex items-center gap-1.5 transition ${
-                view === v.id ? "bg-primary-container text-on-primary-container" : "text-on-surface-variant hover:bg-surface-variant/40"
+                view === v.id ? "bg-primary/15 text-primary" : "text-on-surface-variant hover:bg-surface-variant/40"
               }`}
             >
               <MI name={v.icon} className="text-sm" /> {v.label}
@@ -114,7 +114,7 @@ export default function CalendarioPage() {
         </div>
         <button
           onClick={() => openNew(selected)}
-          className="px-3 py-2 rounded-lg bg-primary-container text-on-primary-container flex items-center gap-1.5 active:scale-95 transition font-label-caps text-[11px]"
+          className="px-3 py-2 rounded-lg border border-primary/40 text-primary hover:bg-primary/10 flex items-center gap-1.5 active:scale-95 transition font-label-caps text-[11px]"
         >
           <MI name="add" className="text-lg" /> NOVO
         </button>
@@ -466,7 +466,7 @@ function DayAgenda({ date, events, onAdd, onEdit, hideHeader }) {
             <h3 className="font-headline-md text-headline-md capitalize">{format(date, "EEEE", { locale: ptBR })}</h3>
             <Caps className="text-outline">{format(date, "d 'de' MMMM", { locale: ptBR })}</Caps>
           </div>
-          <button onClick={onAdd} aria-label="Adicionar evento" className="w-9 h-9 rounded-lg bg-primary-container text-on-primary-container grid place-items-center active:scale-95 transition">
+          <button onClick={onAdd} aria-label="Adicionar evento" className="w-9 h-9 rounded-lg border border-primary/30 text-primary hover:bg-primary/10 grid place-items-center active:scale-95 transition">
             <MI name="add" />
           </button>
         </div>
@@ -575,7 +575,7 @@ function EventModal({ form, setForm, onSave, onDelete, onClose }) {
               EXCLUIR
             </button>
           )}
-          <button onClick={onSave} disabled={!form.title.trim()} className="flex-1 py-2.5 rounded-lg bg-primary-container text-on-primary-container font-label-caps text-[11px] active:scale-95 transition disabled:opacity-40">
+          <button onClick={onSave} disabled={!form.title.trim()} className="flex-1 py-2.5 rounded-lg border border-primary/40 text-primary hover:bg-primary/10 font-label-caps text-[11px] active:scale-95 transition disabled:opacity-40">
             SALVAR
           </button>
         </div>
