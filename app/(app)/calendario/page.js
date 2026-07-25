@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { format, addDays, addMonths, startOfWeek, isSameDay, isToday } from "date-fns";
+import { format, addDays, addMonths, startOfMonth, startOfWeek, isSameDay, isSameMonth, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useApp } from "../AppContext";
 import { MI, Caps, PageHeader, inputCls } from "@/components/ui";
-import { Calendar } from "@/components/ui/calendar";
 import { CALENDAR_CATS, calCat, sortEvents, eventTimeLabel } from "@/lib/state";
 
 const ds = (d) => format(d, "yyyy-MM-dd");
+const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const VIEWS = [
   { id: "month", label: "Mês", icon: "calendar_month" },
   { id: "week", label: "Semana", icon: "calendar_view_week" },
@@ -46,14 +46,6 @@ export default function CalendarioPage() {
   const [form, setForm] = useState(null); // { id?, date, title, cat, allDay, start, end, note }
 
   const eventsOn = (d) => sortEvents(calendar[ds(d)]);
-  const getDayColors = (date) => {
-    const out = [];
-    for (const e of calendar[ds(date)] || []) {
-      const c = calCat(e.cat).color;
-      if (!out.includes(c)) out.push(c);
-    }
-    return out;
-  };
 
   // ---- CRUD ----
   const openNew = (d) => setForm({ date: ds(d), title: "", cat: "pessoal", allDay: false, start: "09:00", end: "10:00", note: "" });
@@ -124,33 +116,16 @@ export default function CalendarioPage() {
 
       {/* ===== MÊS ===== */}
       {view === "month" && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
-          <div className="lg:col-span-7">
-            <div className="glass-card p-5 rounded-xl">
-              <Calendar
-                mode="single"
-                selected={selected}
-                onSelect={(d) => d && setSelected(d)}
-                month={month}
-                onMonthChange={setMonth}
-                getDayColors={getDayColors}
-              />
-              {/* legenda */}
-              <div className="flex flex-wrap gap-x-3 gap-y-1 mt-4 pt-4 border-t border-white/5">
-                {CALENDAR_CATS.map((c) => (
-                  <span key={c.id} className="flex items-center gap-1.5 text-[10px] font-label-caps text-outline">
-                    <span className="w-2 h-2 rounded-full" style={{ background: c.color }} /> {c.label}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* agenda do dia selecionado */}
-          <div className="lg:col-span-5">
-            <DayAgenda date={selected} events={eventsOn(selected)} onAdd={() => openNew(selected)} onEdit={(ev) => openEdit(ds(selected), ev)} />
-          </div>
-        </div>
+        <MonthView
+          month={month}
+          setMonth={setMonth}
+          selected={selected}
+          setSelected={setSelected}
+          calendar={calendar}
+          eventsOn={eventsOn}
+          onAdd={openNew}
+          onEdit={openEdit}
+        />
       )}
 
       {/* ===== SEMANA ===== */}
@@ -217,6 +192,175 @@ export default function CalendarioPage() {
         <EventModal form={form} setForm={setForm} onSave={saveForm} onDelete={deleteForm} onClose={() => setForm(null)} />
       )}
     </>
+  );
+}
+
+// ===== visão mensal: dot-map grid =====
+function MonthView({ month, setMonth, selected, setSelected, calendar, eventsOn, onAdd, onEdit }) {
+  // matriz de 42 dias (6 semanas), começando no domingo
+  const gridStart = startOfWeek(startOfMonth(month), { weekStartsOn: 0 });
+  const cells = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+
+  // stats do mês
+  const monthEvents = [];
+  for (const [dateStr, evs] of Object.entries(calendar || {})) {
+    const d = new Date(dateStr + "T00:00:00");
+    if (isSameMonth(d, month)) for (const e of evs) monthEvents.push(e);
+  }
+  const byCat = {};
+  for (const e of monthEvents) byCat[e.cat] = (byCat[e.cat] || 0) + 1;
+  const topCatId = Object.entries(byCat).sort((a, b) => b[1] - a[1])[0]?.[0];
+  const topCat = topCatId ? calCat(topCatId) : null;
+
+  const pick = (d) => {
+    setSelected(d);
+    if (!isSameMonth(d, month)) setMonth(startOfMonth(d));
+  };
+
+  return (
+    <div className="flex flex-col gap-gutter">
+      {/* overview + navegação */}
+      <section className="flex flex-col md:flex-row justify-between md:items-end gap-6">
+        <div className="flex flex-col gap-1">
+          <span className="font-label-caps text-[10px] text-primary tracking-[0.2em] uppercase">Visão do mês</span>
+          <h1 className="font-headline-lg text-headline-lg text-on-surface capitalize leading-none">{format(month, "LLLL yyyy", { locale: ptBR })}</h1>
+          <p className="text-on-surface-variant mt-2 text-body-md">
+            {monthEvents.length > 0 ? (
+              <>
+                <span className="text-primary font-bold">{monthEvents.length} evento{monthEvents.length > 1 ? "s" : ""}</span> neste mês
+                {topCat && <> · mais em <span style={{ color: topCat.color }}>{topCat.label}</span></>}
+              </>
+            ) : (
+              "Nenhum evento neste mês ainda."
+            )}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1">
+            <button onClick={() => setMonth(addMonths(month, -1))} aria-label="Mês anterior" className="w-9 h-9 rounded-full grid place-items-center text-on-surface-variant hover:bg-surface-container-high transition"><MI name="chevron_left" /></button>
+            <button onClick={() => { setMonth(new Date()); setSelected(new Date()); }} className="px-3 h-9 rounded-full text-on-surface-variant hover:bg-surface-container-high transition font-label-caps text-[10px]">HOJE</button>
+            <button onClick={() => setMonth(addMonths(month, 1))} aria-label="Próximo mês" className="w-9 h-9 rounded-full grid place-items-center text-on-surface-variant hover:bg-surface-container-high transition"><MI name="chevron_right" /></button>
+          </div>
+        </div>
+      </section>
+
+      {/* dot-map grid */}
+      <div className="grid grid-cols-7 gap-px bg-outline-variant/20 rounded-3xl overflow-hidden border border-white/10 shadow-xl">
+        {WEEKDAYS.map((w) => (
+          <div key={w} className="bg-surface-container-low py-3 text-center font-label-caps text-[10px] text-outline uppercase tracking-widest">{w}</div>
+        ))}
+        {cells.map((d) => {
+          const evs = eventsOn(d);
+          const outside = !isSameMonth(d, month);
+          const today = isToday(d);
+          const sel = isSameDay(d, selected);
+          return (
+            <button
+              key={ds(d)}
+              onClick={() => pick(d)}
+              onDoubleClick={() => onAdd(d)}
+              className={`relative aspect-square p-2 sm:p-3 flex flex-col justify-between text-left transition group ${
+                outside ? "bg-surface/30" : "bg-surface-container-lowest hover:bg-surface-container-high"
+              } ${sel ? "ring-2 ring-primary ring-inset z-10" : ""}`}
+            >
+              <div className="flex justify-between items-start">
+                <span className={`font-headline-md text-body-lg ${outside ? "text-outline/40" : today ? "text-primary font-bold" : "text-on-surface-variant"}`}>{format(d, "d")}</span>
+                {today && <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />}
+              </div>
+              {evs.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-auto">
+                  {evs.slice(0, 4).map((e) => (
+                    <span key={e.id} className="w-1.5 h-1.5 rounded-full transition-transform group-hover:scale-125" style={{ background: calCat(e.cat).color }} />
+                  ))}
+                  {evs.length > 4 && <span className="text-[8px] text-outline leading-none self-center">+{evs.length - 4}</span>}
+                </div>
+              )}
+
+              {/* popover (desktop hover) */}
+              {evs.length > 0 && (
+                <div className="hidden md:block absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-48 bg-inverse-surface text-inverse-on-surface p-3 rounded-xl opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 transition-all z-50 shadow-xl">
+                  <p className="font-label-caps text-[9px] uppercase opacity-70 mb-2">{format(d, "d 'de' MMM", { locale: ptBR })}</p>
+                  <div className="space-y-1.5">
+                    {evs.slice(0, 4).map((e) => (
+                      <div key={e.id} className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: calCat(e.cat).color }} />
+                        <p className="text-[11px] truncate">{e.title}</p>
+                      </div>
+                    ))}
+                    {evs.length > 4 && <p className="text-[10px] opacity-50">+{evs.length - 4} mais</p>}
+                  </div>
+                  <span className="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent" style={{ borderTopColor: "var(--color-inverse-surface)" }} />
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* legenda */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
+        {CALENDAR_CATS.map((c) => (
+          <span key={c.id} className="flex items-center gap-1.5 text-[10px] font-label-caps text-outline">
+            <span className="w-2 h-2 rounded-full" style={{ background: c.color }} /> {c.label}
+          </span>
+        ))}
+      </div>
+
+      {/* agenda do dia + próximos */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+        <div className="lg:col-span-6">
+          <DayAgenda date={selected} events={eventsOn(selected)} onAdd={() => onAdd(selected)} onEdit={(ev) => onEdit(ds(selected), ev)} />
+        </div>
+        <div className="lg:col-span-6">
+          <Upcoming calendar={calendar} onEdit={onEdit} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// próximos eventos a partir de hoje
+function Upcoming({ calendar, onEdit }) {
+  const todayStr = ds(new Date());
+  const items = [];
+  for (const [dateStr, evs] of Object.entries(calendar || {})) {
+    if (dateStr < todayStr) continue;
+    for (const e of evs) items.push({ dateStr, ev: e });
+  }
+  items.sort((a, b) => a.dateStr.localeCompare(b.dateStr) || (a.ev.allDay ? "" : a.ev.start || "").localeCompare(b.ev.allDay ? "" : b.ev.start || ""));
+  const next = items.slice(0, 6);
+
+  return (
+    <div className="glass-card p-5 rounded-xl h-full">
+      <div className="flex items-center gap-3 mb-5">
+        <div className="h-px flex-1 bg-outline-variant/40" />
+        <Caps className="text-outline text-[10px]">PRÓXIMOS</Caps>
+      </div>
+      {next.length === 0 ? (
+        <p className="text-[13px] text-outline text-center py-8">Nada agendado à frente.</p>
+      ) : (
+        <div className="space-y-2">
+          {next.map(({ dateStr, ev }) => {
+            const d = new Date(dateStr + "T00:00:00");
+            const cat = calCat(ev.cat);
+            return (
+              <button key={ev.id} onClick={() => onEdit(dateStr, ev)} className="w-full flex items-center gap-4 p-2.5 rounded-xl hover:bg-surface-container transition group text-left">
+                <div className="text-center min-w-[42px]">
+                  <p className="font-headline-md text-body-lg text-on-surface leading-none">{format(d, "d")}</p>
+                  <p className="text-[9px] font-label-caps text-outline uppercase">{format(d, "MMM", { locale: ptBR })}</p>
+                </div>
+                <div className="w-1 h-10 rounded-full shrink-0" style={{ background: cat.color }} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-body-md text-on-surface truncate">{ev.title}</p>
+                  <p className="text-[11px] text-on-surface-variant">{cat.label} · {eventTimeLabel(ev)}</p>
+                </div>
+                <MI name="chevron_right" className="text-outline opacity-0 group-hover:opacity-100 transition" />
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
