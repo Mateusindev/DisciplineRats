@@ -178,7 +178,7 @@ export default function CalendarioPage() {
 
       {/* ===== DIA ===== */}
       {view === "day" && (
-        <div className="max-w-2xl">
+        <div>
           <div className="glass-card p-4 rounded-xl mb-gutter flex items-center justify-between">
             <div>
               <h3 className="font-headline-md text-headline-md text-primary capitalize">{format(selected, "EEEE", { locale: ptBR })}</h3>
