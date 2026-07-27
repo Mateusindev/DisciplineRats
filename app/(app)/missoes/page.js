@@ -70,6 +70,7 @@ export default function MissoesPage() {
   const [newCol, setNewCol] = useState("");
   const [activeCard, setActiveCard] = useState(null);
   const [editing, setEditing] = useState(null); // { colId, cardId }
+  const [showArchived, setShowArchived] = useState(false); // arquivo é uma visão do mesmo quadro
 
   const setCols = (fn) => setState((prev) => ({ ...prev, board: { ...prev.board, columns: fn(prev.board?.columns || []) } }));
 
@@ -90,7 +91,7 @@ export default function MissoesPage() {
   function addCard(colId) {
     const text = (cardInput[colId] || "").trim();
     if (!text) return;
-    setCols((cols) => cols.map((c) => (c.id === colId ? { ...c, cards: [...c.cards, { id: uid(), text, priority: 2, done: false, due: "", desc: "", labels: [] }] } : c)));
+    setCols((cols) => cols.map((c) => (c.id === colId ? { ...c, cards: [...c.cards, { id: uid(), text, priority: 2, done: false, due: "", desc: "", labels: [], archived: false }] } : c)));
     setCardInput((s) => ({ ...s, [colId]: "" }));
   }
   const removeCard = (colId, cardId) => setCols((cols) => cols.map((c) => (c.id === colId ? { ...c, cards: c.cards.filter((x) => x.id !== cardId) } : c)));
@@ -114,6 +115,23 @@ export default function MissoesPage() {
         return c;
       });
     });
+  }
+
+  // ---- arquivo ----
+  // Card arquivado ganha a marca `archived` e sai da visão normal; nada é apagado, então
+  // espelho no Mapa continua resolvendo e o histórico fica.
+  const doneOpen = columns.reduce((n, c) => n + c.cards.filter((k) => k.done && !k.archived).length, 0);
+  const archivedCount = columns.reduce((n, c) => n + c.cards.filter((k) => k.archived).length, 0);
+
+  async function archiveDone() {
+    if (!doneOpen) return;
+    const ok = await confirm({
+      title: `Arquivar ${doneOpen} card(s) concluído(s)?`,
+      body: "Eles saem do quadro mas continuam guardados — dá pra consultar e restaurar em ARQUIVADOS.",
+      confirmLabel: "ARQUIVAR",
+    });
+    if (!ok) return;
+    setCols((cols) => cols.map((c) => ({ ...c, cards: c.cards.map((k) => (k.done && !k.archived ? { ...k, archived: true } : k)) })));
   }
 
   // ---- dnd-kit ----
@@ -159,24 +177,69 @@ export default function MissoesPage() {
     }
   }
 
-  const totalCards = columns.reduce((s, c) => s + c.cards.length, 0);
+  const activeCards = columns.reduce((s, c) => s + c.cards.filter((k) => !k.archived).length, 0);
   const editCol = editing && columns.find((c) => c.id === editing.colId);
   const editCard = editCol && editCol.cards.find((c) => c.id === editing.cardId);
+  // mutações continuam sempre na lista completa; isto é só a visão
+  const viewCols = columns.map((c) => ({ ...c, cards: c.cards.filter((k) => (showArchived ? k.archived : !k.archived)) }));
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
-      <section className="mb-6">
+      <section className="mb-4">
         <h1 className="font-headline-lg text-headline-lg text-primary flex items-center gap-2">
           Missões
           <MI name="verified" className="text-primary-container text-xl" fill />
         </h1>
-        <p className="text-body-md text-on-surface-variant">Seu quadro · {totalCards} card(s) · toque pra detalhes, segure pra arrastar</p>
+        <p className="text-body-md text-on-surface-variant">Seu quadro · {activeCards} card(s) · toque pra detalhes, segure pra arrastar</p>
       </section>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {doneOpen > 0 && !showArchived && (
+          <button
+            onClick={archiveDone}
+            className="px-3 py-1.5 rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container-high transition font-label-caps text-[10px] flex items-center gap-1.5"
+          >
+            <MI name="archive" className="text-base" /> ARQUIVAR CONCLUÍDOS ({doneOpen})
+          </button>
+        )}
+        {(archivedCount > 0 || showArchived) && (
+          <button
+            onClick={() => setShowArchived((v) => !v)}
+            className={`px-3 py-1.5 rounded-lg border transition font-label-caps text-[10px] flex items-center gap-1.5 ${
+              showArchived ? "border-primary text-primary bg-primary/10" : "border-outline-variant text-on-surface-variant hover:bg-surface-container-high"
+            }`}
+          >
+            <MI name={showArchived ? "arrow_back" : "inventory_2"} className="text-base" />
+            {showArchived ? "VOLTAR PRO QUADRO" : `ARQUIVADOS (${archivedCount})`}
+          </button>
+        )}
+      </div>
+
+      {showArchived && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+          <MI name="inventory_2" className="text-primary text-lg" />
+          <span className="text-[13px] text-on-surface">
+            Vendo o arquivo. Abra um card e use <strong className="font-semibold">DESARQUIVAR</strong> pra trazer de volta.
+          </span>
+        </div>
+      )}
 
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => setActiveCard(null)}>
         <div className="flex gap-4 overflow-x-auto ff-scroll pb-4 flex-1 items-start">
-          {columns.map((col) => (
-            <Column key={col.id} col={col} renameColumn={renameColumn} removeColumn={removeColumn} toggleDone={toggleDone} openCard={(cardId) => setEditing({ colId: col.id, cardId })} cardInput={cardInput} setCardInput={setCardInput} addCard={addCard} />
+          {viewCols.map((col, i) => (
+            <Column
+              key={col.id}
+              col={col}
+              totalCount={columns[i].cards.length}
+              canAdd={!showArchived}
+              renameColumn={renameColumn}
+              removeColumn={removeColumn}
+              toggleDone={toggleDone}
+              openCard={(cardId) => setEditing({ colId: col.id, cardId })}
+              cardInput={cardInput}
+              setCardInput={setCardInput}
+              addCard={addCard}
+            />
           ))}
 
           <div className="w-[260px] shrink-0 self-start flex items-center gap-1 rounded-2xl p-2 border-2 border-dashed border-outline-variant/40 hover:border-primary/40 focus-within:border-primary/40 transition">
@@ -206,7 +269,7 @@ export default function MissoesPage() {
   );
 }
 
-function Column({ col, renameColumn, removeColumn, toggleDone, openCard, cardInput, setCardInput, addCard }) {
+function Column({ col, totalCount, canAdd = true, renameColumn, removeColumn, toggleDone, openCard, cardInput, setCardInput, addCard }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.id });
   return (
     <div className={`glass-card rounded-2xl p-4 w-[300px] shrink-0 flex flex-col max-h-full transition ${isOver ? "ring-2 ring-primary/40" : ""}`}>
@@ -215,7 +278,7 @@ function Column({ col, renameColumn, removeColumn, toggleDone, openCard, cardInp
           <input value={col.name} onChange={(e) => renameColumn(col.id, e.target.value)} aria-label="Nome da coluna" className="flex-1 min-w-0 bg-transparent font-label-caps text-label-caps uppercase tracking-widest text-on-surface-variant outline-none border-b border-transparent focus:border-primary-container/40 transition" />
           <span className="bg-surface-container-highest text-on-surface-variant px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0">{col.cards.length}</span>
         </div>
-        <button onClick={() => removeColumn(col.id, col.name, col.cards.length)} aria-label="Excluir coluna" className="text-outline hover:text-error transition p-1 shrink-0">
+        <button onClick={() => removeColumn(col.id, col.name, totalCount ?? col.cards.length)} aria-label="Excluir coluna" className="text-outline hover:text-error transition p-1 shrink-0">
           <MI name="more_horiz" className="text-base" />
         </button>
       </div>
@@ -226,10 +289,14 @@ function Column({ col, renameColumn, removeColumn, toggleDone, openCard, cardInp
             <SortableCard key={card.id} card={card} onToggleDone={() => toggleDone(col.id, card.id, card.done)} onOpen={() => openCard(card.id)} />
           ))}
         </SortableContext>
-        {col.cards.length === 0 && <div className="rounded-lg border border-dashed border-outline-variant/30 p-4 text-center text-[11px] text-outline">Solte aqui</div>}
+        {col.cards.length === 0 && (
+          <div className="rounded-lg border border-dashed border-outline-variant/30 p-4 text-center text-[11px] text-outline">
+            {canAdd ? "Solte aqui" : "Nada arquivado aqui"}
+          </div>
+        )}
       </div>
 
-      <div className="flex items-center gap-1 mt-3 border-2 border-dashed border-outline-variant/40 rounded-lg focus-within:border-primary/40 transition">
+      <div className={`items-center gap-1 mt-3 border-2 border-dashed border-outline-variant/40 rounded-lg focus-within:border-primary/40 transition ${canAdd ? "flex" : "hidden"}`}>
         <input value={cardInput[col.id] || ""} onChange={(e) => setCardInput((s) => ({ ...s, [col.id]: e.target.value }))} onKeyDown={(e) => e.key === "Enter" && addCard(col.id)} placeholder="Adicionar card" className="flex-1 min-w-0 bg-transparent px-3 py-2 text-[13px] text-on-surface placeholder:text-outline outline-none" />
         <button onClick={() => addCard(col.id)} aria-label="Adicionar card" className="mr-1 h-8 w-8 grid place-items-center rounded-md text-primary hover:bg-primary/10 active:scale-95 transition shrink-0">
           <MI name="add" className="text-lg" />
@@ -316,9 +383,18 @@ function CardModal({ card, onToggleDone, onClose, onPatch, onDelete }) {
           </div>
         </div>
 
-        <button onClick={onDelete} className="flex items-center gap-2 text-error hover:bg-error/10 px-3 py-1.5 rounded-lg font-label-caps text-[11px] transition">
-          <MI name="delete" className="text-base" /> EXCLUIR CARD
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={onDelete} className="flex items-center gap-2 text-error hover:bg-error/10 px-3 py-1.5 rounded-lg font-label-caps text-[11px] transition">
+            <MI name="delete" className="text-base" /> EXCLUIR CARD
+          </button>
+          <button
+            onClick={() => onPatch({ archived: !card.archived })}
+            className="flex items-center gap-2 text-on-surface-variant hover:bg-surface-variant/40 px-3 py-1.5 rounded-lg font-label-caps text-[11px] transition"
+          >
+            <MI name={card.archived ? "unarchive" : "archive"} className="text-base" />
+            {card.archived ? "DESARQUIVAR" : "ARQUIVAR"}
+          </button>
+        </div>
       </div>
     </div>
   );

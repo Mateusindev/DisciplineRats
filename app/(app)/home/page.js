@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useApp } from "../AppContext";
 import { MI, Caps, StatTile } from "@/components/ui";
-import { gamify, fmtK, getDateStr, toggleHabitState, habitPriority, computeHabitStreak, bookPct, mapaFocus } from "@/lib/state";
+import { gamify, fmtK, getDateStr, toggleHabitState, habitPriority, habitStreak, habitIsScheduled, bookPct, mapaFocus } from "@/lib/state";
 
 function greeting() {
   const h = new Date().getHours();
@@ -86,8 +86,9 @@ export default function HomePage() {
   const reading = (state.books || []).filter((b) => b.status === "reading");
   const bookInitials = (t) => (t || "?").split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
-  // hábitos marcáveis (build + weekly; quit tem fluxo próprio)
-  const habits = (state.habits || []).filter((h) => (h.kind || "build") !== "quit");
+  // hábitos marcáveis (build + weekly; quit tem fluxo próprio).
+  // Diário agendado só aparece no dia dele — senão a Home cobra academia no domingo.
+  const habits = (state.habits || []).filter((h) => (h.kind || "build") !== "quit" && habitIsScheduled(h, today));
 
   function toggle(id) {
     setState((prev) => toggleHabitState(prev, id, today));
@@ -237,7 +238,7 @@ export default function HomePage() {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {habits.map((h) => {
               const done = (h.doneDates || []).includes(today);
-              const streak = computeHabitStreak(h.doneDates);
+              const streak = habitStreak(h);
               const noXp = (h.kind || "build") === "weekly" && h.direction === "max";
               return (
                 <button

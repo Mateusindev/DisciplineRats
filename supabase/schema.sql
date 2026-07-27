@@ -125,6 +125,7 @@ alter table public.habits add column if not exists direction text;
 alter table public.habits add column if not exists weekly_target smallint;
 alter table public.habits add column if not exists penalty_date date;
 alter table public.habits add column if not exists detail text;
+alter table public.habits add column if not exists weekdays jsonb not null default '[]'::jsonb;  -- build: dias da semana agendados (0=Seg..6=Dom); [] = todo dia
 create index if not exists habits_user on public.habits (user_id);
 
 create table if not exists public.habit_checks (

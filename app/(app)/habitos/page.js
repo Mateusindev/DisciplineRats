@@ -5,7 +5,11 @@ import { useApp } from "../AppContext";
 import { MI, Caps, PageHeader, inputCls } from "@/components/ui";
 import {
   getDateStr,
-  computeHabitStreak,
+  habitStreak,
+  habitWeekdays,
+  habitIsScheduled,
+  habitScheduleLabel,
+  DOW_SHORT,
   HABIT_ICONS,
   HABIT_PRIORITIES,
   habitPriority,
@@ -22,6 +26,46 @@ import {
   shiftDate,
   toggleHabitState,
 } from "@/lib/state";
+
+// dias da semana do hábito (0=Seg..6=Dom). Nada marcado = todo dia.
+function DowPicker({ value, onChange }) {
+  const sel = new Set(value || []);
+  const toggle = (d) => {
+    const next = new Set(sel);
+    next.has(d) ? next.delete(d) : next.add(d);
+    onChange([...next].sort((a, b) => a - b));
+  };
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex gap-1">
+        {DOW_SHORT.map((label, d) => {
+          const on = sel.has(d);
+          return (
+            <button
+              key={d}
+              onClick={() => toggle(d)}
+              aria-pressed={on}
+              aria-label={label}
+              className={`w-9 h-7 rounded font-label-caps text-[10px] border transition ${
+                on ? "bg-primary-container text-on-primary-container border-primary-container" : "border-white/10 text-outline hover:border-white/25"
+              }`}
+            >
+              {label.slice(0, 1)}
+              {label.slice(1, 3).toLowerCase()}
+            </button>
+          );
+        })}
+      </div>
+      {sel.size === 0 ? (
+        <Caps className="text-outline text-[10px]">TODO DIA</Caps>
+      ) : (
+        <button onClick={() => onChange([])} className="font-label-caps text-[10px] text-outline hover:text-primary transition">
+          TODO DIA
+        </button>
+      )}
+    </div>
+  );
+}
 
 // chips de prioridade (form e card)
 function PriorityChips({ value, onChange, size = "text-[10px]" }) {
@@ -146,26 +190,51 @@ function CardHeader({ h, i, ctx }) {
 }
 
 function BuildCard({ h, i, ctx }) {
-  const { today, toggleHabit } = ctx;
+  const { today, toggleHabit, setWeekdays } = ctx;
   const done = h.doneDates.includes(today);
-  const streak = computeHabitStreak(h.doneDates);
+  const streak = habitStreak(h);
   const prio = habitPriority(h);
+  const sched = habitScheduleLabel(h); // null = todo dia
+  const dueToday = habitIsScheduled(h, today);
+  const editing = ctx.edits[h.id] !== undefined;
   return (
     <div className="glass-card p-6 rounded-xl relative">
       <CardHeader h={h} i={i} ctx={ctx} />
+
+      {editing ? (
+        <div className="mb-3">
+          <Caps className="text-outline text-[10px] mb-1.5 block">DIAS DA SEMANA</Caps>
+          <DowPicker value={habitWeekdays(h)} onChange={(wd) => setWeekdays(h.id, wd)} />
+        </div>
+      ) : (
+        sched && (
+          <Caps className="text-outline-variant text-[10px] mb-2 flex items-center gap-1">
+            <MI name="event_repeat" className="text-sm" /> {sched}
+          </Caps>
+        )
+      )}
+
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-1 text-outline-variant font-label-caps text-[10px]">
-          <MI name="local_fire_department" className={`text-sm ${streak > 0 ? "text-primary-container" : ""}`} /> {streak} DIAS
+          <MI name="local_fire_department" className={`text-sm ${streak > 0 ? "text-primary-container" : ""}`} />
+          {streak} {sched ? "EM SEQUÊNCIA" : "DIAS"}
         </div>
-        <Caps className="text-outline text-[10px]">+{prio.xp} XP/DIA</Caps>
+        <Caps className={`text-[10px] ${dueToday ? "text-outline" : "text-primary-container"}`}>
+          {dueToday ? `+${prio.xp} XP/DIA` : "DESCANSO HOJE"}
+        </Caps>
       </div>
+
       <button
         onClick={() => toggleHabit(h.id)}
         className={`w-full py-2 font-label-caps text-[10px] rounded transition-colors ${
-          done ? "bg-primary-container text-on-primary-container" : "border border-primary text-primary hover:bg-primary/10"
+          done
+            ? "bg-primary-container text-on-primary-container"
+            : dueToday
+            ? "border border-primary text-primary hover:bg-primary/10"
+            : "border border-white/10 text-outline hover:border-white/25"
         }`}
       >
-        {done ? "CONCLUÍDO HOJE" : "MARCAR AGORA"}
+        {done ? "CONCLUÍDO HOJE" : dueToday ? "MARCAR AGORA" : "MARCAR EXTRA"}
       </button>
     </div>
   );
@@ -282,6 +351,7 @@ export default function HabitosPage() {
   const [newPriority, setNewPriority] = useState(2);
   const [newDirection, setNewDirection] = useState("min"); // weekly: min | max
   const [newTarget, setNewTarget] = useState(3); // weekly: dias/semana
+  const [newWeekdays, setNewWeekdays] = useState([]); // build: [] = todo dia
   const [edits, setEdits] = useState({}); // { [id]: nome em edição }
   const [editDetails, setEditDetails] = useState({}); // { [id]: detalhe em edição }
   const [pickingIcon, setPickingIcon] = useState(null); // id do hábito com picker aberto
@@ -344,6 +414,7 @@ export default function HabitosPage() {
           priority: newPriority,
           direction: newKind === "weekly" ? newDirection : null,
           weeklyTarget: newKind === "weekly" ? newTarget : null,
+          weekdays: newKind === "build" ? newWeekdays : [], // só faz sentido no diário
           detail: "",
           createdAt: new Date().toISOString(),
           doneDates: [],
@@ -353,6 +424,11 @@ export default function HabitosPage() {
       ],
     }));
     setNewHabit("");
+    setNewWeekdays([]);
+  }
+
+  function setWeekdays(id, weekdays) {
+    setState((prev) => ({ ...prev, habits: prev.habits.map((h) => (h.id === id ? { ...h, weekdays } : h)) }));
   }
 
   function setIcon(id, icon) {
@@ -424,6 +500,7 @@ export default function HabitosPage() {
     editDetails,
     setEdits,
     setEditDetails,
+    setWeekdays,
     pickingIcon,
     setPickingIcon,
     setIcon,
@@ -493,6 +570,15 @@ export default function HabitosPage() {
             <PriorityChips value={newPriority} onChange={setNewPriority} />
           </div>
         </div>
+        {newKind === "build" && (
+          <div>
+            <Caps className="text-outline text-[10px] mb-1.5 block">EM QUAIS DIAS? (VAZIO = TODO DIA)</Caps>
+            <DowPicker value={newWeekdays} onChange={setNewWeekdays} />
+            <p className="text-[11px] text-outline mt-1.5">
+              Dia fora da agenda não cobra XP nem quebra a sequência — treino de seg/qua/sex não paga por domingo.
+            </p>
+          </div>
+        )}
         {newKind === "weekly" && (
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex rounded-lg overflow-hidden border border-white/10">

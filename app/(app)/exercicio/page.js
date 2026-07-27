@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useApp } from "../AppContext";
 import { MI, Caps, StarRating, Select, inputCls, textareaCls } from "@/components/ui";
-import { XP, award, getDateStr, shiftDate, weekdayShort, last7Dates, weekStartOf, isGymModality, gymProgress, gymExercises, gymPR, DOW_SHORT } from "@/lib/state";
+import { XP, award, getDateStr, shiftDate, weekdayShort, last7Dates, weekStartOf, isGymModality, gymProgress, gymExercises, gymPR, playAlarm, DOW_SHORT, REST_PRESETS, mmss } from "@/lib/state";
 import { fetchExercises } from "@/lib/persistence";
 import { LineChart } from "@/components/charts";
 import { ExerciseModal, guessMuscle } from "@/components/ExerciseInfo";
@@ -98,7 +98,7 @@ const scheduledDivName = (mod) => (mod?.divisions || []).find((d) => (d.weekdays
 const defaultDivName = (mod) => scheduledDivName(mod) || mod?.divisions?.[0]?.name || "";
 
 export default function ExercicioPage() {
-  const { state, setState, toast, confirm } = useApp();
+  const { state, setState, toast, confirm, setSetting } = useApp();
   const [tab, setTab] = useState("registrar");
   const [type, setType] = useState(state.workoutPlan?.[0]?.name || "");
   const [division, setDivision] = useState(() => defaultDivName(state.workoutPlan?.[0]));
@@ -331,6 +331,46 @@ export default function ExercicioPage() {
   const getRow = (ex) => rowForms[ex] || { weight: "", reps: "", failure: false };
   const setRow = (ex, patch) => setRowForms((f) => ({ ...f, [ex]: { ...getRow(ex), ...patch } }));
 
+  // ===== descanso entre séries =====
+  // Ancorado no relógio (endRef), não na contagem de ticks: aba em segundo plano é
+  // estrangulada pelo navegador, então contar intervalos atrasaria o cronômetro.
+  const restPref = state.settings?.restSec || 90;
+  const [restLeft, setRestLeft] = useState(0);
+  const restEndRef = useRef(0);
+
+  const startRest = (sec = restPref) => {
+    restEndRef.current = Date.now() + sec * 1000;
+    setRestLeft(sec);
+  };
+  const stopRest = () => {
+    restEndRef.current = 0;
+    setRestLeft(0);
+  };
+  const bumpRest = (delta) => {
+    if (!restEndRef.current) return;
+    restEndRef.current = Math.max(Date.now(), restEndRef.current + delta * 1000);
+    setRestLeft(Math.max(0, Math.round((restEndRef.current - Date.now()) / 1000)));
+  };
+
+  useEffect(() => {
+    if (!restEndRef.current) return;
+    const tick = () => {
+      const left = Math.max(0, Math.round((restEndRef.current - Date.now()) / 1000));
+      setRestLeft(left);
+      if (left === 0) {
+        restEndRef.current = 0;
+        playAlarm();
+        toast("Descanso acabou", { sub: "Próxima série.", icon: "fitness_center" });
+      }
+    };
+    const id = setInterval(tick, 250);
+    document.addEventListener("visibilitychange", tick); // volta pra aba → recalcula na hora
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, [restLeft > 0, toast]);
+
   // registra série p/ um exercício (ficha ou avulso). Retorna true se gravou.
   function pushSet(exercise, { weight, reps, failure }) {
     const ex = exercise.trim().slice(0, 60);
@@ -359,6 +399,7 @@ export default function ExercicioPage() {
         { id: crypto.randomUUID(), date: sessionDate, exercise: ex, weight: w, reps: isNaN(r) || r <= 0 ? null : r, failure: !!failure },
       ],
     }));
+    if (!isRetro) startRest(); // série retroativa não é descanso de agora
     return true;
   }
   const chartExercise = chartEx || gymExercises(gymSets)[0] || null;
@@ -545,6 +586,55 @@ export default function ExercicioPage() {
                       {isRetro ? `SALVAM EM ${ddmm(sessionDate)}` : "SALVAM AO ADICIONAR"}
                     </Caps>
                   </div>
+
+                  {/* descanso: começa sozinho ao registrar série. Sticky pra seguir visível
+                      enquanto você rola entre exercícios; canto inferior direito já é do pomodoro. */}
+                  {!isRetro && (
+                    <div className="sticky top-0 z-30 -mx-1 px-1 py-2 mb-2 bg-background/95 backdrop-blur-md">
+                      {restLeft > 0 ? (
+                        <div className="rounded-lg border border-primary-container/40 bg-primary-container/10 px-3 py-2 flex items-center gap-3">
+                          <MI name="hourglass_top" className="text-primary-container text-lg shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-baseline gap-2">
+                              <span className="font-headline-md text-headline-md text-primary tabular-nums leading-none">{mmss(restLeft)}</span>
+                              <Caps className="text-outline text-[10px]">DESCANSO</Caps>
+                            </div>
+                            <div className="mt-1.5 h-1 rounded-full bg-surface-variant overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-primary-container transition-[width] duration-300"
+                                style={{ width: `${Math.min(100, Math.round((restLeft / (restPref || 90)) * 100))}%` }}
+                              />
+                            </div>
+                          </div>
+                          <button onClick={() => bumpRest(30)} className="px-2 py-1 rounded font-label-caps text-[10px] border border-white/10 text-on-surface-variant hover:border-white/25 transition shrink-0">
+                            +30s
+                          </button>
+                          <button onClick={stopRest} aria-label="Pular descanso" className="text-outline hover:text-on-surface transition shrink-0">
+                            <MI name="skip_next" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Caps className="text-outline text-[10px]">DESCANSO</Caps>
+                          {REST_PRESETS.map((s) => (
+                            <button
+                              key={s}
+                              onClick={() => {
+                                if (s !== restPref) setSetting("restSec", s);
+                                startRest(s);
+                              }}
+                              className={`px-2 py-1 rounded font-label-caps text-[10px] border transition ${
+                                s === restPref ? "border-primary text-primary" : "border-white/10 text-outline hover:border-white/25"
+                              }`}
+                            >
+                              {mmss(s)}
+                            </button>
+                          ))}
+                          <span className="text-[11px] text-outline">começa sozinho ao registrar série</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {trainDiv && trainItems.length === 0 && (
                     <div className="text-[12px] text-outline bg-surface-container-high rounded-lg border border-white/5 p-3 flex items-center justify-between gap-2">
