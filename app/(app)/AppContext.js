@@ -70,7 +70,8 @@ function ConfirmDialog() {
   const { title, body, confirmLabel = "CONFIRMAR", danger = true } = confirmState;
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 animate-[fadeIn_.1s_ease-out]" onClick={() => resolveConfirm(false)}>
-      <div className="glass-card rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-white/10" onClick={(e) => e.stopPropagation()}>
+      {/* sólido, igual aos outros modais: glass-card é 3% de branco e some sobre o scrim */}
+      <div className="bg-surface-container-lowest rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-white/10" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start gap-3 mb-4">
           <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${danger ? "bg-error/15 text-error" : "bg-primary-container/20 text-primary-container"}`}>
             <MI name={danger ? "warning" : "help"} fill />
