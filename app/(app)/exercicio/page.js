@@ -4,12 +4,88 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useApp } from "../AppContext";
 import { MI, Caps, StarRating, Select, inputCls, textareaCls } from "@/components/ui";
-import { XP, award, getDateStr, shiftDate, weekdayShort, last7Dates, weekStartOf, isGymModality, gymProgress, gymExercises, gymPR, playAlarm, DOW_SHORT, REST_PRESETS, mmss } from "@/lib/state";
+import { XP, award, getDateStr, shiftDate, weekdayShort, last7Dates, weekStartOf, isGymModality, gymProgress, gymExercises, gymPR, playAlarm, DOW_SHORT, mmss } from "@/lib/state";
 import { fetchExercises } from "@/lib/persistence";
 import { LineChart } from "@/components/charts";
 import { ExerciseModal, guessMuscle } from "@/components/ExerciseInfo";
 
 const GLOW = { boxShadow: "0 0 15px var(--brand-glow)" };
+
+// ===== descanso entre séries =====
+const REST_MIN = 30;
+const REST_MAX = 240;
+
+function RestTimer({ left, total, pref, onPick, onStart, onBump, onSkip }) {
+  const running = left > 0;
+  const pct = total > 0 ? Math.max(0, Math.min(100, (left / total) * 100)) : 0;
+  const ending = left > 0 && left <= 10; // últimos 10s em vermelho
+
+  // Parado é configuração: fica embutido na superfície da seção, sem card nem sticky.
+  // (Fundo próprio aqui virava um bloco opaco dentro do painel glass-card.)
+  if (!running) {
+    const fill = ((pref - REST_MIN) / (REST_MAX - REST_MIN)) * 100;
+    return (
+      <div className="mb-3 flex items-end gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline gap-2 mb-1.5">
+            <Caps className="text-outline text-[10px]">DESCANSO</Caps>
+            <span className="font-headline-md text-[15px] text-primary tabular-nums leading-none">{mmss(pref)}</span>
+          </div>
+          <input
+            type="range"
+            min={REST_MIN}
+            max={REST_MAX}
+            step={15}
+            value={pref}
+            onChange={(e) => onPick(parseInt(e.target.value, 10))}
+            aria-label="Intervalo de descanso"
+            aria-valuetext={mmss(pref)}
+            className="w-full h-1.5 rounded-full appearance-none cursor-pointer
+              [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary-container [&::-webkit-slider-thumb]:shadow-md
+              [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary-container"
+            style={{ background: `linear-gradient(to right, var(--color-primary-container) ${fill}%, var(--color-surface-variant) ${fill}%)` }}
+          />
+          <div className="flex justify-between mt-1">
+            <span className="text-[10px] text-outline/70 tabular-nums">{mmss(REST_MIN)}</span>
+            <span className="text-[10px] text-outline/70">começa sozinho ao registrar série</span>
+            <span className="text-[10px] text-outline/70 tabular-nums">{mmss(REST_MAX)}</span>
+          </div>
+        </div>
+        <button
+          onClick={() => onStart(pref)}
+          aria-label="Começar descanso"
+          title="Começar descanso"
+          className="w-9 h-9 mb-4 shrink-0 grid place-items-center rounded-full border border-primary/40 text-primary hover:bg-primary/10 active:scale-95 transition"
+        >
+          <MI name="play_arrow" fill className="text-lg" />
+        </button>
+      </div>
+    );
+  }
+
+  // Rodando precisa acompanhar o scroll. A barra é opaca e preenche o sticky inteiro,
+  // então não sobra fresta — dispensa fundo no wrapper.
+  return (
+    <div className="sticky top-0 z-30 mb-2">
+      <div className={`relative overflow-hidden rounded-xl border ${ending ? "border-error/50" : "border-primary-container/40"} bg-surface-container-high`}>
+        <div
+          className={`absolute inset-y-0 left-0 ${ending ? "bg-error/25" : "bg-primary-container/25"}`}
+          style={{ width: `${pct}%`, transition: "width .3s linear" }}
+        />
+        <div className="relative flex items-center gap-3 px-3 py-3">
+          <span className={`font-headline-lg text-[30px] leading-none tabular-nums ${ending ? "text-error" : "text-primary"}`}>{mmss(left)}</span>
+          <Caps className="text-on-surface-variant text-[10px] flex-1">DESCANSO</Caps>
+          <button onClick={onBump} className="px-2.5 py-1.5 rounded font-label-caps text-[11px] border border-white/15 text-on-surface-variant hover:border-white/30 transition shrink-0">
+            +30s
+          </button>
+          <button onClick={onSkip} aria-label="Pular descanso" className="w-9 h-9 grid place-items-center rounded-full text-outline hover:text-on-surface hover:bg-surface-variant/50 transition shrink-0">
+            <MI name="skip_next" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // busca/escolha de exercício no catálogo — abre no clique, agrupado por músculo
 function ExercisePicker({ value, onChange, onSubmit, catalog }) {
@@ -336,10 +412,12 @@ export default function ExercicioPage() {
   // estrangulada pelo navegador, então contar intervalos atrasaria o cronômetro.
   const restPref = state.settings?.restSec || 90;
   const [restLeft, setRestLeft] = useState(0);
+  const [restTotal, setRestTotal] = useState(0); // duração da rodada atual, p/ o % da barra
   const restEndRef = useRef(0);
 
   const startRest = (sec = restPref) => {
     restEndRef.current = Date.now() + sec * 1000;
+    setRestTotal(sec);
     setRestLeft(sec);
   };
   const stopRest = () => {
@@ -349,6 +427,7 @@ export default function ExercicioPage() {
   const bumpRest = (delta) => {
     if (!restEndRef.current) return;
     restEndRef.current = Math.max(Date.now(), restEndRef.current + delta * 1000);
+    setRestTotal((t) => t + delta); // senão +30s trava a barra em 100%
     setRestLeft(Math.max(0, Math.round((restEndRef.current - Date.now()) / 1000)));
   };
 
@@ -587,53 +666,20 @@ export default function ExercicioPage() {
                     </Caps>
                   </div>
 
-                  {/* descanso: começa sozinho ao registrar série. Sticky pra seguir visível
-                      enquanto você rola entre exercícios; canto inferior direito já é do pomodoro. */}
+                  {/* descanso: começa sozinho ao registrar série */}
                   {!isRetro && (
-                    <div className="sticky top-0 z-30 -mx-1 px-1 py-2 mb-2 bg-background/95 backdrop-blur-md">
-                      {restLeft > 0 ? (
-                        <div className="rounded-lg border border-primary-container/40 bg-primary-container/10 px-3 py-2 flex items-center gap-3">
-                          <MI name="hourglass_top" className="text-primary-container text-lg shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-baseline gap-2">
-                              <span className="font-headline-md text-headline-md text-primary tabular-nums leading-none">{mmss(restLeft)}</span>
-                              <Caps className="text-outline text-[10px]">DESCANSO</Caps>
-                            </div>
-                            <div className="mt-1.5 h-1 rounded-full bg-surface-variant overflow-hidden">
-                              <div
-                                className="h-full rounded-full bg-primary-container transition-[width] duration-300"
-                                style={{ width: `${Math.min(100, Math.round((restLeft / (restPref || 90)) * 100))}%` }}
-                              />
-                            </div>
-                          </div>
-                          <button onClick={() => bumpRest(30)} className="px-2 py-1 rounded font-label-caps text-[10px] border border-white/10 text-on-surface-variant hover:border-white/25 transition shrink-0">
-                            +30s
-                          </button>
-                          <button onClick={stopRest} aria-label="Pular descanso" className="text-outline hover:text-on-surface transition shrink-0">
-                            <MI name="skip_next" />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Caps className="text-outline text-[10px]">DESCANSO</Caps>
-                          {REST_PRESETS.map((s) => (
-                            <button
-                              key={s}
-                              onClick={() => {
-                                if (s !== restPref) setSetting("restSec", s);
-                                startRest(s);
-                              }}
-                              className={`px-2 py-1 rounded font-label-caps text-[10px] border transition ${
-                                s === restPref ? "border-primary text-primary" : "border-white/10 text-outline hover:border-white/25"
-                              }`}
-                            >
-                              {mmss(s)}
-                            </button>
-                          ))}
-                          <span className="text-[11px] text-outline">começa sozinho ao registrar série</span>
-                        </div>
-                      )}
-                    </div>
+                    <RestTimer
+                      left={restLeft}
+                      total={restTotal}
+                      pref={restPref}
+                      onPick={(s) => setSetting("restSec", s)}
+                      onStart={(s) => {
+                        if (s !== restPref) setSetting("restSec", s);
+                        startRest(s);
+                      }}
+                      onBump={() => bumpRest(30)}
+                      onSkip={stopRest}
+                    />
                   )}
 
                   {trainDiv && trainItems.length === 0 && (
