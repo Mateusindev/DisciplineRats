@@ -16,19 +16,6 @@ function hm(min) {
 function pad2(n) {
   return String(n).padStart(2, "0");
 }
-// streak só conta NOITE LIMPA: bateu a meta E deitou no horário (madrugada quebra)
-function sleepStreak(sleep, goal, limit) {
-  let streak = 0;
-  let off = sleep[getDateStr(0)] ? 0 : -1;
-  while (true) {
-    const e = sleep[getDateStr(off)];
-    if (e && e.durationMin >= goal && bedtimeLateness(e.bedtime, limit) <= 0) {
-      streak++;
-      off--;
-    } else break;
-  }
-  return streak;
-}
 
 export default function SonoPage() {
   const { state, setState, toast, setSetting } = useApp();
@@ -101,7 +88,6 @@ export default function SonoPage() {
   const fillPct = Math.min(durationMin / goalMin, 1);
   const offset = CIRC * (1 - fillPct);
 
-  const streak = sleepStreak(state.sleep, goalMin, limit);
   // noites "sujas" no gráfico: deitou tarde (madrugada) — não é 8h limpa
   const lateFlags = days.map((d) => {
     const e = state.sleep[d];
@@ -320,33 +306,7 @@ export default function SonoPage() {
           )}
         </div>
 
-        {/* Streak */}
-        <div className="md:col-span-4 glass-card p-6 rounded-xl border-l-4 border-l-primary flex gap-4 items-center">
-          <div className="w-14 h-14 bg-primary-container/20 rounded-xl flex items-center justify-center shrink-0">
-            <MI name="military_tech" fill className="text-primary text-3xl" />
-          </div>
-          <div>
-            <Caps className="text-on-surface">SEQUÊNCIA DE SONO</Caps>
-            <p className="font-body-md text-on-surface-variant text-sm">
-              {streak > 0
-                ? `${streak} ${streak === 1 ? "noite limpa" : "noites limpas"} (meta + deitar no horário).`
-                : "Bata a meta e deite no horário pra iniciar a sequência."}
-            </p>
-            <div className="mt-2 text-primary font-bold text-xs">MADRUGADA QUEBRA A SEQUÊNCIA</div>
-          </div>
-        </div>
-
         <MoodPanel state={state} setState={setState} />
-
-        {/* Tip */}
-        <div className="md:col-span-8 glass-card p-6 rounded-xl flex items-center gap-4 bg-gradient-to-r from-surface-container-high to-transparent border-none">
-          <div className="w-10 h-10 bg-on-primary-container/10 rounded-full flex items-center justify-center shrink-0">
-            <MI name="lightbulb" fill className="text-primary-container" />
-          </div>
-          <p className="font-body-md italic text-on-surface-variant">
-            "O sono é a ponte entre o esforço e o resultado. Recuperação consistente é o que sustenta a disciplina."
-          </p>
-        </div>
       </div>
     </>
   );
