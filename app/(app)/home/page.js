@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useApp } from "../AppContext";
 import { MI, Caps, StatTile } from "@/components/ui";
-import { gamify, fmtK, getDateStr, toggleHabitState, habitPriority, habitStreak, habitIsScheduled, bookPct, mapaFocus } from "@/lib/state";
+import { gamify, fmtK, getDateStr, toggleHabitState, habitPriority, habitStreak, habitIsScheduled, bookPct, mapaFocus, pendingCards } from "@/lib/state";
 
 function greeting() {
   const h = new Date().getHours();
@@ -73,10 +73,7 @@ export default function HomePage() {
   }
 
   // missões pendentes (cards não concluídos do board) → lembrete sutil
-  const rankTask = (k) => (k.due ? (k.due < today ? 0 : 1) : 2); // atrasada, com prazo, sem prazo
-  const pendingTasks = (state.board?.columns || [])
-    .flatMap((c) => (c.cards || []).filter((k) => !k.done))
-    .sort((a, b) => rankTask(a) - rankTask(b) || ((a.due || "9999") < (b.due || "9999") ? -1 : 1) || (b.priority || 2) - (a.priority || 2));
+  const pendingTasks = pendingCards(state); // mesma ordem de urgência usada em /foco
   const priDot = (p) => (p === 3 ? "bg-error" : p === 1 ? "bg-outline" : "bg-primary-container");
 
   // foco do trimestre: nó fixado no Mapa — amarra o longo prazo no dia

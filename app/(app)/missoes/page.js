@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useApp } from "../AppContext";
 import { MI, inputCls } from "@/components/ui";
-import { getDateStr } from "@/lib/state";
+import { getDateStr, toggleBoardCardState } from "@/lib/state";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCorners, DragOverlay, useDroppable } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -96,26 +96,8 @@ export default function MissoesPage() {
   }
   const removeCard = (colId, cardId) => setCols((cols) => cols.map((c) => (c.id === colId ? { ...c, cards: c.cards.filter((x) => x.id !== cardId) } : c)));
   const updateCard = (colId, cardId, patch) => setCols((cols) => cols.map((c) => (c.id === colId ? { ...c, cards: c.cards.map((x) => (x.id === cardId ? { ...x, ...patch } : x)) } : c)));
-  function toggleDone(colId, cardId, done) {
-    const nd = !done;
-    setCols((cols) => {
-      const src = cols.find((c) => c.id === colId);
-      const card = src?.cards.find((k) => k.id === cardId);
-      if (!card) return cols;
-      const updated = { ...card, done: nd };
-      // reabrir, ou concluir já estando na coluna de concluídos → só atualiza no lugar
-      const doneCol = cols.find((c) => /conclu|feito|done/i.test(c.name)) || cols[cols.length - 1];
-      if (!nd || !doneCol || doneCol.id === colId) {
-        return cols.map((c) => (c.id === colId ? { ...c, cards: c.cards.map((k) => (k.id === cardId ? updated : k)) } : c));
-      }
-      // concluir → move pro fim da coluna de concluídos
-      return cols.map((c) => {
-        if (c.id === colId) return { ...c, cards: c.cards.filter((k) => k.id !== cardId) };
-        if (c.id === doneCol.id) return { ...c, cards: [...c.cards, updated] };
-        return c;
-      });
-    });
-  }
+  // reducer compartilhado com /foco — a regra de mover pra coluna de concluídos vive em um lugar
+  const toggleDone = (colId, cardId) => setState((prev) => toggleBoardCardState(prev, colId, cardId));
 
   // ---- arquivo ----
   // Card arquivado ganha a marca `archived` e sai da visão normal; nada é apagado, então
@@ -256,7 +238,7 @@ export default function MissoesPage() {
       {editCard && (
         <CardModal
           card={editCard}
-          onToggleDone={() => toggleDone(editing.colId, editing.cardId, editCard.done)}
+          onToggleDone={() => toggleDone(editing.colId, editing.cardId)}
           onClose={() => setEditing(null)}
           onPatch={(patch) => updateCard(editing.colId, editing.cardId, patch)}
           onDelete={async () => {
@@ -286,7 +268,7 @@ function Column({ col, totalCount, canAdd = true, renameColumn, removeColumn, to
       <div ref={setNodeRef} className="flex flex-col overflow-y-auto ff-scroll pr-1 flex-1 min-h-[40px]">
         <SortableContext items={col.cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
           {col.cards.map((card) => (
-            <SortableCard key={card.id} card={card} onToggleDone={() => toggleDone(col.id, card.id, card.done)} onOpen={() => openCard(card.id)} />
+            <SortableCard key={card.id} card={card} onToggleDone={() => toggleDone(col.id, card.id)} onOpen={() => openCard(card.id)} />
           ))}
         </SortableContext>
         {col.cards.length === 0 && (

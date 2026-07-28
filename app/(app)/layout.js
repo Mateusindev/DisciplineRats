@@ -14,7 +14,7 @@ import { DEFAULT_MODE } from "@/lib/themes";
 const MOBILE_PRIMARY = ["home", "habitos", "exercicio", "sono"];
 
 // rotas desativadas: fora do menu, mas acessíveis por URL — bloqueadas aqui
-const DISABLED_ROUTES = ["/foco", "/grupos"];
+const DISABLED_ROUTES = ["/grupos"];
 
 function DisabledScreen() {
   return (

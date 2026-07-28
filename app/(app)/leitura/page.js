@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps, StarRating, inputCls } from "@/components/ui";
-import { getDateStr, bookPct } from "@/lib/state";
+import { getDateStr, shiftDate, bookPct, readingPace } from "@/lib/state";
 
 const STATUS = {
   want: { label: "Quero ler", icon: "bookmark" },
@@ -42,6 +42,7 @@ function Cover({ book, className = "" }) {
 
 function BookCard({ b, onOpen }) {
   const pct = bookPct(b);
+  const pace = b.status === "reading" ? readingPace(b) : null;
   return (
     <button onClick={onOpen} className="text-left group">
       <div className="aspect-[2/3] rounded-lg overflow-hidden border border-outline-variant/30 shadow-sm relative group-hover:shadow-md group-active:scale-[0.98] transition">
@@ -66,6 +67,13 @@ function BookCard({ b, onOpen }) {
         <div className="text-[12px] font-semibold text-on-surface leading-tight line-clamp-2">{b.title}</div>
         {b.author && <div className="text-[10px] text-outline truncate">{b.author}</div>}
         {b.category && <div className="text-[9px] text-primary-container font-label-caps truncate mt-0.5">{b.category}</div>}
+        {/* ritmo necessário, direto na prateleira */}
+        {pace?.perDay > 0 && (
+          <div className={`text-[10px] font-label-caps mt-0.5 flex items-center gap-1 ${pace.state === "late" ? "text-error" : "text-primary"}`}>
+            <MI name="speed" className="text-[12px]" />
+            {pace.state === "late" ? `${pace.pagesLeft} pág atrasadas` : `${pace.perDay} pág/dia`}
+          </div>
+        )}
         {b.status === "done" && b.rating > 0 && (
           <div className="flex gap-0.5 mt-0.5">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -75,6 +83,95 @@ function BookCard({ b, onOpen }) {
         )}
       </div>
     </button>
+  );
+}
+
+// Quantas páginas por dia pra fechar o livro na meta de término.
+// Só aparece quando dá pra calcular — sem total de páginas ou sem meta, ele pede o que falta
+// em vez de exibir número inventado.
+function PacePanel({ book, onPatch }) {
+  const pace = readingPace(book);
+  if (!pace || pace.state === "done") return null;
+
+  const presets = [
+    { label: "2 SEMANAS", days: 13 },
+    { label: "1 MÊS", days: 29 },
+    { label: "2 MESES", days: 59 },
+  ];
+  const askTarget = pace.reason === "no-target";
+
+  if (pace.reason === "no-total") {
+    return (
+      <div className="mb-5 rounded-lg border border-white/10 bg-surface-container-high p-3">
+        <Caps className="text-outline text-[10px] block mb-1">RITMO NECESSÁRIO</Caps>
+        <p className="text-[12px] text-on-surface-variant">Informe o total de páginas do livro pra eu calcular quantas por dia.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`mb-5 rounded-lg border p-3 ${pace.state === "late" ? "border-error/40 bg-error/5" : "border-primary-container/40 bg-primary-container/[0.07]"}`}>
+      <Caps className="text-outline text-[10px] block mb-2">RITMO NECESSÁRIO</Caps>
+
+      {askTarget ? (
+        <>
+          <p className="text-[12px] text-on-surface-variant mb-2.5">
+            Faltam <strong className="font-semibold text-on-surface">{pace.pagesLeft} páginas</strong>. Defina a meta de término pra eu dizer quantas por dia.
+          </p>
+          <div className="flex gap-1.5 flex-wrap">
+            {presets.map((p) => (
+              <button
+                key={p.days}
+                onClick={() => onPatch({ targetDate: shiftDate(getDateStr(0), p.days), startedAt: book.startedAt || getDateStr(0) })}
+                className="px-2.5 py-1.5 rounded border border-white/15 text-on-surface-variant hover:border-primary/40 hover:text-primary transition font-label-caps text-[10px]"
+              >
+                {p.label} · {Math.ceil(pace.pagesLeft / (p.days + 1))}/DIA
+              </button>
+            ))}
+          </div>
+        </>
+      ) : pace.state === "late" ? (
+        <>
+          <div className="flex items-baseline gap-2">
+            <span className="font-headline-lg text-[26px] text-error tabular-nums leading-none">{pace.pagesLeft}</span>
+            <span className="text-[12px] text-on-surface-variant">páginas restantes</span>
+          </div>
+          <p className="text-[12px] text-on-surface-variant mt-1.5">
+            A meta era {pace.daysLate === 1 ? "ontem" : `${pace.daysLate} dias atrás`}. Empurre a data ou aceite que este livro vai levar mais tempo — as duas
+            são respostas honestas.
+          </p>
+          <div className="flex gap-1.5 flex-wrap mt-2.5">
+            {presets.map((p) => (
+              <button
+                key={p.days}
+                onClick={() => onPatch({ targetDate: shiftDate(getDateStr(0), p.days) })}
+                className="px-2.5 py-1.5 rounded border border-white/15 text-on-surface-variant hover:border-primary/40 hover:text-primary transition font-label-caps text-[10px]"
+              >
+                +{p.label} · {Math.ceil(pace.pagesLeft / (p.days + 1))}/DIA
+              </button>
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <span className="font-headline-lg text-[30px] text-primary tabular-nums leading-none">{pace.perDay}</span>
+            <span className="text-[13px] text-on-surface">página(s) por dia</span>
+          </div>
+          <p className="text-[12px] text-on-surface-variant mt-1.5">
+            {pace.pagesLeft} restantes em {pace.daysLeft} dia(s)
+            {pace.state === "due-today" && <strong className="font-semibold text-on-surface"> — a meta é hoje</strong>}.
+          </p>
+          {Math.abs(pace.ahead) >= 5 && (
+            <p className={`text-[12px] mt-1.5 flex items-center gap-1 ${pace.ahead > 0 ? "text-primary" : "text-error"}`}>
+              <MI name={pace.ahead > 0 ? "trending_up" : "trending_down"} className="text-[15px]" />
+              {pace.ahead > 0 ? `${pace.ahead} páginas adiantado` : `${-pace.ahead} páginas atrás do ritmo`}
+              <span className="text-outline">· esperado hoje: pág. {pace.expectedPage}</span>
+            </p>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -93,7 +190,7 @@ export default function LeituraPage() {
   const setBooks = (fn) => setState((prev) => ({ ...prev, books: fn(prev.books || []) }));
   const updateBook = (id, patch) => setBooks((bs) => bs.map((b) => (b.id === id ? { ...b, ...patch } : b)));
   function addBook(b) {
-    setBooks((bs) => [{ id: uid(), title: b.title || "Sem título", author: b.author || "", total: b.total || 0, page: 0, status: "want", rating: 0, review: "", cover: b.cover || "", startedAt: "", finishedAt: "" }, ...bs]);
+    setBooks((bs) => [{ id: uid(), title: b.title || "Sem título", author: b.author || "", total: b.total || 0, page: 0, status: "want", rating: 0, review: "", cover: b.cover || "", startedAt: "", targetDate: "", finishedAt: "" }, ...bs]);
   }
   async function removeBook(id, title) {
     const ok = await confirm({ title: "Remover livro?", body: title, confirmLabel: "REMOVER" });
@@ -330,16 +427,22 @@ function BookModal({ book, cats = [], onAddCat, onClose, onPatch, onStatus, onDe
         </label>
 
         {/* datas */}
-        <div className="grid grid-cols-2 gap-3 mb-5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
           <label className="block">
             <Caps className="text-outline text-[10px]">Início</Caps>
             <input type="date" value={book.startedAt || ""} onChange={(e) => onPatch({ startedAt: e.target.value })} className={`${inputCls} w-full mt-1`} />
           </label>
           <label className="block">
-            <Caps className="text-outline text-[10px]">Fim</Caps>
+            <Caps className="text-outline text-[10px]">Meta de término</Caps>
+            <input type="date" value={book.targetDate || ""} onChange={(e) => onPatch({ targetDate: e.target.value })} className={`${inputCls} w-full mt-1`} />
+          </label>
+          <label className="block">
+            <Caps className="text-outline text-[10px]">Fim (real)</Caps>
             <input type="date" value={book.finishedAt || ""} onChange={(e) => onPatch({ finishedAt: e.target.value })} className={`${inputCls} w-full mt-1`} />
           </label>
         </div>
+
+        <PacePanel book={book} onPatch={onPatch} />
 
         <button onClick={onDelete} className="flex items-center gap-2 text-error hover:bg-error/10 px-3 py-1.5 rounded-lg font-label-caps text-[11px] transition">
           <MI name="delete" className="text-base" /> REMOVER LIVRO
