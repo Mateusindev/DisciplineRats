@@ -11,6 +11,52 @@ import { ExerciseModal, guessMuscle } from "@/components/ExerciseInfo";
 
 const GLOW = { boxShadow: "0 0 15px var(--brand-glow)" };
 
+// Horários por dia, quando a mesma divisão acontece em horas diferentes.
+// Aparece só a partir de 2 dias marcados — com um dia só, o campo padrão basta.
+function DayTimes({ weekdays, obj, onSet }) {
+  const [open, setOpen] = useState(() => Object.keys(obj.times || {}).length > 0);
+  const days = [...(weekdays || [])].sort((a, b) => a - b);
+  if (days.length < 2) return null;
+  const overrides = Object.keys(obj.times || {}).length;
+
+  return (
+    <div className="mb-3">
+      <button onClick={() => setOpen((v) => !v)} className="flex items-center gap-1.5 text-[11px] text-outline hover:text-primary transition">
+        <MI name="schedule" className="text-[14px]" />
+        Horário diferente por dia
+        {overrides > 0 && <span className="text-primary">({overrides})</span>}
+        <MI name="expand_more" className={`text-[14px] transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {days.map((d) => {
+            const val = obj.times?.[String(d)] || "";
+            return (
+              <label key={d} className="flex items-center gap-1.5 rounded bg-surface-container-lowest/60 border border-white/5 px-2 py-1">
+                <Caps className={`text-[9px] ${val ? "text-primary" : "text-outline"}`}>{DOW_SHORT[d]}</Caps>
+                <input
+                  type="time"
+                  value={val}
+                  onChange={(e) => onSet(d, e.target.value)}
+                  aria-label={`Horário de ${DOW_SHORT[d]}`}
+                  className="bg-transparent text-on-surface text-[11px] outline-none w-[74px]"
+                />
+                {val && (
+                  <button onClick={() => onSet(d, "")} aria-label={`Voltar ${DOW_SHORT[d]} pro padrão`} className="text-outline hover:text-error transition">
+                    <MI name="close" className="text-[13px]" />
+                  </button>
+                )}
+              </label>
+            );
+          })}
+          <p className="text-[10px] text-outline w-full">Dia em branco usa o horário padrão acima.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ===== descanso entre séries =====
 const REST_MIN = 30;
 const REST_MAX = 240;
@@ -292,6 +338,25 @@ export default function ExercicioPage() {
       })),
     }));
   }
+
+  // exceção de horário por dia da semana. Valor vazio remove a chave e volta pro padrão.
+  const patchTimes = (obj, dow, time) => {
+    const times = { ...(obj.times || {}) };
+    if (time) times[String(dow)] = time;
+    else delete times[String(dow)];
+    return times;
+  };
+  function setDivisionDayTime(modId, divId, dow, time) {
+    setState((prev) => ({
+      ...prev,
+      workoutPlan: mapMod(prev, modId, (m) => ({
+        ...m,
+        divisions: (m.divisions || []).map((d) => (d.id === divId ? { ...d, times: patchTimes(d, dow, time) } : d)),
+      })),
+    }));
+  }
+  const setModalityDayTime = (modId, dow, time) =>
+    setState((prev) => ({ ...prev, workoutPlan: mapMod(prev, modId, (m) => ({ ...m, times: patchTimes(m, dow, time) })) }));
 
   const getItemForm = (divId) => itemForms[divId] || { name: "", detail: "" };
   const setItemField = (divId, key) => (e) => setItemForms((f) => ({ ...f, [divId]: { ...getItemForm(divId), [key]: e.target.value } }));
@@ -1161,6 +1226,8 @@ export default function ExercicioPage() {
                           )}
                         </div>
 
+                        <DayTimes weekdays={d.weekdays} obj={d} onSet={(dow, t) => setDivisionDayTime(m.id, d.id, dow, t)} />
+
                         {(d.items || []).length > 0 && (
                           <div className="space-y-1.5 mb-3">
                             {d.items.map((it, idx) => {
@@ -1322,6 +1389,9 @@ export default function ExercicioPage() {
                           {!m.time && <span className="text-[10px] text-outline">sem hora = dia inteiro na Agenda</span>}
                         </label>
                       )}
+                    </div>
+                    <div className="mt-3">
+                      <DayTimes weekdays={m.weekdays} obj={m} onSet={(dow, t) => setModalityDayTime(m.id, dow, t)} />
                     </div>
                   </div>
                 )}
