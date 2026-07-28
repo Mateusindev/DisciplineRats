@@ -37,6 +37,7 @@ alter table public.profiles add column if not exists books        jsonb not null
 alter table public.profiles add column if not exists calendar     jsonb not null default '{}'::jsonb;  -- agenda: { [date]: [eventos] }
 alter table public.profiles add column if not exists mapa         jsonb not null default '{}'::jsonb;  -- mapa de longo prazo: { lanes, nodes, edges, focusId }
 alter table public.profiles add column if not exists agenda_rules jsonb not null default '[]'::jsonb;  -- agenda: regras de recorrência semanal (ocorrência é calculada, não gravada)
+alter table public.profiles add column if not exists body         jsonb not null default '{}'::jsonb;  -- perfil corporal: sexo, nascimento, altura, %gordura, objetivo (idade é derivada)
 alter table public.profiles drop column if exists state;           -- blob legado removido
 
 -- ---------- LOGS por data/entrada ----------
@@ -72,6 +73,14 @@ create table if not exists public.focus_days (
   date     date not null,
   sessions integer not null default 0,
   minutes  integer not null default 0,
+  primary key (user_id, date)
+);
+
+-- pesagens: uma por data. Alimenta o gráfico de peso e recalibra o cálculo de gasto.
+create table if not exists public.weight_logs (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  date    date not null,
+  kg      real not null,
   primary key (user_id, date)
 );
 
@@ -185,6 +194,7 @@ alter table public.habits       enable row level security;
 alter table public.habit_checks enable row level security;
 alter table public.gym_sets     enable row level security;
 alter table public.routine_checks enable row level security;
+alter table public.weight_logs   enable row level security;
 
 -- profiles: cada um só mexe no próprio.
 drop policy if exists "own profile select" on public.profiles;
@@ -198,7 +208,7 @@ create policy "own profile update" on public.profiles for update using (auth.uid
 do $$
 declare t text;
 begin
-  foreach t in array array['sleep_logs','mood_logs','focus_days','exercise_logs','habits','habit_checks','gym_sets','routine_checks','transactions']
+  foreach t in array array['sleep_logs','mood_logs','focus_days','exercise_logs','habits','habit_checks','gym_sets','routine_checks','transactions','weight_logs']
   loop
     execute format('drop policy if exists "own rows select" on public.%I', t);
     execute format('create policy "own rows select" on public.%I for select using (auth.uid() = user_id)', t);

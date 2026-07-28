@@ -5,11 +5,13 @@ import { useApp } from "../AppContext";
 import { MI, Caps, inputCls } from "@/components/ui";
 import { dietTotals } from "@/lib/state";
 import MetasEditor from "@/components/MetasEditor";
+import NutriProfile from "@/components/NutriProfile";
 
 const EMPTY_ITEM = { name: "", grams: "", kcal: "", protein: "", carbs: "", fat: "" };
 
 const TABS_DIETA = [
   { id: "plano", label: "PLANO", short: "PLANO", icon: "restaurant_menu" },
+  { id: "perfil", label: "CÁLCULO", short: "CÁLCULO", icon: "calculate" },
   { id: "despensa", label: "DESPENSA", short: "DESPENSA", icon: "kitchen" },
 ];
 
@@ -383,6 +385,8 @@ export default function DietaPage() {
       </section>
 
       </>)}
+
+      {tab === "perfil" && <NutriProfile state={state} setState={setState} toast={toast} />}
 
       {tab === "despensa" && (<>
 
