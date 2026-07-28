@@ -11,10 +11,10 @@ import { hasSupabase } from "@/lib/persistence";
 import { DEFAULT_MODE } from "@/lib/themes";
 
 // bottom nav mobile: 4 destinos fixos + MAIS (bottom sheet com o resto)
-const MOBILE_PRIMARY = ["home", "habitos", "exercicio", "sono"];
+const MOBILE_PRIMARY = ["foco", "habitos", "exercicio", "sono"];
 
 // rotas desativadas: fora do menu, mas acessíveis por URL — bloqueadas aqui
-const DISABLED_ROUTES = ["/grupos"];
+const DISABLED_ROUTES = ["/home", "/carteira", "/analise", "/grupos"];
 
 function DisabledScreen() {
   return (
@@ -26,8 +26,8 @@ function DisabledScreen() {
       <p className="text-on-surface-variant text-body-md max-w-sm">
         Esta parte está temporariamente indisponível. Volte mais tarde.
       </p>
-      <Link href="/home" className="px-5 py-2.5 rounded-lg bg-primary-container text-on-primary-container font-label-caps text-[11px] active:scale-95 transition">
-        VOLTAR PRA HOME
+      <Link href="/foco" className="px-5 py-2.5 rounded-lg bg-primary-container text-on-primary-container font-label-caps text-[11px] active:scale-95 transition">
+        VOLTAR PRO FOCO
       </Link>
     </div>
   );

@@ -518,7 +518,7 @@ export function AppProvider({ children }) {
     });
     if (!ok) return;
     setState(defaultState());
-    router.push("/home");
+    router.push("/foco");
   }
 
   const value = {
