@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, isSameDay, isSameMonth, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useApp } from "../AppContext";
@@ -39,7 +40,10 @@ function EventRow({ ev, onClick, compact }) {
       </div>
       {/* marca o que não é evento avulso: repetição, ou treino puxado do plano */}
       {ev.source === "workout" ? (
-        <MI name="fitness_center" className={`text-outline shrink-0 ${compact ? "text-[11px]" : "text-sm"}`} title="Do plano de treino" />
+        <span className="flex items-center gap-1 shrink-0">
+          {ev.allDay && !compact && <Caps className="text-outline/70 text-[9px]">SEM HORA</Caps>}
+          <MI name="fitness_center" className={`text-outline ${compact ? "text-[11px]" : "text-sm"}`} title="Do plano de treino" />
+        </span>
       ) : ev.ruleId ? (
         <MI name="repeat" className={`text-outline shrink-0 ${compact ? "text-[11px]" : "text-sm"}`} title="Repete toda semana" />
       ) : null}
@@ -73,6 +77,50 @@ function WeekdayPicker({ value, onChange }) {
         );
       })}
     </div>
+  );
+}
+
+// treino derivado do plano: a agenda não edita. Explica de onde vem e leva ao lugar certo —
+// clique que não faz nada é pior que não ser clicável.
+function WorkoutInfoModal({ ev, onClose }) {
+  return createPortal(
+    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 animate-[fadeIn_.1s_ease-out]" onClick={onClose} role="dialog" aria-label="Treino do plano">
+      <div className="bg-surface-container-lowest rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-white/10" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-10 h-10 rounded-full bg-primary-container/20 text-primary-container grid place-items-center shrink-0">
+            <MI name="fitness_center" fill />
+          </div>
+          <div className="min-w-0">
+            <p className="font-headline-md text-headline-md text-on-surface">{ev.title}</p>
+            <Caps className="text-outline text-[10px]">{ev.allDay ? "SEM HORÁRIO DEFINIDO" : eventTimeLabel(ev)}</Caps>
+          </div>
+        </div>
+
+        <p className="text-body-md text-on-surface-variant">
+          Isto vem do seu <strong className="font-semibold text-on-surface">plano de treino</strong>, não da agenda — por isso não se edita aqui. Assim você não
+          mantém o mesmo horário em dois lugares.
+        </p>
+        {ev.allDay && (
+          <p className="text-[12px] text-on-surface-variant mt-2">
+            Aparece o dia inteiro porque essa divisão não tem <strong className="font-semibold">hora</strong>. Defina a hora ao lado dos dias da semana, em
+            Exercício, e ele passa a ocupar só o horário certo.
+          </p>
+        )}
+
+        <div className="flex items-center gap-2 mt-6">
+          <Link
+            href="/exercicio"
+            className="flex-1 py-2.5 rounded-lg border border-primary/40 text-primary hover:bg-primary/10 font-label-caps text-[11px] text-center transition"
+          >
+            AJUSTAR NO PLANO
+          </Link>
+          <button onClick={onClose} className="px-4 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-variant/40 font-label-caps text-[11px] transition">
+            FECHAR
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -131,6 +179,7 @@ export default function CalendarioPage() {
   const [month, setMonth] = useState(new Date());
   const [form, setForm] = useState(null); // { id?, ruleId?, date, title, cat, allDay, start, end, note, repeat, weekdays }
   const [showRules, setShowRules] = useState(false);
+  const [workoutInfo, setWorkoutInfo] = useState(null); // ocorrência de treino clicada
 
   // Única leitura da agenda: junta eventos gravados + ocorrências de regra + treino do plano.
   const eventsOn = (d) => eventsForDate(state, ds(d));
@@ -141,8 +190,8 @@ export default function CalendarioPage() {
   const openSlot = (d, hour) => setForm(blank(ds(d), `${String(hour).padStart(2, "0")}:00`, `${String((hour + 1) % 24).padStart(2, "0")}:00`));
 
   function openEdit(dateStr, ev) {
-    // treino vem do plano de exercício: a agenda não edita, só aponta pra lá
-    if (ev.source === "workout") return;
+    // treino vem do plano de exercício: a agenda não edita, só explica e aponta pra lá
+    if (ev.source === "workout") return setWorkoutInfo({ ...ev, date: dateStr });
     if (ev.ruleId) {
       const r = (state.agendaRules || []).find((x) => x.id === ev.ruleId);
       if (!r) return;
@@ -358,6 +407,8 @@ export default function CalendarioPage() {
       {form && (
         <EventModal form={form} setForm={setForm} onSave={saveForm} onDelete={deleteForm} onSkip={skipOccurrence} onClose={() => setForm(null)} />
       )}
+
+      {workoutInfo && <WorkoutInfoModal ev={workoutInfo} onClose={() => setWorkoutInfo(null)} />}
 
       {showRules && (
         <RulesModal

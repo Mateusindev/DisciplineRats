@@ -1145,15 +1145,18 @@ export default function ExercicioPage() {
                           })}
                           {(d.weekdays || []).length > 0 && (
                             <label className="flex items-center gap-1.5 ml-1">
-                              <Caps className="text-outline text-[9px]">HORA</Caps>
+                              <Caps className={`text-[9px] ${d.time ? "text-outline" : "text-primary-container"}`}>HORA</Caps>
                               <input
                                 type="time"
                                 value={d.time || ""}
                                 onChange={(e) => setDivisionTime(m.id, d.id, e.target.value)}
                                 aria-label="Horário do treino"
                                 title="Horário — aparece na Agenda"
-                                className="bg-surface-container-lowest/60 text-on-surface border border-white/5 rounded px-2 py-1 text-[11px] outline-none focus:border-primary-container/50 transition"
+                                className={`bg-surface-container-lowest/60 text-on-surface border rounded px-2 py-1 text-[11px] outline-none focus:border-primary-container/50 transition ${
+                                  d.time ? "border-white/5" : "border-primary-container/40"
+                                }`}
                               />
+                              {!d.time && <span className="text-[10px] text-outline">sem hora = dia inteiro na Agenda</span>}
                             </label>
                           )}
                         </div>
@@ -1305,15 +1308,18 @@ export default function ExercicioPage() {
                       })}
                       {(m.weekdays || []).length > 0 && (
                         <label className="flex items-center gap-1.5 ml-1">
-                          <Caps className="text-outline text-[9px]">HORA</Caps>
+                          <Caps className={`text-[9px] ${m.time ? "text-outline" : "text-primary-container"}`}>HORA</Caps>
                           <input
                             type="time"
                             value={m.time || ""}
                             onChange={(e) => setModalityTime(m.id, e.target.value)}
                             aria-label="Horário da prática"
                             title="Horário — aparece na Agenda"
-                            className="bg-surface-container-lowest/60 text-on-surface border border-white/5 rounded px-2 py-1 text-[11px] outline-none focus:border-primary-container/50 transition"
+                            className={`bg-surface-container-lowest/60 text-on-surface border rounded px-2 py-1 text-[11px] outline-none focus:border-primary-container/50 transition ${
+                              m.time ? "border-white/5" : "border-primary-container/40"
+                            }`}
                           />
+                          {!m.time && <span className="text-[10px] text-outline">sem hora = dia inteiro na Agenda</span>}
                         </label>
                       )}
                     </div>
