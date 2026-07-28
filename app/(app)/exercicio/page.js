@@ -280,6 +280,19 @@ export default function ExercicioPage() {
     }));
   }
 
+  const setModalityTime = (modId, time) => setState((prev) => ({ ...prev, workoutPlan: mapMod(prev, modId, (m) => ({ ...m, time })) }));
+
+  // horário da divisão: só serve pra Agenda posicionar o treino na hora certa
+  function setDivisionTime(modId, divId, time) {
+    setState((prev) => ({
+      ...prev,
+      workoutPlan: mapMod(prev, modId, (m) => ({
+        ...m,
+        divisions: (m.divisions || []).map((d) => (d.id === divId ? { ...d, time } : d)),
+      })),
+    }));
+  }
+
   const getItemForm = (divId) => itemForms[divId] || { name: "", detail: "" };
   const setItemField = (divId, key) => (e) => setItemForms((f) => ({ ...f, [divId]: { ...getItemForm(divId), [key]: e.target.value } }));
 
@@ -1130,6 +1143,19 @@ export default function ExercicioPage() {
                               </button>
                             );
                           })}
+                          {(d.weekdays || []).length > 0 && (
+                            <label className="flex items-center gap-1.5 ml-1">
+                              <Caps className="text-outline text-[9px]">HORA</Caps>
+                              <input
+                                type="time"
+                                value={d.time || ""}
+                                onChange={(e) => setDivisionTime(m.id, d.id, e.target.value)}
+                                aria-label="Horário do treino"
+                                title="Horário — aparece na Agenda"
+                                className="bg-surface-container-lowest/60 text-on-surface border border-white/5 rounded px-2 py-1 text-[11px] outline-none focus:border-primary-container/50 transition"
+                              />
+                            </label>
+                          )}
                         </div>
 
                         {(d.items || []).length > 0 && (
@@ -1277,6 +1303,19 @@ export default function ExercicioPage() {
                           </button>
                         );
                       })}
+                      {(m.weekdays || []).length > 0 && (
+                        <label className="flex items-center gap-1.5 ml-1">
+                          <Caps className="text-outline text-[9px]">HORA</Caps>
+                          <input
+                            type="time"
+                            value={m.time || ""}
+                            onChange={(e) => setModalityTime(m.id, e.target.value)}
+                            aria-label="Horário da prática"
+                            title="Horário — aparece na Agenda"
+                            className="bg-surface-container-lowest/60 text-on-surface border border-white/5 rounded px-2 py-1 text-[11px] outline-none focus:border-primary-container/50 transition"
+                          />
+                        </label>
+                      )}
                     </div>
                   </div>
                 )}

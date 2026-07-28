@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { format, addDays, addMonths, startOfMonth, startOfWeek, isSameDay, isSameMonth, isToday } from "date-fns";
+import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, isSameDay, isSameMonth, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useApp } from "../AppContext";
 import { MI, Caps, PageHeader, inputCls } from "@/components/ui";
-import { CALENDAR_CATS, calCat, sortEvents, eventTimeLabel } from "@/lib/state";
+import { CALENDAR_CATS, calCat, sortEvents, eventTimeLabel, eventsForDate, eventsInRange, dowIndex, DOW_SHORT } from "@/lib/state";
 
 const ds = (d) => format(d, "yyyy-MM-dd");
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -37,30 +37,135 @@ function EventRow({ ev, onClick, compact }) {
         {!compact && <Caps className="text-outline text-[9px]">{eventTimeLabel(ev)}</Caps>}
         {compact && ev.start && !ev.allDay && <span className="text-[9px] text-outline">{ev.start}</span>}
       </div>
+      {/* marca o que não é evento avulso: repetição, ou treino puxado do plano */}
+      {ev.source === "workout" ? (
+        <MI name="fitness_center" className={`text-outline shrink-0 ${compact ? "text-[11px]" : "text-sm"}`} title="Do plano de treino" />
+      ) : ev.ruleId ? (
+        <MI name="repeat" className={`text-outline shrink-0 ${compact ? "text-[11px]" : "text-sm"}`} title="Repete toda semana" />
+      ) : null}
     </button>
+  );
+}
+
+// picker de dias da semana da recorrência (0=Seg..6=Dom)
+function WeekdayPicker({ value, onChange }) {
+  const sel = new Set(value || []);
+  return (
+    <div className="flex gap-1 flex-wrap">
+      {DOW_SHORT.map((label, d) => {
+        const on = sel.has(d);
+        return (
+          <button
+            key={d}
+            onClick={() => {
+              const next = new Set(sel);
+              next.has(d) ? next.delete(d) : next.add(d);
+              onChange([...next].sort((a, b) => a - b));
+            }}
+            aria-pressed={on}
+            aria-label={label}
+            className={`w-9 h-8 rounded font-label-caps text-[10px] border transition ${
+              on ? "bg-primary-container text-on-primary-container border-primary-container" : "border-white/10 text-outline hover:border-white/25"
+            }`}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// painel das regras: uma linha por repetição, com exceções e exclusão
+function RulesModal({ rules, onEdit, onRemove, onClearSkips, onClose }) {
+  return createPortal(
+    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 animate-[fadeIn_.1s_ease-out]" onClick={onClose} role="dialog" aria-label="Repetições">
+      <div className="bg-surface-container-lowest rounded-2xl p-6 w-full max-w-md shadow-2xl border border-white/10 max-h-[90vh] overflow-auto ff-scroll" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="font-headline-md text-headline-md text-primary">Repetições</h3>
+          <button onClick={onClose} aria-label="Fechar" className="text-outline hover:text-on-surface transition p-1"><MI name="close" /></button>
+        </div>
+        <p className="text-[12px] text-outline mb-4">Uma regra vale pra sempre. Editar aqui muda todas as semanas de uma vez.</p>
+
+        {rules.length === 0 ? (
+          <p className="text-[13px] text-outline text-center py-8">Nenhuma repetição ainda. Crie um evento e marque “repetir toda semana”.</p>
+        ) : (
+          <div className="space-y-2">
+            {rules.map((r) => {
+              const cat = calCat(r.cat);
+              const dias = r.weekdays.map((d) => DOW_SHORT[d]).join(" · ");
+              return (
+                <div key={r.id} className="rounded-lg bg-surface-container-high p-3" style={{ borderLeft: `3px solid ${cat.color}` }}>
+                  <div className="flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] text-on-surface truncate">{r.title}</p>
+                      <Caps className="text-outline text-[10px]">
+                        {dias} · {r.allDay ? "dia inteiro" : eventTimeLabel(r)}
+                      </Caps>
+                    </div>
+                    <button onClick={() => onEdit(r)} aria-label="Editar" className="text-outline hover:text-primary transition shrink-0"><MI name="edit" className="text-base" /></button>
+                    <button onClick={() => onRemove(r.id)} aria-label="Excluir repetição" className="text-outline hover:text-error transition shrink-0"><MI name="delete" className="text-base" /></button>
+                  </div>
+                  {(r.skips || []).length > 0 && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <Caps className="text-outline text-[10px] flex-1">{r.skips.length} ocorrência(s) pulada(s)</Caps>
+                      <button onClick={() => onClearSkips(r.id)} className="font-label-caps text-[10px] text-primary hover:underline">RESTAURAR</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
   );
 }
 
 export default function CalendarioPage() {
   const { state, setState } = useApp();
-  const calendar = state.calendar || {};
 
   const [view, setView] = useState("month");
   const [selected, setSelected] = useState(new Date());
   const [month, setMonth] = useState(new Date());
-  const [form, setForm] = useState(null); // { id?, date, title, cat, allDay, start, end, note }
+  const [form, setForm] = useState(null); // { id?, ruleId?, date, title, cat, allDay, start, end, note, repeat, weekdays }
+  const [showRules, setShowRules] = useState(false);
 
-  const eventsOn = (d) => sortEvents(calendar[ds(d)]);
+  // Única leitura da agenda: junta eventos gravados + ocorrências de regra + treino do plano.
+  const eventsOn = (d) => eventsForDate(state, ds(d));
 
   // ---- CRUD ----
-  const openNew = (d) => setForm({ date: ds(d), title: "", cat: "pessoal", allDay: false, start: "09:00", end: "10:00", note: "" });
-  const openEdit = (dateStr, ev) => setForm({ ...ev, date: dateStr, start: ev.start || "09:00", end: ev.end || "10:00", note: ev.note || "" });
-  const openSlot = (d, hour) => setForm({ date: ds(d), title: "", cat: "pessoal", allDay: false, start: `${String(hour).padStart(2, "0")}:00`, end: `${String((hour + 1) % 24).padStart(2, "0")}:00`, note: "" });
+  const blank = (date, start, end) => ({ date, title: "", cat: "pessoal", allDay: false, start, end, note: "", repeat: false, weekdays: [dowIndex(date)] });
+  const openNew = (d) => setForm(blank(ds(d), "09:00", "10:00"));
+  const openSlot = (d, hour) => setForm(blank(ds(d), `${String(hour).padStart(2, "0")}:00`, `${String((hour + 1) % 24).padStart(2, "0")}:00`));
+
+  function openEdit(dateStr, ev) {
+    // treino vem do plano de exercício: a agenda não edita, só aponta pra lá
+    if (ev.source === "workout") return;
+    if (ev.ruleId) {
+      const r = (state.agendaRules || []).find((x) => x.id === ev.ruleId);
+      if (!r) return;
+      return setForm({
+        ruleId: r.id,
+        occurrence: dateStr, // qual ocorrência foi aberta (p/ "pular esta")
+        date: dateStr,
+        title: r.title,
+        cat: r.cat,
+        allDay: !!r.allDay,
+        start: r.start || "09:00",
+        end: r.end || "10:00",
+        note: r.note || "",
+        repeat: true,
+        weekdays: r.weekdays || [],
+      });
+    }
+    setForm({ ...ev, date: dateStr, start: ev.start || "09:00", end: ev.end || "10:00", note: ev.note || "", repeat: false, weekdays: [dowIndex(dateStr)] });
+  }
 
   function saveForm() {
     if (!form.title.trim()) return;
-    const ev = {
-      id: form.id || crypto.randomUUID(),
+    const base = {
       title: form.title.trim().slice(0, 120),
       cat: form.cat,
       allDay: !!form.allDay,
@@ -68,16 +173,46 @@ export default function CalendarioPage() {
       end: form.allDay ? null : form.end || null,
       note: (form.note || "").slice(0, 500),
     };
+
+    // repetição ligada → vira (ou atualiza) uma REGRA; nenhuma data é gravada
+    if (form.repeat) {
+      const weekdays = [...new Set(form.weekdays || [])].sort((a, b) => a - b);
+      if (!weekdays.length) return;
+      setState((prev) => {
+        const rules = prev.agendaRules || [];
+        if (form.ruleId) {
+          return { ...prev, agendaRules: rules.map((r) => (r.id === form.ruleId ? { ...r, ...base, weekdays } : r)) };
+        }
+        const rule = { id: crypto.randomUUID(), ...base, weekdays, from: form.date, until: null, skips: [] };
+        // evento avulso que virou recorrente: remove a cópia solta
+        const cal = { ...(prev.calendar || {}) };
+        if (form.id) {
+          for (const d of Object.keys(cal)) cal[d] = (cal[d] || []).filter((e) => e.id !== form.id);
+          for (const d of Object.keys(cal)) if (!cal[d].length) delete cal[d];
+        }
+        return { ...prev, calendar: cal, agendaRules: [...rules, rule] };
+      });
+      return setForm(null);
+    }
+
+    // regra que perdeu a repetição → encerra a regra e grava um evento avulso na data
     setState((prev) => {
       const cal = { ...(prev.calendar || {}) };
+      const ev = { id: form.id || crypto.randomUUID(), ...base };
       if (form.id) for (const d of Object.keys(cal)) cal[d] = (cal[d] || []).filter((e) => e.id !== form.id);
       cal[form.date] = [...(cal[form.date] || []), ev];
       for (const d of Object.keys(cal)) if (!cal[d].length) delete cal[d];
-      return { ...prev, calendar: cal };
+      const rules = form.ruleId ? (prev.agendaRules || []).filter((r) => r.id !== form.ruleId) : prev.agendaRules;
+      return { ...prev, calendar: cal, agendaRules: rules };
     });
     setForm(null);
   }
+
   function deleteForm() {
+    if (form.ruleId) {
+      setState((prev) => ({ ...prev, agendaRules: (prev.agendaRules || []).filter((r) => r.id !== form.ruleId) }));
+      return setForm(null);
+    }
     if (!form.id) return setForm(null);
     setState((prev) => {
       const cal = { ...(prev.calendar || {}) };
@@ -89,6 +224,22 @@ export default function CalendarioPage() {
     });
     setForm(null);
   }
+
+  // pular só esta ocorrência: entra na lista de exceções da regra, o resto segue
+  function skipOccurrence() {
+    if (!form?.ruleId || !form?.occurrence) return;
+    setState((prev) => ({
+      ...prev,
+      agendaRules: (prev.agendaRules || []).map((r) =>
+        r.id === form.ruleId ? { ...r, skips: [...new Set([...(r.skips || []), form.occurrence])] } : r
+      ),
+    }));
+    setForm(null);
+  }
+
+  const removeRule = (id) => setState((prev) => ({ ...prev, agendaRules: (prev.agendaRules || []).filter((r) => r.id !== id) }));
+  const clearSkips = (id) =>
+    setState((prev) => ({ ...prev, agendaRules: (prev.agendaRules || []).map((r) => (r.id === id ? { ...r, skips: [] } : r)) }));
 
   const weekStart = startOfWeek(selected, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -112,12 +263,22 @@ export default function CalendarioPage() {
             </button>
           ))}
         </div>
-        <button
-          onClick={() => openNew(selected)}
-          className="px-3 py-2 rounded-lg border border-primary/40 text-primary hover:bg-primary/10 flex items-center gap-1.5 active:scale-95 transition font-label-caps text-[11px]"
-        >
-          <MI name="add" className="text-lg" /> NOVO
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowRules(true)}
+            className="px-3 py-2 rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container-high flex items-center gap-1.5 transition font-label-caps text-[11px]"
+          >
+            <MI name="repeat" className="text-base" />
+            REPETIÇÕES
+            {(state.agendaRules || []).length > 0 && <span className="text-primary">({state.agendaRules.length})</span>}
+          </button>
+          <button
+            onClick={() => openNew(selected)}
+            className="px-3 py-2 rounded-lg border border-primary/40 text-primary hover:bg-primary/10 flex items-center gap-1.5 active:scale-95 transition font-label-caps text-[11px]"
+          >
+            <MI name="add" className="text-lg" /> NOVO
+          </button>
+        </div>
       </div>
 
       {/* ===== MÊS ===== */}
@@ -127,7 +288,7 @@ export default function CalendarioPage() {
           setMonth={setMonth}
           selected={selected}
           setSelected={setSelected}
-          calendar={calendar}
+          state={state}
           eventsOn={eventsOn}
           onAdd={openNew}
           onEdit={openEdit}
@@ -195,24 +356,33 @@ export default function CalendarioPage() {
       )}
 
       {form && (
-        <EventModal form={form} setForm={setForm} onSave={saveForm} onDelete={deleteForm} onClose={() => setForm(null)} />
+        <EventModal form={form} setForm={setForm} onSave={saveForm} onDelete={deleteForm} onSkip={skipOccurrence} onClose={() => setForm(null)} />
+      )}
+
+      {showRules && (
+        <RulesModal
+          rules={state.agendaRules || []}
+          onEdit={(r) => {
+            setShowRules(false);
+            setForm({ ruleId: r.id, date: ds(new Date()), title: r.title, cat: r.cat, allDay: !!r.allDay, start: r.start || "09:00", end: r.end || "10:00", note: r.note || "", repeat: true, weekdays: r.weekdays || [] });
+          }}
+          onRemove={removeRule}
+          onClearSkips={clearSkips}
+          onClose={() => setShowRules(false)}
+        />
       )}
     </>
   );
 }
 
 // ===== visão mensal: dot-map grid =====
-function MonthView({ month, setMonth, selected, setSelected, calendar, eventsOn, onAdd, onEdit }) {
+function MonthView({ month, setMonth, selected, setSelected, state, eventsOn, onAdd, onEdit }) {
   // matriz de 42 dias (6 semanas), começando no domingo
   const gridStart = startOfWeek(startOfMonth(month), { weekStartsOn: 0 });
   const cells = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
 
-  // stats do mês
-  const monthEvents = [];
-  for (const [dateStr, evs] of Object.entries(calendar || {})) {
-    const d = new Date(dateStr + "T00:00:00");
-    if (isSameMonth(d, month)) for (const e of evs) monthEvents.push(e);
-  }
+  // stats do mês — por range, não varrendo o mapa: ocorrência de regra não está gravada
+  const monthEvents = eventsInRange(state, ds(startOfMonth(month)), ds(endOfMonth(month)));
   const byCat = {};
   for (const e of monthEvents) byCat[e.cat] = (byCat[e.cat] || 0) + 1;
   const topCatId = Object.entries(byCat).sort((a, b) => b[1] - a[1])[0]?.[0];
@@ -318,7 +488,7 @@ function MonthView({ month, setMonth, selected, setSelected, calendar, eventsOn,
           <DayAgenda date={selected} events={eventsOn(selected)} onAdd={() => onAdd(selected)} onEdit={(ev) => onEdit(ds(selected), ev)} />
         </div>
         <div className="lg:col-span-6">
-          <Upcoming calendar={calendar} onEdit={onEdit} />
+          <Upcoming state={state} onEdit={onEdit} />
         </div>
       </div>
     </div>
@@ -326,13 +496,10 @@ function MonthView({ month, setMonth, selected, setSelected, calendar, eventsOn,
 }
 
 // próximos eventos a partir de hoje
-function Upcoming({ calendar, onEdit }) {
-  const todayStr = ds(new Date());
-  const items = [];
-  for (const [dateStr, evs] of Object.entries(calendar || {})) {
-    if (dateStr < todayStr) continue;
-    for (const e of evs) items.push({ dateStr, ev: e });
-  }
+function Upcoming({ state, onEdit }) {
+  // janela de 60 dias à frente: recorrência é infinita, então varrer "tudo" não existe mais
+  const today = new Date();
+  const items = eventsInRange(state, ds(today), ds(addDays(today, 60))).map((ev) => ({ dateStr: ev.date, ev }));
   items.sort((a, b) => a.dateStr.localeCompare(b.dateStr) || (a.ev.allDay ? "" : a.ev.start || "").localeCompare(b.ev.allDay ? "" : b.ev.start || ""));
   const next = items.slice(0, 6);
 
@@ -496,15 +663,27 @@ function DayAgenda({ date, events, onAdd, onEdit, hideHeader }) {
 }
 
 // modal de criar/editar evento
-function EventModal({ form, setForm, onSave, onDelete, onClose }) {
+function EventModal({ form, setForm, onSave, onDelete, onSkip, onClose }) {
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
+  const isRule = !!form.ruleId;
+  const title = isRule ? "Editar repetição" : form.id ? "Editar evento" : "Novo evento";
   return createPortal(
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 animate-[fadeIn_.1s_ease-out]" onClick={onClose} role="dialog" aria-label="Evento">
       <div className="bg-surface-container-lowest rounded-2xl p-6 w-full max-w-md shadow-2xl border border-white/10 max-h-[90vh] overflow-auto ff-scroll" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-headline-md text-headline-md text-primary">{form.id ? "Editar evento" : "Novo evento"}</h3>
+          <h3 className="font-headline-md text-headline-md text-primary">{title}</h3>
           <button onClick={onClose} aria-label="Fechar" className="text-outline hover:text-on-surface transition p-1"><MI name="close" /></button>
         </div>
+
+        {isRule && (
+          <div className="mb-4 flex items-start gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+            <MI name="repeat" className="text-primary text-lg shrink-0" />
+            <p className="text-[12px] text-on-surface">
+              Você está editando a <strong className="font-semibold">série toda</strong>. Pra mexer só nesta semana, use{" "}
+              <strong className="font-semibold">PULAR ESTA</strong> lá embaixo.
+            </p>
+          </div>
+        )}
 
         <div className="space-y-4">
           <input
@@ -537,12 +716,37 @@ function EventModal({ form, setForm, onSave, onDelete, onClose }) {
             </div>
           </div>
 
-          {/* data + horário */}
-          <div className="flex items-center gap-2">
-            <div className="flex-1">
-              <Caps className="text-outline text-[10px] mb-1.5 block">DATA</Caps>
-              <input type="date" value={form.date} onChange={(e) => set({ date: e.target.value })} className={`${inputCls} w-full`} />
+          {/* data: regra não tem data única, tem dias da semana */}
+          {!form.repeat && (
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <Caps className="text-outline text-[10px] mb-1.5 block">DATA</Caps>
+                <input type="date" value={form.date} onChange={(e) => set({ date: e.target.value })} className={`${inputCls} w-full`} />
+              </div>
             </div>
+          )}
+
+          {/* repetição semanal */}
+          <div className="rounded-lg border border-white/10 p-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!form.repeat}
+                onChange={(e) => set({ repeat: e.target.checked, weekdays: e.target.checked && !(form.weekdays || []).length ? [dowIndex(form.date)] : form.weekdays })}
+                className="accent-[var(--color-primary-container)] w-4 h-4"
+              />
+              <MI name="repeat" className="text-base text-on-surface-variant" />
+              <span className="text-body-md text-on-surface">Repetir toda semana</span>
+            </label>
+            {form.repeat && (
+              <div className="mt-3">
+                <Caps className="text-outline text-[10px] mb-1.5 block">EM QUAIS DIAS</Caps>
+                <WeekdayPicker value={form.weekdays || []} onChange={(weekdays) => set({ weekdays })} />
+                <p className="text-[11px] text-outline mt-2">
+                  Vale pra sempre, sem precisar preencher semana por semana. Desmarcar a repetição encerra a série e deixa só este dia.
+                </p>
+              </div>
+            )}
           </div>
 
           <label className="flex items-center gap-2 cursor-pointer">
@@ -569,13 +773,22 @@ function EventModal({ form, setForm, onSave, onDelete, onClose }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 mt-6">
-          {form.id && (
+        <div className="flex flex-wrap items-center gap-2 mt-6">
+          {(form.id || isRule) && (
             <button onClick={onDelete} className="px-4 py-2.5 rounded-lg border border-error/40 text-error hover:bg-error/10 transition font-label-caps text-[11px]">
-              EXCLUIR
+              {isRule ? "EXCLUIR SÉRIE" : "EXCLUIR"}
             </button>
           )}
-          <button onClick={onSave} disabled={!form.title.trim()} className="flex-1 py-2.5 rounded-lg border border-primary/40 text-primary hover:bg-primary/10 font-label-caps text-[11px] active:scale-95 transition disabled:opacity-40">
+          {isRule && form.occurrence && (
+            <button onClick={onSkip} className="px-4 py-2.5 rounded-lg border border-white/15 text-on-surface-variant hover:border-white/30 transition font-label-caps text-[11px]">
+              PULAR ESTA
+            </button>
+          )}
+          <button
+            onClick={onSave}
+            disabled={!form.title.trim() || (form.repeat && !(form.weekdays || []).length)}
+            className="flex-1 min-w-[120px] py-2.5 rounded-lg border border-primary/40 text-primary hover:bg-primary/10 font-label-caps text-[11px] active:scale-95 transition disabled:opacity-40"
+          >
             SALVAR
           </button>
         </div>
