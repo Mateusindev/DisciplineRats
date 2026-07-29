@@ -10,13 +10,14 @@
 
 import { useState } from "react";
 import { MI, Caps, inputCls } from "@/components/ui";
-import { LineChart } from "@/components/charts";
+import { WeightChart } from "@/components/charts";
 import {
   BODY_GOALS,
   ageFrom,
   bmrFor,
   currentWeight,
   weightSeries,
+  weightStats,
   tdeeForDate,
   weeklyEnergy,
   macroTargets,
@@ -26,6 +27,39 @@ import {
 } from "@/lib/state";
 
 const fmt = (n) => (n === null || n === undefined ? "—" : new Intl.NumberFormat("pt-BR").format(Math.round(n)));
+const kg1 = (n) => (n === null || n === undefined ? "—" : (Math.round(n * 10) / 10).toString().replace(".", ","));
+const signed = (n) => (n === null || n === undefined ? "—" : `${n > 0 ? "+" : n < 0 ? "−" : ""}${kg1(Math.abs(n))}`);
+const dm = (d) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+
+const WEIGHT_RANGES = [
+  { id: 30, label: "30D" },
+  { id: 90, label: "90D" },
+  { id: 365, label: "1 ANO" },
+  { id: 0, label: "TUDO" },
+];
+
+// Um número de peso só é "bom" ou "ruim" em relação ao objetivo: −1 kg é vitória
+// pra quem corta e derrota pra quem ganha massa. `tol` é a zona morta de quem mantém.
+function goalTone(v, goal, tol) {
+  if (v === null || v === undefined) return "text-on-surface-variant";
+  const sign = goal === "cut" ? -1 : goal === "bulk" ? 1 : 0;
+  if (!sign) return Math.abs(v) <= tol ? "text-primary" : "text-error";
+  if (Math.abs(v) <= tol / 2) return "text-on-surface";
+  return v * sign > 0 ? "text-primary" : "text-error";
+}
+
+function Tile({ label, value, unit, sub, tone }) {
+  return (
+    <div className="rounded-lg bg-surface-container-high p-3">
+      <Caps className="text-outline text-[9px] block">{label}</Caps>
+      <div className={`font-headline-md text-[20px] tabular-nums leading-tight ${tone || "text-on-surface"}`}>
+        {value}
+        {unit && <span className="text-[10px] text-outline ml-1">{unit}</span>}
+      </div>
+      {sub && <span className="text-[10px] text-outline leading-tight block">{sub}</span>}
+    </div>
+  );
+}
 
 function Field({ label, hint, children }) {
   return (
@@ -54,6 +88,7 @@ export default function NutriProfile({ state, setState, toast }) {
   const [wInput, setWInput] = useState("");
   const [wDate, setWDate] = useState(getDateStr(0));
   const [showMicros, setShowMicros] = useState(false);
+  const [wRange, setWRange] = useState(90);
 
   const setBody = (patch) => setState((prev) => ({ ...prev, body: { ...(prev.body || {}), ...patch } }));
 
@@ -63,7 +98,9 @@ export default function NutriProfile({ state, setState, toast }) {
   const today = tdeeForDate(state, getDateStr(0), kg);
   const week = weeklyEnergy(state, kg);
   const target = macroTargets(state, kg);
-  const series = weightSeries(state).slice(-30);
+  const allWeights = weightSeries(state);
+  const w = weightStats(state, wRange);
+  const rangeLabel = (WEIGHT_RANGES.find((r) => r.id === wRange) || {}).label;
 
   function addWeight() {
     const n = parseFloat(String(wInput).replace(",", "."));
@@ -157,6 +194,23 @@ export default function NutriProfile({ state, setState, toast }) {
               className={`${inputCls} w-full`}
             />
           </Field>
+
+          <Field label="PESO ALVO (KG) — OPCIONAL" hint="Só desenha a linha de alvo no gráfico e estima a data. Não entra em nenhum cálculo de caloria.">
+            <input
+              type="number"
+              min={20}
+              max={400}
+              step="0.1"
+              inputMode="decimal"
+              placeholder="sem alvo"
+              value={body.targetKg ?? ""}
+              onChange={(e) => {
+                const n = parseFloat(e.target.value);
+                setBody({ targetKg: Number.isFinite(n) ? n : null });
+              }}
+              className={`${inputCls} w-full`}
+            />
+          </Field>
         </div>
 
         <Field label="OBJETIVO">
@@ -204,12 +258,12 @@ export default function NutriProfile({ state, setState, toast }) {
 
       {/* ---------- pesagens ---------- */}
       <section className="glass-card p-6 rounded-xl">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-start justify-between gap-3 mb-3">
           <div>
-            <h3 className="font-headline-md text-headline-md text-primary">Pesagens</h3>
-            <p className="text-[12px] text-on-surface-variant">A linha clara é a média de 7 dias — é nela que se olha. O dia isolado oscila com água e intestino.</p>
+            <h3 className="font-headline-md text-headline-md text-primary">Evolução do peso</h3>
+            <p className="text-[12px] text-on-surface-variant">A linha vermelha é a média de 7 dias — é nela que se olha. O dia isolado oscila com água, sal e intestino.</p>
           </div>
-          {kg && <span className="font-headline-lg text-[24px] text-primary tabular-nums shrink-0">{kg} kg</span>}
+          {kg && <span className="font-headline-lg text-[24px] text-primary tabular-nums shrink-0">{kg1(kg)} kg</span>}
         </div>
 
         <div className="flex items-end gap-2 mb-4 flex-wrap">
@@ -235,33 +289,117 @@ export default function NutriProfile({ state, setState, toast }) {
           </button>
         </div>
 
-        {series.length >= 2 ? (
+        {allWeights.length >= 2 && (
+          <div className="flex rounded-lg overflow-hidden border border-white/10 mb-4 w-fit">
+            {WEIGHT_RANGES.map((r) => (
+              <button
+                key={r.id}
+                onClick={() => setWRange(r.id)}
+                className={`px-3 py-1.5 font-label-caps text-[10px] transition ${
+                  wRange === r.id ? "bg-primary-container text-on-primary-container" : "text-on-surface-variant hover:bg-surface-variant/40"
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {w && w.count >= 2 ? (
           <>
-            <LineChart
-              days={series.map((s) => s.date)}
-              values={series.map((s) => s.kg)}
-              goal={null}
-              format={(v) => `${v} kg`}
-              ariaLabel="Evolução do peso"
-              xLabel={(d) => d.slice(8, 10)}
-              height={180}
-            />
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {series.slice(-8).reverse().map((s) => (
-                <button
-                  key={s.date}
-                  onClick={() => removeWeight(s.date)}
-                  title="Clique pra remover"
-                  className="px-2 py-1 rounded-full border border-white/10 text-[10px] font-label-caps text-outline hover:border-error/40 hover:text-error transition tabular-nums"
-                >
-                  {s.date.slice(8, 10)}/{s.date.slice(5, 7)} · {s.kg}
-                </button>
-              ))}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+              <Tile label="ÚLTIMA PESAGEM" value={kg1(w.current)} unit="kg" sub={dm(w.last.date)} tone="text-primary" />
+              <Tile
+                label="MÉDIA 7 DIAS"
+                value={kg1(w.avg)}
+                unit="kg"
+                sub={w.avgSamples >= 2 ? `${w.avgSamples} pesagens na janela` : "só 1 pesagem na janela"}
+              />
+              <Tile
+                label={`VARIAÇÃO · ${rangeLabel}`}
+                value={signed(w.deltaAvg)}
+                unit="kg"
+                sub={`da média · ${w.spanDays} dia(s)`}
+                tone={goalTone(w.deltaAvg, w.goal, 1)}
+              />
+              <Tile
+                label="RITMO MEDIDO"
+                value={w.perWeek === null ? "—" : signed(w.perWeek)}
+                unit={w.perWeek === null ? "" : "kg/sem"}
+                sub={
+                  w.perWeek === null
+                    ? "precisa de 3 pesagens em 7+ dias"
+                    : w.goal === "maintain"
+                      ? "alvo: manter"
+                      : `alvo ${signed(w.targetPerWeek)} kg/sem`
+                }
+                tone={goalTone(w.perWeek, w.goal, 0.25)}
+              />
+            </div>
+
+            <WeightChart series={w.series} targetKg={w.targetKg} height={240} />
+
+            {/* leitura do ritmo: a comparação com o alvo é o ponto do painel todo */}
+            <div className="mt-3 space-y-1.5">
+              {w.perWeek !== null && w.goal !== "maintain" && (
+                <p className="text-[12px] text-on-surface-variant">
+                  {Math.abs(w.perWeek - w.targetPerWeek) <= 0.15
+                    ? "O ritmo medido bate com o alvo. Não mexa em nada; a estimativa está funcionando."
+                    : Math.sign(w.perWeek) !== Math.sign(w.targetPerWeek) || w.perWeek === 0
+                      ? `O peso não está indo pro lado do objetivo (${signed(w.perWeek)} kg/sem contra alvo de ${signed(w.targetPerWeek)}). Ajuste a caloria alvo, não a fé nela.`
+                      : Math.abs(w.perWeek) > Math.abs(w.targetPerWeek)
+                        ? `Mais rápido que o planejado (${signed(w.perWeek)} contra ${signed(w.targetPerWeek)} kg/sem). Rápido demais cobra em massa magra.`
+                        : `Mais lento que o planejado (${signed(w.perWeek)} contra ${signed(w.targetPerWeek)} kg/sem). Ajuste a caloria em 2 a 3 semanas de dado, não em 3 dias.`}
+                </p>
+              )}
+              {w.targetKg && (
+                <p className="text-[12px] text-on-surface-variant">
+                  Faltam <strong className="font-semibold text-on-surface tabular-nums">{kg1(Math.abs(w.toTarget))} kg</strong> pro alvo de {kg1(w.targetKg)} kg
+                  {w.eta ? (
+                    <>
+                      {" "}— no ritmo atual, por volta de <span className="tabular-nums">{dm(w.eta.date)}</span> ({Math.round(w.eta.days / 7)} semana(s)).
+                    </>
+                  ) : (
+                    ". Sem ritmo medido na direção do alvo, não há previsão honesta de data."
+                  )}
+                </p>
+              )}
+              <p className="text-[11px] text-outline">
+                Ritmo por regressão sobre a média móvel, {w.count} pesagens em {w.spanDays} dia(s). Faixa do período: {kg1(w.min)} a {kg1(w.max)} kg.
+              </p>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-white/5">
+              <Caps className="text-outline text-[9px] block mb-1.5">ÚLTIMAS PESAGENS — CLIQUE PRA REMOVER</Caps>
+              <div className="flex flex-wrap gap-1.5">
+                {allWeights
+                  .slice(-10)
+                  .reverse()
+                  .map((s, i, arr) => {
+                    const prev = arr[i + 1];
+                    const d = prev ? Math.round((s.kg - prev.kg) * 10) / 10 : null;
+                    return (
+                      <button
+                        key={s.date}
+                        onClick={() => removeWeight(s.date)}
+                        title={`Remover pesagem de ${dm(s.date)}`}
+                        className="px-2 py-1 rounded-full border border-white/10 text-[10px] font-label-caps text-on-surface-variant hover:border-error/40 hover:text-error transition tabular-nums"
+                      >
+                        {dm(s.date)} · {kg1(s.kg)}
+                        {d !== null && d !== 0 && <span className="text-outline ml-1">{signed(d)}</span>}
+                      </button>
+                    );
+                  })}
+              </div>
             </div>
           </>
         ) : (
           <p className="text-[13px] text-outline text-center py-6">
-            {series.length === 1 ? "Uma pesagem registrada. Com duas o gráfico aparece." : "Nenhuma pesagem ainda."}
+            {allWeights.length === 0
+              ? "Nenhuma pesagem ainda. Registre a primeira aí em cima."
+              : allWeights.length === 1
+                ? "Uma pesagem registrada. Com duas o gráfico aparece."
+                : `Menos de duas pesagens no período ${rangeLabel} — nada pra traçar. Registre outra, ou olhe em TUDO.`}
           </p>
         )}
       </section>
