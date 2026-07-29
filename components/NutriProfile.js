@@ -261,7 +261,7 @@ export default function NutriProfile({ state, setState, toast }) {
         <div className="flex items-start justify-between gap-3 mb-3">
           <div>
             <h3 className="font-headline-md text-headline-md text-primary">Evolução do peso</h3>
-            <p className="text-[12px] text-on-surface-variant">A linha vermelha é a média de 7 dias — é nela que se olha. O dia isolado oscila com água, sal e intestino.</p>
+            <p className="text-[12px] text-on-surface-variant">A linha grossa é a média de 7 dias — é nela que se olha. O dia isolado oscila com água, sal e intestino.</p>
           </div>
           {kg && <span className="font-headline-lg text-[24px] text-primary tabular-nums shrink-0">{kg1(kg)} kg</span>}
         </div>
