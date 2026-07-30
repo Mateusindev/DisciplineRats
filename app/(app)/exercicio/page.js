@@ -1,15 +1,37 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useApp } from "../AppContext";
 import { MI, Caps, StarRating, Select, inputCls, textareaCls } from "@/components/ui";
-import { XP, award, getDateStr, shiftDate, weekdayShort, last7Dates, weekStartOf, isGymModality, gymProgress, gymExercises, gymPR, playAlarm, DOW_SHORT, mmss } from "@/lib/state";
+import {
+  XP,
+  award,
+  getDateStr,
+  shiftDate,
+  weekdayShort,
+  last7Dates,
+  weekStartOf,
+  isGymModality,
+  gymProgress,
+  gymExercises,
+  gymPR,
+  gymHistoryByExercise,
+  fichaCycle,
+  fichaStats,
+  archiveFicha,
+  restoreFicha,
+  FICHA_WEEK_OPTIONS,
+  playAlarm,
+  DOW_SHORT,
+  mmss,
+} from "@/lib/state";
 import { fetchExercises } from "@/lib/persistence";
 import { LineChart } from "@/components/charts";
 import { ExerciseModal, guessMuscle } from "@/components/ExerciseInfo";
 
 const GLOW = { boxShadow: "0 0 15px var(--brand-glow)" };
+const ddmm = (d) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : "");
 
 // Horários por dia, quando a mesma divisão acontece em horas diferentes.
 // Aparece só a partir de 2 dias marcados — com um dia só, o campo padrão basta.
@@ -133,13 +155,20 @@ function RestTimer({ left, total, pref, onPick, onStart, onBump, onSkip }) {
   );
 }
 
-// busca/escolha de exercício no catálogo — abre no clique, agrupado por músculo
-function ExercisePicker({ value, onChange, onSubmit, catalog }) {
+// busca/escolha de exercício no catálogo — abre no clique, agrupado por músculo.
+// `history` = { [nome em minúsculas]: { sets, days, last, prWeight } } (gymHistoryByExercise):
+// exercício que você já executou ganha marca, porque escolher entre "novo" e "já rodei
+// esse" é metade da decisão ao montar ficha.
+function ExercisePicker({ value, onChange, onSubmit, catalog, history = {} }) {
   const [open, setOpen] = useState(false);
+  const [onlyDone, setOnlyDone] = useState(false);
   const [rect, setRect] = useState(null); // posição do input p/ ancorar o dropdown no portal
   const inputRef = useRef(null);
   const q = (value || "").trim().toLowerCase();
-  const filtered = q ? catalog.filter((e) => e.name.toLowerCase().includes(q)) : catalog;
+  const hist = (name) => history[(name || "").trim().toLowerCase()] || null;
+  const byQuery = q ? catalog.filter((e) => e.name.toLowerCase().includes(q)) : catalog;
+  const filtered = onlyDone ? byQuery.filter((e) => hist(e.name)) : byQuery;
+  const doneCount = byQuery.reduce((n, e) => n + (hist(e.name) ? 1 : 0), 0);
   // agrupa por grupo muscular (catálogo já vem ordenado por músculo → nome)
   const groups = [];
   for (const e of filtered) {
@@ -175,35 +204,257 @@ function ExercisePicker({ value, onChange, onSubmit, catalog }) {
         placeholder="Buscar ou escolher exercício..."
         className={`${inputCls} w-full text-[13px]`}
       />
-      {open && rect && groups.length > 0 && createPortal(
+      {open && rect && (groups.length > 0 || onlyDone) && createPortal(
         <div
           className="fixed z-[120] bg-surface-container-highest border border-white/10 rounded-lg shadow-2xl max-h-72 overflow-auto ff-scroll"
           style={{ top: rect.bottom + 4, left: rect.left, width: rect.width }}
         >
+          {doneCount > 0 && (
+            <div className="sticky top-0 z-10 bg-surface-container-highest px-3 py-1.5 border-b border-white/10 flex items-center justify-between gap-2">
+              <Caps className="text-outline text-[9px]">{doneCount} JÁ FEITO(S)</Caps>
+              <button
+                type="button"
+                onMouseDown={(ev) => { ev.preventDefault(); setOnlyDone((v) => !v); }}
+                className={`font-label-caps text-[9px] px-2 py-1 rounded-full border transition ${
+                  onlyDone ? "bg-primary-container text-on-primary-container border-transparent" : "border-white/15 text-on-surface-variant hover:border-white/30"
+                }`}
+              >
+                {onlyDone ? "MOSTRAR TODOS" : "SÓ OS QUE JÁ FIZ"}
+              </button>
+            </div>
+          )}
+          {onlyDone && groups.length === 0 && (
+            <p className="px-3 py-3 text-[12px] text-outline">Nenhum exercício que você já fez bate com essa busca.</p>
+          )}
           {groups.map((g) => (
             <div key={g.muscle}>
-              <div className="sticky top-0 bg-surface-container-highest px-3 py-1.5 border-b border-white/5">
+              <div className={`sticky ${doneCount > 0 ? "top-7" : "top-0"} bg-surface-container-highest px-3 py-1.5 border-b border-white/5`}>
                 <Caps className="text-primary-container text-[9px]">{g.muscle}</Caps>
               </div>
               <ul>
-                {g.items.map((e) => (
-                  <li key={e.name}>
-                    <button
-                      type="button"
-                      onMouseDown={(ev) => { ev.preventDefault(); onChange(e.name); setOpen(false); }}
-                      className="w-full px-3 py-2 text-left text-[13px] text-on-surface hover:bg-surface-variant/50 transition flex items-center gap-2"
-                    >
-                      <span className="flex-1 min-w-0 truncate">{e.name}</span>
-                      {e.video_id && <MI name="play_circle" className="text-sm text-primary-container shrink-0" title="Vídeo disponível" />}
-                    </button>
-                  </li>
-                ))}
+                {g.items.map((e) => {
+                  const h = hist(e.name);
+                  return (
+                    <li key={e.name}>
+                      <button
+                        type="button"
+                        onMouseDown={(ev) => { ev.preventDefault(); onChange(e.name); setOpen(false); }}
+                        className="w-full px-3 py-2 text-left text-[13px] text-on-surface hover:bg-surface-variant/50 transition flex items-center gap-2"
+                      >
+                        <span className="flex-1 min-w-0 truncate">{e.name}</span>
+                        {h && (
+                          <span
+                            className="flex items-center gap-1 shrink-0 font-label-caps text-[9px] text-primary-container tabular-nums"
+                            title={`Já fiz: ${h.days} dia(s) · ${h.sets} série(s)${h.prWeight ? ` · PR ${h.prWeight} kg` : ""} · última em ${ddmm(h.last)}`}
+                          >
+                            <MI name="check_circle" className="text-[13px]" />
+                            {ddmm(h.last)}
+                          </span>
+                        )}
+                        {e.video_id && <MI name="play_circle" className="text-sm text-primary-container shrink-0" title="Vídeo disponível" />}
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}
         </div>,
         document.body
       )}
+    </div>
+  );
+}
+
+// Ciclo da ficha: por quanto tempo você fica com ela. Sem prazo é opção legítima
+// (mostra há quanto tempo está na mesma), não default silencioso.
+function FichaCycle({ mod, cyc, stats, onSetCycle, onArchive }) {
+  const weeks = cyc?.weeks || 0;
+  return (
+    <div className="bg-surface-container-high rounded-lg border border-white/5 p-4 mb-4">
+      <div className="flex items-center gap-2 mb-3">
+        <MI name="event_available" className="text-primary-container text-lg shrink-0" />
+        <Caps className="text-primary text-[10px] flex-1">CICLO DESTA FICHA</Caps>
+        {cyc?.expired && <Caps className="text-error text-[9px] border border-error/40 rounded-full px-2 py-0.5 shrink-0">VENCIDA</Caps>}
+      </div>
+
+      <div className="flex flex-wrap items-end gap-4 mb-3">
+        <label className="flex flex-col gap-1.5">
+          <Caps className="text-outline text-[9px]">COMECEI EM</Caps>
+          <input
+            type="date"
+            value={cyc?.start || ""}
+            max={getDateStr(0)}
+            onChange={(e) => onSetCycle({ startDate: e.target.value })}
+            aria-label="Início da ficha"
+            className="bg-surface-container-lowest/60 text-on-surface border border-white/5 rounded px-2 py-1.5 text-[12px] outline-none focus:border-primary-container/50 transition"
+          />
+        </label>
+        <div className="flex flex-col gap-1.5">
+          <Caps className="text-outline text-[9px]">FICO COM ELA</Caps>
+          <div className="flex flex-wrap gap-1.5">
+            {FICHA_WEEK_OPTIONS.map((w) => (
+              <button
+                key={w}
+                onClick={() => onSetCycle({ weeks: w })}
+                className={`px-2.5 py-1.5 rounded-full font-label-caps text-[10px] transition active:scale-95 ${
+                  weeks === w ? "bg-primary-container text-on-primary-container" : "border border-white/10 text-on-surface-variant hover:border-white/25"
+                }`}
+              >
+                {w} SEM
+              </button>
+            ))}
+            <button
+              onClick={() => onSetCycle({ weeks: 0 })}
+              className={`px-2.5 py-1.5 rounded-full font-label-caps text-[10px] transition active:scale-95 ${
+                weeks === 0 ? "bg-primary-container text-on-primary-container" : "border border-white/10 text-on-surface-variant hover:border-white/25"
+              }`}
+            >
+              SEM PRAZO
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {cyc && weeks > 0 && (
+        <>
+          <div className="w-full h-2 bg-surface-variant rounded-full overflow-hidden mb-1.5">
+            <div className={`h-full rounded-full ${cyc.expired ? "bg-error" : "bg-primary-container"}`} style={{ width: `${cyc.pct}%` }} />
+          </div>
+          <p className="text-[12px] text-on-surface-variant mb-1">
+            <span className="text-on-surface">
+              SEMANA {Math.max(1, cyc.weekNow)} DE {weeks}
+            </span>{" "}
+            · termina {ddmm(cyc.endDate)} ·{" "}
+            {cyc.expired ? (
+              <span className="text-error">venceu há {Math.abs(cyc.daysLeft)} dia(s)</span>
+            ) : cyc.daysLeft === 0 ? (
+              <span className="text-primary">último dia</span>
+            ) : (
+              `faltam ${cyc.daysLeft} dia(s)`
+            )}
+          </p>
+        </>
+      )}
+      {cyc?.start && weeks === 0 && (
+        <p className="text-[12px] text-on-surface-variant mb-1">
+          Sem prazo — <span className="text-on-surface">{Math.max(1, cyc.dayNow)} dia(s)</span> na mesma ficha desde {ddmm(cyc.start)}.
+        </p>
+      )}
+
+      {cyc?.start ? (
+        <p className="text-[11px] text-outline mb-3">
+          Neste ciclo: <span className="tabular-nums text-on-surface-variant">{stats.sessions}</span> treino(s) ·{" "}
+          <span className="tabular-nums text-on-surface-variant">{stats.sets}</span> série(s) ·{" "}
+          <span className="tabular-nums text-on-surface-variant">{stats.minutes}</span> min. Conta o que você registrou, não o que estava planejado.
+        </p>
+      ) : (
+        <p className="text-[11px] text-outline mb-3">
+          Escolha uma duração (ou <em>sem prazo</em>) e o ciclo começa hoje. Sem data de início não há o que acompanhar nem o que arquivar com período.
+        </p>
+      )}
+
+      {cyc?.expired && (
+        <p className="text-[12px] text-error mb-3">
+          O prazo que você mesmo definiu passou. Arquive pra guardar o que essa ficha rendeu e montar a próxima — ou estenda a duração se quer seguir nela.
+        </p>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => onArchive(false)}
+          className="px-3 py-2 rounded-lg border border-primary/40 text-primary font-label-caps text-[10px] hover:bg-primary/10 active:scale-95 transition flex items-center gap-1.5"
+        >
+          <MI name="inventory_2" className="text-base" /> ARQUIVAR E RENOVAR
+        </button>
+        <button
+          onClick={() => onArchive(true)}
+          className="px-3 py-2 rounded-lg border border-white/10 text-on-surface-variant font-label-caps text-[10px] hover:border-white/25 active:scale-95 transition flex items-center gap-1.5"
+        >
+          <MI name="restart_alt" className="text-base" /> ARQUIVAR E MONTAR NOVA
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Histórico: snapshot de cada ficha que você fechou. Só leitura, com restaurar e excluir.
+function FichaHistory({ entries, onRestore, onDelete }) {
+  const [openId, setOpenId] = useState(null);
+  return (
+    <div className="glass-card p-6 rounded-xl">
+      <div className="flex items-center gap-3 mb-1">
+        <MI name="history" className="text-primary-container shrink-0" />
+        <h3 className="font-headline-md text-headline-md text-primary flex-1">Histórico de fichas</h3>
+        <Caps className="text-outline text-[10px] shrink-0">{entries.length}</Caps>
+      </div>
+      <p className="text-[12px] text-on-surface-variant mb-4">
+        Cada ficha arquivada fica congelada como estava — mudar o plano de hoje não reescreve o passado. Restaurar traz as divisões de volta e recomeça o ciclo.
+      </p>
+
+      <div className="space-y-2">
+        {entries.map((e) => {
+          const open = openId === e.id;
+          const exCount = (e.divisions || []).reduce((n, d) => n + (d.items || []).length, 0);
+          return (
+            <div key={e.id} className="bg-surface-container-high rounded-lg border border-white/5">
+              <div className="flex items-center gap-2 p-3">
+                <button onClick={() => setOpenId(open ? null : e.id)} className="flex-1 min-w-0 text-left" aria-expanded={open}>
+                  <div className="flex items-center gap-1.5">
+                    <MI name={open ? "expand_less" : "expand_more"} className="text-outline text-lg shrink-0" />
+                    <span className="font-label-caps text-[11px] text-on-surface truncate">{e.name}</span>
+                  </div>
+                  <span className="text-[11px] text-outline tabular-nums block mt-0.5">
+                    {ddmm(e.startDate)} → {ddmm(e.endDate)} · {e.weeks ? `${e.weeks} sem` : "sem prazo"} · {(e.divisions || []).length} divisão(ões) · {exCount} exercício(s)
+                  </span>
+                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button onClick={() => onRestore(e)} aria-label="Restaurar ficha" title="Restaurar esta ficha no plano" className="text-outline hover:text-primary-container transition p-1">
+                    <MI name="restore" />
+                  </button>
+                  <button onClick={() => onDelete(e)} aria-label="Excluir do histórico" title="Excluir do histórico" className="text-outline hover:text-error transition p-1">
+                    <MI name="delete" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="px-3 pb-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-outline tabular-nums">
+                <span>{e.sessions ?? 0} treino(s) registrados</span>
+                <span>{e.sets ?? 0} série(s)</span>
+                <span>{e.minutes ?? 0} min</span>
+              </div>
+
+              {open && (
+                <div className="border-t border-white/5 p-3 space-y-3">
+                  {(e.divisions || []).length === 0 && <p className="text-[12px] text-outline">Ficha arquivada sem divisões.</p>}
+                  {(e.divisions || []).map((d, di) => (
+                    <div key={`${e.id}-${di}`}>
+                      <Caps className="text-primary-container text-[9px] block mb-1">
+                        {d.name || `DIVISÃO ${di + 1}`}
+                        {(d.weekdays || []).length > 0 && (
+                          <span className="text-outline"> · {(d.weekdays || []).map((w) => DOW_SHORT[w]).join(" ")}</span>
+                        )}
+                      </Caps>
+                      {(d.items || []).length === 0 ? (
+                        <p className="text-[12px] text-outline">Sem exercícios.</p>
+                      ) : (
+                        <ul className="space-y-0.5">
+                          {d.items.map((it, ii) => (
+                            <li key={`${e.id}-${di}-${ii}`} className="text-[12px] text-on-surface-variant">
+                              {it.name}
+                              {it.detail && <span className="text-outline"> — {it.detail}</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -456,10 +707,11 @@ export default function ExercicioPage() {
   const minDate = shiftDate(today, -7);
   const isRetro = sessionDate !== today;
   const validSessionDate = sessionDate >= minDate && sessionDate <= today;
-  const ddmm = (d) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 
   // ===== academia: séries (peso × reps | falha) =====
   const gymSets = state.gymSets || [];
+  // histórico por exercício: alimenta a marca de "já fiz" no picker e na ficha
+  const exHistory = useMemo(() => gymHistoryByExercise(gymSets), [gymSets]);
   const [setForm, setSetForm] = useState({ exercise: "", weight: "", reps: "" });
   const [setFailure, setSetFailure] = useState(false);
   const [chartEx, setChartEx] = useState(null);
@@ -649,6 +901,57 @@ export default function ExercicioPage() {
       stats: { ...prev.stats, xp: Math.max(0, (prev.stats.xp || 0) - (log?.xp || 0)) },
     }));
   }
+  // ===== ciclo e histórico de fichas =====
+  function setCycle(modId, patch) {
+    setState((prev) => ({
+      ...prev,
+      workoutPlan: prev.workoutPlan.map((m) =>
+        m.id !== modId
+          ? m
+          : { ...m, cycle: { startDate: m.cycle?.startDate || getDateStr(0), weeks: m.cycle?.weeks || 0, ...patch } }
+      ),
+    }));
+  }
+
+  async function archiveCurrentFicha(mod, clearItems) {
+    const cyc = fichaCycle(mod);
+    const st = fichaStats(state, mod.name, cyc?.start || getDateStr(0), null);
+    const ok = await confirm({
+      title: clearItems ? "Arquivar e montar ficha nova?" : "Arquivar ficha atual?",
+      body: clearItems
+        ? `${st.sessions} treino(s) e ${st.sets} série(s) vão pro histórico e as divisões ficam vazias pra você montar do zero. As séries registradas não são apagadas.`
+        : `${st.sessions} treino(s) e ${st.sets} série(s) vão pro histórico. Os exercícios continuam no plano e o ciclo recomeça hoje.`,
+      confirmLabel: clearItems ? "ARQUIVAR E LIMPAR" : "ARQUIVAR",
+      danger: clearItems,
+    });
+    if (!ok) return;
+    setState((prev) => archiveFicha(prev, mod.id, { clearItems }));
+    toast("Ficha arquivada", { sub: "Está no histórico, no fim desta aba.", icon: "inventory_2" });
+  }
+
+  async function restoreFichaEntry(entry) {
+    const target = plan.find((m) => m.name === entry.name) || plan.find(isGymModality);
+    if (!target) return toast("Sem modalidade pra restaurar", { type: "error" });
+    const ok = await confirm({
+      title: `Restaurar ficha de ${ddmm(entry.startDate)}?`,
+      body: `As divisões atuais de ${target.name} são substituídas pelas dessa ficha, e o ciclo recomeça hoje. Arquive a atual antes se não quiser perdê-la.`,
+      confirmLabel: "RESTAURAR",
+    });
+    if (!ok) return;
+    setState((prev) => restoreFicha(prev, target.id, entry.id));
+    toast("Ficha restaurada", { sub: `${target.name} · ciclo recomeçou hoje`, icon: "restore" });
+  }
+
+  async function deleteFichaEntry(entry) {
+    const ok = await confirm({
+      title: "Excluir do histórico?",
+      body: `A ficha de ${ddmm(entry.startDate)} a ${ddmm(entry.endDate)} sai do histórico. As séries e treinos registrados não são afetados.`,
+      confirmLabel: "EXCLUIR",
+    });
+    if (!ok) return;
+    setState((prev) => ({ ...prev, workoutHistory: (prev.workoutHistory || []).filter((e) => e.id !== entry.id) }));
+  }
+
   function updateGoal(delta) {
     setState((prev) => ({
       ...prev,
@@ -1171,6 +1474,13 @@ export default function ExercicioPage() {
 
                 {gym && (
                 <>
+                <FichaCycle
+                  mod={m}
+                  cyc={fichaCycle(m) || { start: "", weeks: m.cycle?.weeks || 0 }}
+                  stats={fichaStats(state, m.name, fichaCycle(m)?.start || getDateStr(0), null)}
+                  onSetCycle={(patch) => setCycle(m.id, patch)}
+                  onArchive={(clearItems) => archiveCurrentFicha(m, clearItems)}
+                />
                 <div className="space-y-3">
                   {(m.divisions || []).map((d) => {
                     const f = getItemForm(d.id);
@@ -1300,6 +1610,16 @@ export default function ExercicioPage() {
                                       {it.name}
                                       <MI name="info" className="text-sm text-outline" />
                                     </button>
+                                    {(() => {
+                                      const h = exHistory[(it.name || "").trim().toLowerCase()];
+                                      return h ? (
+                                        <MI
+                                          name="check_circle"
+                                          className="text-[13px] text-primary-container ml-1 align-middle"
+                                          title={`Já fiz: ${h.days} dia(s) · ${h.sets} série(s)${h.prWeight ? ` · PR ${h.prWeight} kg` : ""} · última em ${ddmm(h.last)}`}
+                                        />
+                                      ) : null;
+                                    })()}
                                     {it.detail && <span className="text-outline"> — {it.detail}</span>}
                                   </div>
                                   {/* fallback de reordenação p/ touch (drag não funciona em mobile) */}
@@ -1327,6 +1647,7 @@ export default function ExercicioPage() {
                             onChange={(v) => setItemForms((fs) => ({ ...fs, [d.id]: { ...getItemForm(d.id), name: v } }))}
                             onSubmit={() => addItem(m.id, d.id)}
                             catalog={catalog}
+                            history={exHistory}
                           />
                           <input value={f.detail} onChange={setItemField(d.id, "detail")} onKeyDown={(e) => e.key === "Enter" && addItem(m.id, d.id)} placeholder="Detalhe (ex.: 4x12 · 30kg)" className={`${inputCls} flex-1 text-[13px]`} />
                           <button onClick={() => addItem(m.id, d.id)} aria-label="Adicionar exercício" className="px-3 py-2 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center gap-1 active:scale-95 transition font-label-caps text-[11px] shrink-0">
@@ -1412,6 +1733,10 @@ export default function ExercicioPage() {
               <MI name="add" /> ADICIONAR MODALIDADE
             </button>
           </div>
+
+          {(state.workoutHistory || []).length > 0 && (
+            <FichaHistory entries={state.workoutHistory} onRestore={restoreFichaEntry} onDelete={deleteFichaEntry} />
+          )}
         </section>
       )}
 
