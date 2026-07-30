@@ -27,6 +27,11 @@ import {
   toggleHabitState,
 } from "@/lib/state";
 
+// Limite do porquê. Curto de propósito: motivo que não cabe numa linha não é lido
+// na hora da decisão, e é justamente aí que ele precisa funcionar. Notas longas
+// vão pro campo de detalhes.
+const WHY_MAX = 140;
+
 // dias da semana do hábito (0=Seg..6=Dom). Nada marcado = todo dia.
 function DowPicker({ value, onChange }) {
   const sel = new Set(value || []);
@@ -96,7 +101,7 @@ function PriorityChips({ value, onChange, size = "text-[10px]" }) {
 // entre renders, então os inputs de edição não remontam a cada tecla (evita o
 // foco pular pro título ao digitar os detalhes).
 function CardHeader({ h, i, ctx }) {
-  const { edits, editDetails, setEdits, setEditDetails, pickingIcon, setPickingIcon, setIcon, saveEdit, cancelEdit, startEdit, removeHabit, setPriority } = ctx;
+  const { edits, editDetails, editWhys, setEdits, setEditDetails, setEditWhys, pickingIcon, setPickingIcon, setIcon, saveEdit, cancelEdit, startEdit, removeHabit, setPriority } = ctx;
   const editing = edits[h.id] !== undefined;
   const picking = pickingIcon === h.id;
   return (
@@ -165,13 +170,22 @@ function CardHeader({ h, i, ctx }) {
             aria-label="Nome do hábito"
             className={`${inputCls} w-full mb-2`}
           />
+          <input
+            value={editWhys[h.id] || ""}
+            onChange={(e) => setEditWhys((es) => ({ ...es, [h.id]: e.target.value }))}
+            onKeyDown={(e) => (e.key === "Enter" ? saveEdit(h.id) : e.key === "Escape" ? cancelEdit(h.id) : null)}
+            maxLength={WHY_MAX}
+            placeholder={(h.kind || "build") === "quit" ? "Por que largar isso?" : "Por que esse hábito importa?"}
+            aria-label="Porquê do hábito"
+            className={`${inputCls} w-full mb-2`}
+          />
           <textarea
             value={editDetails[h.id] || ""}
             onChange={(e) => setEditDetails((es) => ({ ...es, [h.id]: e.target.value }))}
             onKeyDown={(e) => (e.key === "Escape" ? cancelEdit(h.id) : null)}
             rows={3}
             maxLength={500}
-            placeholder="Detalhes, motivação, como executar..."
+            placeholder="Detalhes: como executar, onde, com o quê..."
             aria-label="Detalhes do hábito"
             className={`${inputCls} w-full mb-2 resize-y`}
           />
@@ -179,6 +193,26 @@ function CardHeader({ h, i, ctx }) {
       ) : (
         <h4 className="font-headline-md text-headline-md mb-2">{h.name}</h4>
       )}
+      {/* o porquê fica ACIMA de tudo que é métrica: é o que você lê antes de decidir marcar */}
+      {!editing &&
+        (h.why ? (
+          <div
+            className={`mb-3 flex items-start gap-2 rounded-lg px-2.5 py-2 border-l-2 ${
+              (h.kind || "build") === "quit" ? "bg-error/8 border-l-error/50" : "bg-primary-container/10 border-l-primary-container/50"
+            }`}
+          >
+            <MI name="format_quote" className={`text-sm shrink-0 ${(h.kind || "build") === "quit" ? "text-error" : "text-primary-container"}`} />
+            <p className="text-[12px] text-on-surface whitespace-pre-wrap">{h.why}</p>
+          </div>
+        ) : (
+          <button
+            onClick={() => startEdit(h)}
+            className="mb-3 flex items-center gap-1.5 font-label-caps text-[10px] text-outline hover:text-primary-container transition"
+          >
+            <MI name="add_circle" className="text-sm" />
+            {(h.kind || "build") === "quit" ? "POR QUE LARGAR ISSO?" : "POR QUE ESSE HÁBITO IMPORTA?"}
+          </button>
+        ))}
       {!editing && h.detail && (
         <p className="text-[12px] text-on-surface-variant whitespace-pre-wrap mb-2">{h.detail}</p>
       )}
@@ -347,12 +381,14 @@ function QuitCard({ h, i, ctx }) {
 export default function HabitosPage() {
   const { state, setState, confirm, toast } = useApp();
   const [newHabit, setNewHabit] = useState("");
+  const [newWhy, setNewWhy] = useState(""); // o porquê: pergunta feita na criação, quando a motivação ainda está fresca
   const [newKind, setNewKind] = useState("build"); // build | weekly | quit
   const [newPriority, setNewPriority] = useState(2);
   const [newDirection, setNewDirection] = useState("min"); // weekly: min | max
   const [newTarget, setNewTarget] = useState(3); // weekly: dias/semana
   const [newWeekdays, setNewWeekdays] = useState([]); // build: [] = todo dia
   const [edits, setEdits] = useState({}); // { [id]: nome em edição }
+  const [editWhys, setEditWhys] = useState({}); // { [id]: porquê em edição }
   const [editDetails, setEditDetails] = useState({}); // { [id]: detalhe em edição }
   const [pickingIcon, setPickingIcon] = useState(null); // id do hábito com picker aberto
   const today = getDateStr(0);
@@ -415,6 +451,7 @@ export default function HabitosPage() {
           direction: newKind === "weekly" ? newDirection : null,
           weeklyTarget: newKind === "weekly" ? newTarget : null,
           weekdays: newKind === "build" ? newWeekdays : [], // só faz sentido no diário
+          why: newWhy.trim().slice(0, WHY_MAX),
           detail: "",
           createdAt: new Date().toISOString(),
           doneDates: [],
@@ -424,6 +461,7 @@ export default function HabitosPage() {
       ],
     }));
     setNewHabit("");
+    setNewWhy("");
     setNewWeekdays([]);
   }
 
@@ -447,9 +485,12 @@ export default function HabitosPage() {
   // ===== quit: registrar/desfazer recaída =====
   async function logRelapse(h) {
     if (h.doneDates.includes(today)) return;
+    // o porquê entra aqui de propósito: é o momento exato em que ele tem função
     const ok = await confirm({
       title: `Registrar recaída em "${h.name}"?`,
-      body: "Zera a contagem de dias limpo. Sem julgamento — recomeça agora.",
+      body: h.why
+        ? `Você largou porque: “${h.why}”. Registrar zera a contagem de dias limpo — sem julgamento, recomeça agora.`
+        : "Zera a contagem de dias limpo. Sem julgamento — recomeça agora.",
       confirmLabel: "RECAÍ HOJE",
     });
     if (!ok) return;
@@ -474,31 +515,34 @@ export default function HabitosPage() {
 
   const startEdit = (h) => {
     setEdits((e) => ({ ...e, [h.id]: h.name }));
+    setEditWhys((e) => ({ ...e, [h.id]: h.why || "" }));
     setEditDetails((e) => ({ ...e, [h.id]: h.detail || "" }));
   };
   const cancelEdit = (id) => {
-    setEdits((e) => {
-      const { [id]: _, ...rest } = e;
+    const drop = (o) => {
+      const { [id]: _, ...rest } = o;
       return rest;
-    });
-    setEditDetails((e) => {
-      const { [id]: _, ...rest } = e;
-      return rest;
-    });
+    };
+    setEdits(drop);
+    setEditWhys(drop);
+    setEditDetails(drop);
   };
   function saveEdit(id) {
     const name = (edits[id] || "").trim();
     if (!name) return;
+    const why = (editWhys[id] || "").trim().slice(0, WHY_MAX);
     const detail = (editDetails[id] || "").trim().slice(0, 500);
-    setState((prev) => ({ ...prev, habits: prev.habits.map((h) => (h.id === id ? { ...h, name: name.slice(0, 80), detail } : h)) }));
+    setState((prev) => ({ ...prev, habits: prev.habits.map((h) => (h.id === id ? { ...h, name: name.slice(0, 80), why, detail } : h)) }));
     cancelEdit(id);
   }
 
   // handlers/estado compartilhados com os cards (identidade estável evita remount dos inputs)
   const ctx = {
     edits,
+    editWhys,
     editDetails,
     setEdits,
+    setEditWhys,
     setEditDetails,
     setWeekdays,
     pickingIcon,
@@ -537,6 +581,28 @@ export default function HabitosPage() {
           <button onClick={addHabit} aria-label="Adicionar hábito" className="px-4 rounded-lg bg-primary-container text-on-primary-container flex items-center active:scale-95 transition">
             <MI name="add" />
           </button>
+        </div>
+        {/* o porquê é perguntado na criação: é o único momento em que a motivação está fresca */}
+        <div>
+          <div className="flex items-center gap-2">
+            <MI name="format_quote" className="text-outline text-lg shrink-0" />
+            <input
+              value={newWhy}
+              onChange={(e) => setNewWhy(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addHabit()}
+              maxLength={WHY_MAX}
+              placeholder={
+                newKind === "quit"
+                  ? "Por que largar? Ex: quero acordar sem tosse e sem culpa"
+                  : "Por que isso importa? Ex: quero subir escada sem perder o ar"
+              }
+              aria-label="Porquê do hábito"
+              className={`${inputCls} flex-1`}
+            />
+          </div>
+          <p className="text-[11px] text-outline mt-1.5">
+            Opcional, mas é o que faz diferença no dia ruim: o motivo aparece no card, antes do botão de marcar. Dá pra escrever depois.
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex rounded-lg overflow-hidden border border-white/10">
