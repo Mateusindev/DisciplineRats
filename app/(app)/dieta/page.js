@@ -12,16 +12,7 @@ const EMPTY_ITEM = { name: "", grams: "", kcal: "", protein: "", carbs: "", fat:
 const TABS_DIETA = [
   { id: "plano", label: "PLANO", short: "PLANO", icon: "restaurant_menu" },
   { id: "perfil", label: "CÁLCULO", short: "CÁLCULO", icon: "calculate" },
-  { id: "despensa", label: "DESPENSA", short: "DESPENSA", icon: "kitchen" },
 ];
-
-// status da despensa: ordem = ciclo do clique e severidade (acabou primeiro na lista)
-const PANTRY_STATUS = {
-  ok: { label: "EM ESTOQUE", icon: "check_circle", next: "low", order: 2, chip: "bg-surface-variant text-on-surface-variant" },
-  low: { label: "ACABANDO", icon: "warning", next: "out", order: 1, chip: "bg-primary-container/20 text-primary-container border border-primary-container/40" },
-  out: { label: "ACABOU", icon: "remove_shopping_cart", next: "ok", order: 0, chip: "bg-error-container/40 text-error border border-error/40" },
-};
-const pantrySt = (s) => PANTRY_STATUS[s] || PANTRY_STATUS.ok;
 
 function num(v) {
   const n = parseFloat(v);
@@ -53,8 +44,6 @@ export default function DietaPage() {
   const [forms, setForms] = useState({}); // { [mealId]: {name,grams,...} }
   const [edits, setEdits] = useState({}); // { [itemId]: {name,grams,...} } — item em edição
   const [newMeal, setNewMeal] = useState("");
-  const [newPantry, setNewPantry] = useState({ name: "", qty: "" });
-  const [pantryEdits, setPantryEdits] = useState({}); // { [id]: {name, qty} }
 
   const plan = state.dietPlan || [];
   const allItems = plan.flatMap((m) => m.items || []);
@@ -155,64 +144,6 @@ export default function DietaPage() {
     cancelEdit(itemId);
   }
 
-  // ---- despensa ----
-  const pantry = state.pantry || [];
-  const pantrySorted = [...pantry].sort((a, b) => {
-    const d = pantrySt(a.status).order - pantrySt(b.status).order;
-    return d !== 0 ? d : a.name.localeCompare(b.name, "pt-BR");
-  });
-  const lowCount = pantry.filter((i) => i.status === "low").length;
-  const outCount = pantry.filter((i) => i.status === "out").length;
-  const shopping = pantrySorted.filter((i) => i.status === "low" || i.status === "out");
-
-  function addPantryItem() {
-    const name = newPantry.name.trim();
-    if (!name) {
-      toast("Informe o item", { type: "error" });
-      return;
-    }
-    const item = { id: Date.now(), name: name.slice(0, 60), qty: newPantry.qty.trim().slice(0, 30), status: "ok" };
-    setState((prev) => ({ ...prev, pantry: [...(prev.pantry || []), item] }));
-    setNewPantry({ name: "", qty: "" });
-  }
-  function cyclePantryStatus(id) {
-    setState((prev) => ({
-      ...prev,
-      pantry: (prev.pantry || []).map((i) => (i.id === id ? { ...i, status: pantrySt(i.status).next } : i)),
-    }));
-  }
-  function removePantryItem(id) {
-    setState((prev) => ({ ...prev, pantry: (prev.pantry || []).filter((i) => i.id !== id) }));
-  }
-  const startPantryEdit = (item) => setPantryEdits((es) => ({ ...es, [item.id]: { name: item.name, qty: item.qty || "" } }));
-  const cancelPantryEdit = (id) =>
-    setPantryEdits((es) => {
-      const { [id]: _, ...rest } = es;
-      return rest;
-    });
-  function savePantryEdit(id) {
-    const f = pantryEdits[id];
-    const name = (f?.name || "").trim();
-    if (!name) {
-      toast("Informe o item", { type: "error" });
-      return;
-    }
-    setState((prev) => ({
-      ...prev,
-      pantry: (prev.pantry || []).map((i) => (i.id === id ? { ...i, name: name.slice(0, 60), qty: (f.qty || "").trim().slice(0, 30) } : i)),
-    }));
-    cancelPantryEdit(id);
-  }
-  async function copyShoppingList() {
-    const lines = shopping.map((i) => `- ${i.name}${i.qty ? ` (${i.qty})` : ""}`).join("\n");
-    try {
-      await navigator.clipboard.writeText(`Lista de compras:\n${lines}`);
-      toast("Lista copiada!", { icon: "content_copy" });
-    } catch {
-      toast("Não foi possível copiar", { type: "error" });
-    }
-  }
-
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -221,7 +152,7 @@ export default function DietaPage() {
         <p className="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">
           {tab === "plano"
             ? "Monte sua dieta fixa. Adicione quantas refeições precisar — o índice geral soma kcal e macros do plano."
-            : "Controle sua despensa. Marque o que está acabando ou acabou e gere a lista de compras."}
+            : "Estimativa de gasto e macros a partir do seu corpo, e a evolução do peso que diz se a estimativa acertou."}
         </p>
       </section>
 
@@ -388,119 +319,6 @@ export default function DietaPage() {
 
       {tab === "perfil" && <NutriProfile state={state} setState={setState} toast={toast} />}
 
-      {tab === "despensa" && (<>
-
-      {/* Lista de compras (acabando/acabou) */}
-      {shopping.length > 0 && (
-        <section className="glass-card p-6 rounded-xl border border-primary-container/30">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <MI name="shopping_cart" className="text-primary-container" />
-              <h3 className="font-headline-md text-headline-md text-primary">LISTA DE COMPRAS</h3>
-            </div>
-            <button onClick={copyShoppingList} className="px-4 py-2 rounded-lg bg-primary-container text-on-primary-container font-label-caps text-[11px] flex items-center gap-1.5 active:scale-95 transition">
-              <MI name="content_copy" className="text-base" /> COPIAR
-            </button>
-          </div>
-          <Caps className="text-outline block mb-3">{outCount} ACABOU · {lowCount} ACABANDO</Caps>
-          <div className="flex flex-wrap gap-2">
-            {shopping.map((i) => {
-              const st = pantrySt(i.status);
-              return (
-                <span key={i.id} className={`px-3 py-1.5 rounded-full font-label-caps text-[11px] flex items-center gap-1.5 ${st.chip}`}>
-                  <MI name={st.icon} className="text-sm" />
-                  {i.name}{i.qty ? ` · ${i.qty}` : ""}
-                </span>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* Itens da despensa */}
-      <section className="glass-card p-6 rounded-xl">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-headline-md text-headline-md text-primary">DESPENSA</h3>
-          <Caps className="text-outline">{pantry.length} ITEM(NS)</Caps>
-        </div>
-
-        {/* add item */}
-        <div className="grid grid-cols-2 md:grid-cols-12 gap-2 mb-4">
-          <input
-            value={newPantry.name}
-            onChange={(e) => setNewPantry((p) => ({ ...p, name: e.target.value }))}
-            onKeyDown={(e) => e.key === "Enter" && addPantryItem()}
-            placeholder="Item (ex.: Arroz)"
-            className={`${inputCls} col-span-2 md:col-span-6 text-[13px]`}
-          />
-          <input
-            value={newPantry.qty}
-            onChange={(e) => setNewPantry((p) => ({ ...p, qty: e.target.value }))}
-            onKeyDown={(e) => e.key === "Enter" && addPantryItem()}
-            placeholder="Qtd (ex.: 2 kg)"
-            className={`${inputCls} md:col-span-4 text-[13px]`}
-          />
-          <button onClick={addPantryItem} aria-label="Adicionar item" className="md:col-span-2 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center gap-1 py-2 active:scale-95 transition font-label-caps text-[11px]">
-            <MI name="add" className="text-lg" /> ADD
-          </button>
-        </div>
-
-        {pantry.length === 0 ? (
-          <p className="text-body-md text-on-surface-variant text-center py-6">
-            Despensa vazia. Adicione os itens que você mantém em casa e controle o estoque por aqui.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {pantrySorted.map((i) => {
-              const st = pantrySt(i.status);
-              const ed = pantryEdits[i.id];
-              if (ed) {
-                return (
-                  <div key={i.id} className="p-3 bg-surface-container-high rounded-lg border border-primary-container/30">
-                    <div className="grid grid-cols-2 md:grid-cols-12 gap-2">
-                      <input value={ed.name} onChange={(e) => setPantryEdits((es) => ({ ...es, [i.id]: { ...es[i.id], name: e.target.value } }))} onKeyDown={(k) => k.key === "Enter" && savePantryEdit(i.id)} placeholder="Item" className={`${inputCls} col-span-2 md:col-span-6 text-[13px]`} />
-                      <input value={ed.qty} onChange={(e) => setPantryEdits((es) => ({ ...es, [i.id]: { ...es[i.id], qty: e.target.value } }))} onKeyDown={(k) => k.key === "Enter" && savePantryEdit(i.id)} placeholder="Qtd" className={`${inputCls} md:col-span-4 text-[13px]`} />
-                      <div className="col-span-2 md:col-span-2 flex gap-2">
-                        <button onClick={() => savePantryEdit(i.id)} aria-label="Salvar item" className="flex-1 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center py-2 active:scale-95 transition">
-                          <MI name="check" className="text-lg" />
-                        </button>
-                        <button onClick={() => cancelPantryEdit(i.id)} aria-label="Cancelar edição" className="flex-1 rounded-lg bg-surface-variant text-on-surface-variant flex items-center justify-center py-2 active:scale-95 transition">
-                          <MI name="close" className="text-lg" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-              return (
-                <div key={i.id} className={`flex items-center gap-3 p-3 bg-surface-container-high rounded-lg border ${i.status === "out" ? "border-error/30" : i.status === "low" ? "border-primary-container/30" : "border-white/5"}`}>
-                  <button
-                    onClick={() => cyclePantryStatus(i.id)}
-                    aria-label={`Status: ${st.label}. Clique para alternar`}
-                    title="Alternar status"
-                    className={`px-2.5 py-1 rounded-full font-label-caps text-[10px] flex items-center gap-1 shrink-0 active:scale-95 transition ${st.chip}`}
-                  >
-                    <MI name={st.icon} className="text-sm" />
-                    <span className="hidden sm:inline">{st.label}</span>
-                  </button>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[13px] font-bold text-on-surface truncate">{i.name}</div>
-                    {i.qty && <div className="text-[10px] text-outline">{i.qty}</div>}
-                  </div>
-                  <button onClick={() => startPantryEdit(i)} aria-label="Editar item" className="text-outline hover:text-primary-container transition p-1">
-                    <MI name="edit" className="text-lg" />
-                  </button>
-                  <button onClick={() => removePantryItem(i.id)} aria-label="Remover item" className="text-outline hover:text-error transition p-1">
-                    <MI name="delete" className="text-lg" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      </>)}
     </div>
   );
 }
