@@ -1610,16 +1610,6 @@ export default function ExercicioPage() {
                                       {it.name}
                                       <MI name="info" className="text-sm text-outline" />
                                     </button>
-                                    {(() => {
-                                      const h = exHistory[(it.name || "").trim().toLowerCase()];
-                                      return h ? (
-                                        <MI
-                                          name="check_circle"
-                                          className="text-[13px] text-primary-container ml-1 align-middle"
-                                          title={`Já fiz: ${h.days} dia(s) · ${h.sets} série(s)${h.prWeight ? ` · PR ${h.prWeight} kg` : ""} · última em ${ddmm(h.last)}`}
-                                        />
-                                      ) : null;
-                                    })()}
                                     {it.detail && <span className="text-outline"> — {it.detail}</span>}
                                   </div>
                                   {/* fallback de reordenação p/ touch (drag não funciona em mobile) */}
