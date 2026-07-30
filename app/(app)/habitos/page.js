@@ -81,6 +81,10 @@ function DowMini({ value, onChange }) {
     next.has(d) ? next.delete(d) : next.add(d);
     onChange([...next].sort((a, b) => a - b));
   };
+  // Nenhum dia marcado = TODO DIA, que é o padrão. Como "vazio" e "todo dia" são o
+  // mesmo estado, ele precisa se anunciar: o chip acende e os sete círculos ficam
+  // com o contorno do accent — sem isso, padrão ativo parece campo não preenchido.
+  const all = sel.size === 0;
   return (
     <div className="flex items-center gap-1">
       {DOW_SHORT.map((label, d) => {
@@ -91,9 +95,13 @@ function DowMini({ value, onChange }) {
             onClick={() => toggle(d)}
             aria-pressed={on}
             aria-label={label}
-            title={label}
-            className={`w-6 h-6 rounded font-label-caps text-[10px] border transition ${
-              on ? "bg-primary-container text-on-primary-container border-primary-container" : "border-white/10 text-outline hover:border-white/25"
+            title={all ? `${label} — incluído em todo dia` : label}
+            className={`w-7 h-7 rounded-full font-label-caps text-[10px] border transition ${
+              on
+                ? "bg-primary-container text-on-primary-container border-primary-container"
+                : all
+                  ? "border-primary-container/40 text-primary-container/70 hover:border-primary-container"
+                  : "border-white/10 text-outline hover:border-white/25"
             }`}
           >
             {label.slice(0, 1)}
@@ -102,10 +110,16 @@ function DowMini({ value, onChange }) {
       })}
       <button
         onClick={() => onChange([])}
-        disabled={sel.size === 0}
-        title="Todo dia"
-        className={`ml-1 font-label-caps text-[9px] transition ${sel.size === 0 ? "text-outline" : "text-on-surface-variant hover:text-primary"}`}
+        disabled={all}
+        aria-pressed={all}
+        title={all ? "Vale todo dia da semana" : "Voltar pra todo dia"}
+        className={`ml-1.5 px-2 h-7 rounded-full font-label-caps text-[9px] flex items-center gap-1 border transition ${
+          all
+            ? "bg-primary-container/15 text-primary-container border-primary-container/40"
+            : "border-white/10 text-on-surface-variant hover:border-white/25 hover:text-primary"
+        }`}
       >
+        <MI name={all ? "done_all" : "restart_alt"} className="text-[13px]" />
         TODO DIA
       </button>
     </div>
@@ -135,6 +149,165 @@ function PriorityChips({ value, onChange, size = "text-[10px]" }) {
     </div>
   );
 }
+
+// ============================================================================
+// FORM DE CRIAÇÃO — barra de uma linha: nome, porquê, tipo, prioridade e
+// dias/alvo, todos à vista. Sem menu escondendo opção.
+// ============================================================================
+const KINDS = [
+  { id: "build", label: "DIÁRIO", icon: "trending_up" },
+  { id: "weekly", label: "SEMANAL", icon: "event_repeat" },
+  { id: "quit", label: "LARGAR", icon: "block" },
+];
+
+// nome + porquê: dois inputs só com linha inferior (o porquê acende no foco)
+function NameFields({ f }) {
+  return (
+    <div className="flex-1 min-w-0">
+      <input
+        value={f.newHabit}
+        onChange={(e) => f.setNewHabit(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && f.addHabit()}
+        placeholder={f.newKind === "quit" ? "Largar o quê? Ex: cigarro, açúcar..." : "Adicionar novo hábito..."}
+        aria-label="Nome do hábito"
+        className="w-full bg-transparent border-0 border-b border-white/10 focus:border-primary-container/70 px-0 py-2 font-body-md text-body-md text-on-surface placeholder:text-outline outline-none transition-colors"
+      />
+      <div className="flex items-center gap-1.5 mt-1">
+        <MI name="format_quote" className="text-outline text-base shrink-0" />
+        <input
+          value={f.newWhy}
+          onChange={(e) => f.setNewWhy(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && f.addHabit()}
+          maxLength={WHY_MAX}
+          placeholder={f.newKind === "quit" ? "Por que largar? (opcional)" : "Por que isso importa? (opcional)"}
+          aria-label="Porquê do hábito"
+          className="w-full bg-transparent border-0 border-b border-transparent hover:border-white/10 focus:border-primary-container/70 px-0 py-1 text-[12px] text-on-surface-variant placeholder:text-outline outline-none transition-colors"
+        />
+      </div>
+    </div>
+  );
+}
+
+function AddButton({ onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label="Adicionar hábito"
+      className="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shrink-0 active:scale-95 transition"
+    >
+      <MI name="add" className="text-2xl" />
+    </button>
+  );
+}
+
+// tipo em 3 ícones, sem texto (tooltip carrega o nome)
+function KindIcons({ value, onChange }) {
+  return (
+    <div className="flex items-center gap-1 shrink-0">
+      {KINDS.map((k) => {
+        const on = value === k.id;
+        return (
+          <button
+            key={k.id}
+            onClick={() => onChange(k.id)}
+            aria-pressed={on}
+            aria-label={k.label}
+            title={k.label}
+            className={`w-8 h-8 rounded-lg flex items-center justify-center border transition ${
+              on
+                ? k.id === "quit"
+                  ? "bg-error/15 text-error border-error/40"
+                  : "bg-primary-container/20 text-primary-container border-primary-container/40"
+                : "border-transparent text-outline hover:text-on-surface-variant hover:border-white/10"
+            }`}
+          >
+            <MI name={k.icon} className="text-lg" />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// alvo semanal compacto: direção (meta/limite) + N
+function WeeklyCompact({ direction, onDirection, target, onTarget }) {
+  return (
+    <div className="flex items-center gap-1.5 shrink-0">
+      <button
+        onClick={() => onDirection(direction === "min" ? "max" : "min")}
+        title={direction === "min" ? "Pelo menos N vezes na semana — clique pra virar limite" : "No máximo N vezes na semana — clique pra virar meta"}
+        className={`h-7 px-2 rounded-full border font-label-caps text-[9px] flex items-center gap-1 transition ${
+          direction === "max" ? "border-error/40 text-error" : "border-primary-container/40 text-primary-container"
+        }`}
+      >
+        <MI name={direction === "min" ? "arrow_upward" : "arrow_downward"} className="text-[13px]" />
+        {direction === "min" ? "MÍN" : "MÁX"}
+      </button>
+      <button onClick={() => onTarget(Math.max(1, target - 1))} aria-label="Diminuir alvo" className="w-6 h-6 rounded-full border border-white/10 text-outline hover:border-white/25 transition">−</button>
+      <Caps className="text-primary text-[10px] w-12 text-center">{target}×/SEM</Caps>
+      <button onClick={() => onTarget(Math.min(7, target + 1))} aria-label="Aumentar alvo" className="w-6 h-6 rounded-full border border-white/10 text-outline hover:border-white/25 transition">+</button>
+    </div>
+  );
+}
+
+// Prioridade em barras crescentes + rótulo do nível ativo. Três marcas iguais não
+// dizem qual é qual: aqui a altura já é a escala, o preenchimento é cumulativo
+// (alta = três barras acesas) e o texto ao lado tira qualquer dúvida do XP.
+function PriorityBars({ value, onChange }) {
+  const active = HABIT_PRIORITIES.find((p) => p.v === value) || HABIT_PRIORITIES[1];
+  return (
+    <div className="flex items-center gap-1.5 shrink-0" title={`Prioridade ${active.label} · +${active.xp} XP por check`}>
+      <div className="flex items-end gap-0.5" role="group" aria-label="Prioridade">
+        {HABIT_PRIORITIES.map((p) => {
+          const on = value >= p.v;
+          const h = p.v === 1 ? "h-2" : p.v === 2 ? "h-3.5" : "h-5";
+          return (
+            <button
+              key={p.v}
+              onClick={() => onChange(p.v)}
+              aria-pressed={value === p.v}
+              aria-label={`Prioridade ${p.label}, +${p.xp} XP`}
+              title={`${p.label} · +${p.xp} XP`}
+              className="w-3 h-7 flex items-end justify-center group"
+            >
+              <span className={`w-2 ${h} rounded-sm transition ${on ? "bg-primary-container" : "bg-outline/30 group-hover:bg-outline/60"}`} />
+            </button>
+          );
+        })}
+      </div>
+      <div className="leading-none">
+        <Caps className={`text-[10px] block ${value === 3 ? "text-primary" : "text-on-surface-variant"}`}>{active.label}</Caps>
+        <span className="text-[9px] text-outline">+{active.xp} XP</span>
+      </div>
+    </div>
+  );
+}
+
+// controle da direita que troca com o tipo escolhido
+function ContextControl({ f }) {
+  if (f.newKind === "build") return <DowMini value={f.newWeekdays} onChange={f.setNewWeekdays} />;
+  if (f.newKind === "weekly")
+    return <WeeklyCompact direction={f.newDirection} onDirection={f.setNewDirection} target={f.newTarget} onTarget={f.setNewTarget} />;
+  return <Caps className="text-error text-[10px] shrink-0">SÓ RECAÍDAS</Caps>;
+}
+
+// Barra de criação: tipo em ícone à esquerda, nome e porquê no meio, contexto
+// (dias ou alvo) + prioridade + adicionar à direita. Tudo a um clique, nada
+// escondido atrás de menu.
+function HabitForm({ f }) {
+  return (
+    <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-5">
+      <KindIcons value={f.newKind} onChange={f.setNewKind} />
+      <NameFields f={f} />
+      <div className="flex items-center gap-3 md:gap-4 justify-between md:justify-end">
+        <ContextControl f={f} />
+        <PriorityBars value={f.newPriority} onChange={f.setNewPriority} />
+        <AddButton onClick={f.addHabit} />
+      </div>
+    </div>
+  );
+}
+
 
 // ---- header comum do card (ícone + editar/excluir + nome) ----
 // Componentes em escopo de módulo (não aninhados na página): identidade estável
@@ -427,7 +600,6 @@ export default function HabitosPage() {
   const [newDirection, setNewDirection] = useState("min"); // weekly: min | max
   const [newTarget, setNewTarget] = useState(3); // weekly: dias/semana
   const [newWeekdays, setNewWeekdays] = useState([]); // build: [] = todo dia
-  const [moreOpen, setMoreOpen] = useState(false); // painel de tipo/prioridade/alvo (3 pontos)
   const [edits, setEdits] = useState({}); // { [id]: nome em edição }
   const [editWhys, setEditWhys] = useState({}); // { [id]: porquê em edição }
   const [editDetails, setEditDetails] = useState({}); // { [id]: detalhe em edição }
@@ -600,6 +772,24 @@ export default function HabitosPage() {
     undoRelapse,
   };
 
+  // props do form de criação num objeto só
+  const formProps = {
+    newHabit,
+    setNewHabit,
+    newWhy,
+    setNewWhy,
+    newKind,
+    setNewKind,
+    newPriority,
+    setNewPriority,
+    newDirection,
+    setNewDirection,
+    newTarget,
+    setNewTarget,
+    newWeekdays,
+    setNewWeekdays,
+    addHabit,
+  };
   const buildHabits = state.habits.filter((h) => (h.kind || "build") === "build");
   const weeklyHabits = state.habits.filter((h) => (h.kind || "build") === "weekly");
   const quitHabits = state.habits.filter((h) => (h.kind || "build") === "quit");
@@ -609,150 +799,11 @@ export default function HabitosPage() {
     <>
       <PageHeader title="HÁBITOS" subtitle="Construa os bons, largue os ruins. Prioridade alta vale mais XP. Hábito diário não feito tira metade." />
 
-      {/* Form de criação: barra de uma linha. Só nome, porquê, os dias e o botão
-          ficam à vista; tipo, prioridade e alvo semanal moram atrás dos 3 pontos.
-          O painel abre NO FLUXO do card em vez de flutuar: glass-card usa
-          backdrop-filter e cria stacking context, então dropdown absoluto aqui
-          passaria atrás dos cards de hábito seguintes. */}
+      {/* ---- form de criação ---- */}
       <div className="glass-card px-4 py-3 md:px-6 md:py-4 rounded-xl mb-gutter">
-        <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-6">
-          <div className="flex-1 min-w-0">
-            <input
-              value={newHabit}
-              onChange={(e) => setNewHabit(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addHabit()}
-              placeholder={newKind === "quit" ? "Largar o quê? Ex: cigarro, açúcar, rede social..." : "Adicionar novo hábito..."}
-              aria-label="Nome do hábito"
-              className="w-full bg-transparent border-0 border-b border-white/10 focus:border-primary-container/70 px-0 py-2 font-body-md text-body-md text-on-surface placeholder:text-outline outline-none transition-colors"
-            />
-            {/* o porquê fica na criação: é quando a motivação ainda está fresca */}
-            <div className="flex items-center gap-1.5 mt-1">
-              <MI name="format_quote" className="text-outline text-base shrink-0" />
-              <input
-                value={newWhy}
-                onChange={(e) => setNewWhy(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addHabit()}
-                maxLength={WHY_MAX}
-                placeholder={newKind === "quit" ? "Por que largar? (opcional)" : "Por que isso importa? (opcional)"}
-                aria-label="Porquê do hábito"
-                className="w-full bg-transparent border-0 border-b border-transparent hover:border-white/10 focus:border-primary-container/70 px-0 py-1 text-[12px] text-on-surface-variant placeholder:text-outline outline-none transition-colors"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 md:gap-4 justify-between md:justify-end">
-            {newKind === "build" ? (
-              <DowMini value={newWeekdays} onChange={setNewWeekdays} />
-            ) : newKind === "weekly" ? (
-              <Caps className="text-on-surface-variant text-[10px]">
-                {newDirection === "min" ? "PELO MENOS" : "NO MÁXIMO"} {newTarget}×/SEM
-              </Caps>
-            ) : (
-              <Caps className="text-error text-[10px]">SÓ RECAÍDAS</Caps>
-            )}
-
-            <button
-              onClick={() => setMoreOpen((v) => !v)}
-              aria-label="Mais opções"
-              aria-expanded={moreOpen}
-              title="Tipo, prioridade e alvo"
-              className={`relative w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition ${
-                moreOpen ? "bg-surface-variant text-on-surface" : "text-outline hover:text-on-surface hover:bg-surface-variant/50"
-              }`}
-            >
-              <MI name="more_vert" />
-              {(newKind !== "build" || newPriority !== 2) && (
-                <span className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ${newKind === "quit" ? "bg-error" : "bg-primary-container"}`} />
-              )}
-            </button>
-
-            <button
-              onClick={addHabit}
-              aria-label="Adicionar hábito"
-              className="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shrink-0 active:scale-95 transition"
-            >
-              <MI name="add" className="text-2xl" />
-            </button>
-          </div>
-        </div>
-
-        {moreOpen && (
-          <div className="mt-4 pt-4 border-t border-white/5 space-y-3 animate-[fadeIn_.1s_ease-out]">
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-              <div>
-                <Caps className="text-outline text-[9px] block mb-1.5">TIPO</Caps>
-                <div className="flex rounded-lg overflow-hidden border border-white/10 w-fit">
-                  {[
-                    { id: "build", label: "DIÁRIO", icon: "trending_up" },
-                    { id: "weekly", label: "SEMANAL", icon: "event_repeat" },
-                    { id: "quit", label: "LARGAR", icon: "block" },
-                  ].map((k) => (
-                    <button
-                      key={k.id}
-                      onClick={() => setNewKind(k.id)}
-                      className={`px-3 py-1.5 font-label-caps text-[10px] flex items-center gap-1.5 transition ${
-                        newKind === k.id
-                          ? k.id === "quit"
-                            ? "bg-error text-on-error"
-                            : "bg-primary-container text-on-primary-container"
-                          : "text-on-surface-variant hover:bg-surface-variant/40"
-                      }`}
-                    >
-                      <MI name={k.icon} className="text-sm" /> {k.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <Caps className="text-outline text-[9px] block mb-1.5">PRIORIDADE</Caps>
-                <PriorityChips value={newPriority} onChange={setNewPriority} />
-              </div>
-
-              {newKind === "weekly" && (
-                <div>
-                  <Caps className="text-outline text-[9px] block mb-1.5">ALVO DA SEMANA</Caps>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <div className="flex rounded-lg overflow-hidden border border-white/10">
-                      <button
-                        onClick={() => setNewDirection("min")}
-                        className={`px-3 py-1.5 font-label-caps text-[10px] transition ${
-                          newDirection === "min" ? "bg-primary-container text-on-primary-container" : "text-on-surface-variant hover:bg-surface-variant/40"
-                        }`}
-                      >
-                        PELO MENOS
-                      </button>
-                      <button
-                        onClick={() => setNewDirection("max")}
-                        className={`px-3 py-1.5 font-label-caps text-[10px] transition ${
-                          newDirection === "max" ? "bg-error text-on-error" : "text-on-surface-variant hover:bg-surface-variant/40"
-                        }`}
-                      >
-                        NO MÁXIMO
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => setNewTarget((t) => Math.max(1, t - 1))} aria-label="Diminuir dias" className="w-7 h-7 rounded-full bg-surface-variant text-on-surface flex items-center justify-center hover:brightness-125 active:scale-95 transition">−</button>
-                      <Caps className="text-primary w-20 text-center">{newTarget}×/SEM</Caps>
-                      <button onClick={() => setNewTarget((t) => Math.min(7, t + 1))} aria-label="Aumentar dias" className="w-7 h-7 rounded-full bg-surface-variant text-on-surface flex items-center justify-center hover:brightness-125 active:scale-95 transition">+</button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <p className="text-[11px] text-outline">
-              {newKind === "quit"
-                ? "Vício: registre só as recaídas. Dias limpo rendem XP em marcos (3, 7, 14, 30, 60, 90 dias)."
-                : newKind === "weekly"
-                  ? newDirection === "min"
-                    ? `Praticar ${newTarget}×/semana: cada dia marcado rende XP pela prioridade + bônus ao fechar a semana na meta.`
-                    : `Moderar: no máx ${newTarget} dia(s) por semana. Marcar não dá XP — fechar a semana dentro do limite dá bônus.`
-                  : `Diário: marcar rende XP pela prioridade (${HABIT_PRIORITIES.map((p) => `${p.label.toLowerCase()} +${p.xp}`).join(" · ")}). Dia fora dos dias marcados não cobra XP nem quebra a sequência.`}
-            </p>
-          </div>
-        )}
+        <HabitForm f={formProps} />
       </div>
+
 
       {state.habits.length === 0 ? (
         <div className="glass-card p-8 rounded-xl text-center text-on-surface-variant">Nenhum hábito cadastrado ainda.</div>
