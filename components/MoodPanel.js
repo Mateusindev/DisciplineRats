@@ -1,7 +1,8 @@
 "use client";
 
-// Humor, embutido na página de Sono. Sono e humor se explicam um pelo outro — dormir mal
-// hoje aparece no humor de amanhã — então registrar os dois no mesmo lugar é o ponto.
+// Registro de humor de hoje — vive na página de Humor, junto do diagnóstico que ele
+// alimenta. O /sono mantém apenas a MoodStrip (leitura dos mesmos 7 dias do gráfico de
+// sono), porque ali o valor é a correlação, não o registro.
 //
 // Compacto de propósito: uma linha por período, escala inline. Etiqueta e nota só aparecem
 // se você abrir. O período atual já vem aberto, então o caso comum é um clique.

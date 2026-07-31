@@ -1,235 +1,141 @@
 "use client";
 
-import { useApp } from "../AppContext";
-import { MI, Caps } from "@/components/ui";
-import {
-  getDateStr,
-  last7Dates,
-  MOOD_OPTIONS,
-  MOOD_PERIODS,
-  MOOD_TAGS,
-  currentPeriodKey,
-  moodDayAvg,
-  moodHasContent,
-  moodPeriodAverages,
-} from "@/lib/state";
-import { LineChart } from "@/components/charts";
+// Página de Humor = registro + diagnóstico.
+//
+// Registro e diagnóstico moram juntos: a pergunta "o que melhora e o que piora meu humor"
+// precisa de janela longa e comparação, e ler o resultado no mesmo lugar onde se registra é
+// o que faz alguém marcar a etiqueta. O /sono ficou só com a faixa de carinhas dos mesmos
+// 7 dias do gráfico de sono — leitura da correlação, não segundo formulário.
 
-const GLOW = { boxShadow: "0 0 15px var(--brand-glow)" };
-const MOOD_ICON = {
-  1: "sentiment_very_dissatisfied",
-  2: "sentiment_dissatisfied",
-  3: "sentiment_neutral",
-  4: "sentiment_satisfied",
-  5: "sentiment_very_satisfied",
-};
-const moodColor = (m) => (m >= 5 ? "text-primary-container" : m <= 1 ? "text-error" : "text-primary");
+import { useState } from "react";
+import { useApp } from "../AppContext";
+import { MI, Caps, PageHeader } from "@/components/ui";
+import MoodPanel from "@/components/MoodPanel";
+import MoodInsights from "@/components/MoodInsights";
+import { LineChart } from "@/components/charts";
+import { getDateStr, shiftDate, moodDayAvg, moodHasContent, moodPeriods, MOOD_OPTIONS, MOOD_TAGS } from "@/lib/state";
+
+const HISTORY_RANGES = [
+  { id: 14, label: "14D" },
+  { id: 30, label: "30D" },
+];
+const tagLabel = (id) => (MOOD_TAGS.find((t) => t.id === id) || {}).label || id;
 
 function moodStreak(moodMap) {
   let streak = 0;
-  let off = moodHasContent(moodMap[getDateStr(0)]) ? 0 : -1;
-  while (moodHasContent(moodMap[getDateStr(off)])) {
+  let off = moodHasContent(moodMap?.[getDateStr(0)]) ? 0 : -1;
+  while (moodHasContent(moodMap?.[getDateStr(off)])) {
     streak++;
     off--;
   }
   return streak;
 }
 
-// lê o período `key` da entrada do dia, tolerando o formato legado (mood numérico → cai na Tarde)
-function readPeriod(dayEntry, key) {
-  if (!dayEntry) return null;
-  if (typeof dayEntry.mood === "number") return key === "afternoon" ? { mood: dayEntry.mood, note: dayEntry.note || "", tags: [] } : null;
-  return dayEntry[key] || null;
-}
-
 export default function HumorPage() {
   const { state, setState } = useApp();
+  const [histRange, setHistRange] = useState(14);
+  const mood = state.mood || {};
   const today = getDateStr(0);
-  const nowPeriod = currentPeriodKey();
-  const dayEntry = state.mood[today];
 
-  const days = last7Dates();
-  const dayAvgs = days.map((d) => moodDayAvg(state.mood[d]));
-  const withData = dayAvgs.filter((v) => v !== null);
-  const avg = withData.length ? withData.reduce((s, v) => s + v, 0) / withData.length : null;
-  const streak = moodStreak(state.mood);
-  const registeredDays = days.filter((d) => moodHasContent(state.mood[d])).length;
-  const goalPct = Math.round((registeredDays / 7) * 100);
-  const periodAvgs = moodPeriodAverages(state.mood);
+  const days = Array.from({ length: histRange }, (_, i) => shiftDate(today, -(histRange - 1 - i)));
+  const values = days.map((d) => moodDayAvg(mood[d]));
+  const hasHistory = values.some((v) => v !== null);
+  const streak = moodStreak(mood);
+  const filled = days.filter((d) => moodHasContent(mood[d])).length;
 
-  // grava um período de hoje, migrando entrada legada p/ shape-por-período
-  function updatePeriod(key, patch) {
-    setState((prev) => {
-      let day = prev.mood[today];
-      if (day && typeof day.mood === "number") day = { afternoon: { mood: day.mood, note: day.note || "", tags: [] } };
-      day = { ...(day || {}) };
-      const cur = day[key] || {};
-      const next = { mood: cur.mood, note: cur.note || "", tags: cur.tags || [], ...patch };
-      if (typeof next.mood !== "number") delete day[key];
-      else day[key] = next;
-      return { ...prev, mood: { ...prev.mood, [today]: day } };
-    });
+  // notas recentes: é onde mora o "por quê" que nenhum número explica
+  const notes = [];
+  for (const d of Object.keys(mood).sort().reverse()) {
+    for (const p of moodPeriods(mood[d])) {
+      if (p.note) notes.push({ date: d, ...p });
+    }
+    if (notes.length >= 6) break;
   }
 
-  const setMood = (key, val) => {
-    const cur = readPeriod(dayEntry, key);
-    updatePeriod(key, { mood: cur?.mood === val ? undefined : val }); // clicar de novo limpa
-  };
-  const toggleTag = (key, tagId) => {
-    const cur = readPeriod(dayEntry, key);
-    const tags = cur?.tags || [];
-    updatePeriod(key, { tags: tags.includes(tagId) ? tags.filter((t) => t !== tagId) : [...tags, tagId] });
-  };
-  const setNote = (key, txt) => updatePeriod(key, { note: txt.slice(0, 140) });
-
   return (
-    <div className="space-y-8">
-      {/* Header + stat tiles */}
-      <section className="grid grid-cols-1 md:grid-cols-12 gap-card-gap">
-        <div className="md:col-span-8 space-y-2">
-          <h2 className="font-headline-lg text-headline-lg text-primary uppercase">Equilíbrio Emocional</h2>
-          <p className="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">
-            Registre o humor em cada período do dia. Assim dá pra ver o padrão — tarde pesada, treino à noite, humor que vira.
-          </p>
+    <>
+      <PageHeader
+        title="HUMOR"
+        subtitle="Registre os três períodos e veja o que levanta e o que derruba. Sem etiqueta o número não explica nada."
+      />
+
+      <div className="grid grid-cols-1 gap-gutter">
+        {/* registro de hoje — mesmo painel do /sono */}
+        <div className="grid grid-cols-1 md:grid-cols-12">
+          <MoodPanel state={state} setState={setState} />
         </div>
-        <div className="md:col-span-4 flex justify-start md:justify-end items-start gap-4">
-          <div className="glass-card p-4 rounded-xl flex flex-col items-center min-w-[100px]">
-            <Caps className="text-primary-container">SEQUÊNCIA</Caps>
-            <span className="font-headline-lg text-headline-lg">{streak} {streak === 1 ? "DIA" : "DIAS"}</span>
-          </div>
-          <div className="glass-card p-4 rounded-xl flex flex-col items-center min-w-[100px] border-primary-container/30">
-            <Caps className="text-primary-container">MÉDIA 7D</Caps>
-            <span className="font-headline-lg text-headline-lg text-primary-container">{avg ? avg.toFixed(1) : "—"}</span>
-          </div>
-        </div>
-      </section>
 
-      {/* Registro por período */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-card-gap">
-        {MOOD_PERIODS.map((p) => {
-          const cur = readPeriod(dayEntry, p.key);
-          const isNow = p.key === nowPeriod;
-          return (
-            <div
-              key={p.key}
-              className={`glass-card p-5 rounded-xl flex flex-col gap-4 border ${isNow ? "border-primary/50" : "border-white/10"}`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <MI name={p.icon} className={`text-xl ${isNow ? "text-primary" : "text-on-surface-variant"}`} />
-                  <h3 className="font-headline-md text-headline-md">{p.label}</h3>
-                  {isNow && <Caps className="text-[8px] text-primary bg-primary/15 px-1.5 py-0.5 rounded-full">AGORA</Caps>}
-                </div>
-                {cur && <MI name={MOOD_ICON[cur.mood]} className={`text-2xl ${moodColor(cur.mood)}`} />}
-              </div>
+        {/* diagnóstico */}
+        <MoodInsights state={state} />
 
-              {/* picker 1-5 */}
-              <div className="grid grid-cols-5 gap-1.5">
-                {MOOD_OPTIONS.map((opt) => {
-                  const active = cur?.mood === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      onClick={() => setMood(p.key, opt.value)}
-                      aria-label={opt.label}
-                      title={opt.label}
-                      className={`aspect-square rounded-lg flex items-center justify-center transition active:scale-90 border ${
-                        active ? "bg-primary/20 border-primary/50" : "border-white/10 hover:bg-primary/10"
-                      }`}
-                    >
-                      <MI name={MOOD_ICON[opt.value]} className={`text-xl ${active ? moodColor(opt.value) : "text-on-surface-variant"}`} />
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* tags */}
-              <div className="flex flex-wrap gap-1.5">
-                {MOOD_TAGS.map((t) => {
-                  const on = (cur?.tags || []).includes(t.id);
-                  return (
-                    <button
-                      key={t.id}
-                      onClick={() => toggleTag(p.key, t.id)}
-                      disabled={!cur}
-                      className={`px-2 py-1 rounded-full text-[10px] font-label-caps flex items-center gap-1 border transition ${
-                        on
-                          ? "bg-primary-container/25 text-primary-container border-primary-container/40"
-                          : "border-white/10 text-outline hover:border-white/25 disabled:opacity-40 disabled:hover:border-white/10"
-                      }`}
-                    >
-                      <MI name={t.icon} className="text-xs" /> {t.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* nota */}
-              <textarea
-                value={cur?.note || ""}
-                onChange={(e) => setNote(p.key, e.target.value)}
-                disabled={!cur}
-                placeholder={cur ? "Nota (opcional)" : "Escolha um humor pra anotar"}
-                maxLength={140}
-                rows={2}
-                className="bg-surface-container-lowest border border-white/5 rounded-lg px-3 py-2 text-body-md outline-none focus:border-primary/50 transition-colors resize-none disabled:opacity-40"
-              />
+        {/* histórico */}
+        <div className="glass-card p-6 rounded-xl">
+          <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+            <div>
+              <h3 className="font-headline-md text-headline-md text-primary">Histórico</h3>
+              <p className="text-[12px] text-on-surface-variant">
+                Média do dia na escala 1–5. {filled} de {histRange} dias registrados · sequência atual de {streak} dia(s).
+              </p>
             </div>
-          );
-        })}
-      </section>
-
-      {/* Média por período */}
-      <section className="glass-card p-6 rounded-xl">
-        <h3 className="font-headline-md text-headline-md mb-5">MÉDIA POR PERÍODO</h3>
-        <div className="grid grid-cols-3 gap-4">
-          {MOOD_PERIODS.map((p) => {
-            const a = periodAvgs[p.key];
-            const pct = a.avg ? ((a.avg - 1) / 4) * 100 : 0;
-            return (
-              <div key={p.key} className="flex flex-col items-center gap-2">
-                <div className="flex items-center gap-1.5 text-on-surface-variant">
-                  <MI name={p.icon} className="text-base" />
-                  <Caps className="text-[10px]">{p.label}</Caps>
-                </div>
-                <span className={`font-headline-md text-headline-md ${a.avg ? moodColor(Math.round(a.avg)) : "text-outline"}`}>
-                  {a.avg ? a.avg.toFixed(1) : "—"}
-                </span>
-                <div className="w-full h-2 bg-surface-container rounded-full overflow-hidden border border-white/5">
-                  <div className="h-full bg-primary-container rounded-full" style={{ width: `${pct}%` }} />
-                </div>
-                <Caps className="text-[9px] text-outline">{a.n} {a.n === 1 ? "REGISTRO" : "REGISTROS"}</Caps>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Histórico (média do dia) */}
-      <section className="glass-card p-8 rounded-xl">
-        <div className="flex justify-between items-center mb-8">
-          <h3 className="font-headline-md text-headline-md">HISTÓRICO (MÉDIA DO DIA)</h3>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 px-3 py-1 bg-surface-container rounded-full text-[10px] font-label-caps border border-white/5">
-              <span className="w-2 h-2 rounded-full bg-primary-container" /> ESCALA 1–5
+            <div className="flex rounded-lg overflow-hidden border border-white/10 shrink-0">
+              {HISTORY_RANGES.map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => setHistRange(r.id)}
+                  className={`px-3 py-1.5 font-label-caps text-[10px] transition ${
+                    histRange === r.id ? "bg-primary-container text-on-primary-container" : "text-on-surface-variant hover:bg-surface-variant/40"
+                  }`}
+                >
+                  {r.label}
+                </button>
+              ))}
             </div>
-            <Caps className="text-primary text-[10px]">{goalPct}% DA SEMANA</Caps>
           </div>
+
+          {hasHistory ? (
+            <LineChart
+              days={days}
+              values={values}
+              today={today}
+              yMin={1}
+              yMax={5.4}
+              format={(v) => MOOD_OPTIONS.find((o) => o.value === Math.round(v))?.emoji || v.toFixed(1)}
+              xLabel={(d) => d.slice(8, 10)}
+              ariaLabel="Média de humor por dia (escala 1 a 5)"
+              height={190}
+            />
+          ) : (
+            <p className="text-[13px] text-outline text-center py-8">Sem registro nessa janela — marque o humor de hoje pra começar.</p>
+          )}
         </div>
-        {withData.length > 0 ? (
-          <LineChart
-            days={days}
-            values={dayAvgs}
-            today={today}
-            yMin={0}
-            yMax={5.4}
-            format={(v) => MOOD_OPTIONS.find((o) => o.value === Math.round(v))?.emoji || (v ? v.toFixed(1) : v)}
-            ariaLabel="Média de humor por dia nos últimos 7 dias (escala 1 a 5)"
-          />
-        ) : (
-          <p className="text-[13px] text-outline text-center py-10">Sem registros ainda — marque seu humor de algum período pra começar o gráfico.</p>
+
+        {/* notas */}
+        {notes.length > 0 && (
+          <div className="glass-card p-6 rounded-xl">
+            <h3 className="font-headline-md text-headline-md text-primary mb-1">Últimas notas</h3>
+            <p className="text-[12px] text-on-surface-variant mb-3">O contexto que o número não guarda. Serve pra ler junto do diagnóstico.</p>
+            <div className="space-y-2">
+              {notes.slice(0, 6).map((n, i) => (
+                <div key={`${n.date}-${n.key}-${i}`} className="flex items-start gap-2 rounded-lg bg-surface-container-high px-3 py-2">
+                  <MI name="format_quote" className="text-outline text-base shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[12px] text-on-surface">{n.note}</p>
+                    <span className="text-[10px] text-outline tabular-nums">
+                      {n.date.slice(8, 10)}/{n.date.slice(5, 7)} · nota {n.mood}
+                      {(n.tags || []).length > 0 && ` · ${n.tags.map(tagLabel).join(", ")}`}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
-      </section>
-    </div>
+
+        <p className="text-[11px] text-outline text-center px-4 pb-2">
+          <Caps className="text-[9px] text-outline">SEM XP</Caps> — registrar humor não pontua. Métrica que paga vira número inflado, e aqui o número precisa ser
+          honesto pra servir de diagnóstico.
+        </p>
+      </div>
+    </>
   );
 }

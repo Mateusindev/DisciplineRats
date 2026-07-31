@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps, StarRating, inputCls } from "@/components/ui";
 import MetasEditor from "@/components/MetasEditor";
-import MoodPanel, { MoodStrip } from "@/components/MoodPanel";
+import { MoodStrip } from "@/components/MoodPanel";
 import { sleepXp, sleepMissXp, computeSleepXp, bedtimeLateness, SLEEP_LIMIT_DEFAULT, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX, award, getDateStr, minutesToHm, weekdayShort, last7Dates } from "@/lib/state";
 import { LineChart } from "@/components/charts";
 
@@ -273,7 +273,7 @@ export default function SonoPage() {
               <p className="text-[13px] text-outline text-center w-full py-10">Sem registros ainda — salve seu sono de hoje pra começar o gráfico.</p>
             )}
           </div>
-          {/* humor nos mesmos 7 dias — a correlação fica visível sem precisar de outra tela */}
+          {/* humor nos mesmos 7 dias: leitura da correlação. O registro mora em /humor. */}
           <MoodStrip mood={state.mood} days={days} />
 
           <div className="mt-8 pt-4 border-t border-white/5 flex items-center justify-between">
@@ -306,7 +306,6 @@ export default function SonoPage() {
           )}
         </div>
 
-        <MoodPanel state={state} setState={setState} />
       </div>
     </>
   );
