@@ -43,6 +43,22 @@ function SetChips({ sets, onRemove, size = "text-[11px]" }) {
   );
 }
 
+// Recorde pessoal: pílula com troféu. O número solto em caps se perdia no meio dos
+// rótulos — a marca é o que dá a ele peso de conquista, e é o alvo a bater na série.
+function PrBadge({ pr, size = "text-[11px]" }) {
+  if (!pr) return null;
+  return (
+    <span
+      title={`Recorde pessoal: ${pr.weight}kg${pr.reps ? ` × ${pr.reps} reps` : ""}`}
+      className={`inline-flex items-center gap-1 pl-1.5 pr-2 py-0.5 rounded-full bg-primary-container/15 border border-primary-container/30 text-primary-container ${size} font-bold tabular-nums shrink-0`}
+    >
+      <MI name="emoji_events" fill className="text-[13px]" />
+      {pr.weight}kg
+      {pr.reps ? <span className="text-primary-container/70">×{pr.reps}</span> : null}
+    </span>
+  );
+}
+
 // entrada digitada (kg · reps · falha · +)
 function TypedInputs({ row, onRow, onAdd, label }) {
   return (
@@ -341,7 +357,10 @@ export default function ExerciseRegister({ r }) {
             <div className="flex items-start justify-between gap-2 mb-3">
               <div className="min-w-0">
                 <h3 className="font-headline-md text-headline-md text-primary truncate">{it.name}</h3>
-                {it.detail && <Caps className="text-outline text-[9px]">{it.detail}</Caps>}
+                <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                  <PrBadge pr={r.gymPR(it.name)} />
+                  {it.detail && <Caps className="text-outline text-[9px]">{it.detail}</Caps>}
+                </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <button onClick={() => setI(Math.max(0, idx - 1))} disabled={idx === 0} aria-label="Anterior" className="w-8 h-8 rounded-full border border-white/10 text-on-surface-variant disabled:opacity-30 hover:border-white/25 transition grid place-items-center">
@@ -355,15 +374,6 @@ export default function ExerciseRegister({ r }) {
                 </button>
               </div>
             </div>
-
-            {(() => {
-              const pr = r.gymPR(it.name);
-              return pr ? (
-                <Caps className="text-outline text-[9px] block mb-2 tabular-nums">
-                  RECORDE {pr.weight}KG{pr.reps ? ` × ${pr.reps}` : ""}
-                </Caps>
-              ) : null;
-            })()}
 
             <div className="mb-3">
               {sets.length ? (
