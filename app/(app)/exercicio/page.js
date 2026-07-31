@@ -22,9 +22,7 @@ import {
   archiveFicha,
   restoreFicha,
   FICHA_WEEK_OPTIONS,
-  playAlarm,
   DOW_SHORT,
-  mmss,
 } from "@/lib/state";
 import { fetchExercises } from "@/lib/persistence";
 import { LineChart } from "@/components/charts";
@@ -75,82 +73,6 @@ function DayTimes({ weekdays, obj, onSet }) {
           <p className="text-[10px] text-outline w-full">Dia em branco usa o horário padrão acima.</p>
         </div>
       )}
-    </div>
-  );
-}
-
-// ===== descanso entre séries =====
-const REST_MIN = 30;
-const REST_MAX = 240;
-
-function RestTimer({ left, total, pref, onPick, onStart, onBump, onSkip }) {
-  const running = left > 0;
-  const pct = total > 0 ? Math.max(0, Math.min(100, (left / total) * 100)) : 0;
-  const ending = left > 0 && left <= 10; // últimos 10s em vermelho
-
-  // Parado é configuração: fica embutido na superfície da seção, sem card nem sticky.
-  // (Fundo próprio aqui virava um bloco opaco dentro do painel glass-card.)
-  if (!running) {
-    const fill = ((pref - REST_MIN) / (REST_MAX - REST_MIN)) * 100;
-    return (
-      <div className="mb-3 flex items-end gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-baseline gap-2 mb-1.5">
-            <Caps className="text-outline text-[10px]">DESCANSO</Caps>
-            <span className="font-headline-md text-[15px] text-primary tabular-nums leading-none">{mmss(pref)}</span>
-          </div>
-          <input
-            type="range"
-            min={REST_MIN}
-            max={REST_MAX}
-            step={15}
-            value={pref}
-            onChange={(e) => onPick(parseInt(e.target.value, 10))}
-            aria-label="Intervalo de descanso"
-            aria-valuetext={mmss(pref)}
-            className="w-full h-1.5 rounded-full appearance-none cursor-pointer
-              [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary-container [&::-webkit-slider-thumb]:shadow-md
-              [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary-container"
-            style={{ background: `linear-gradient(to right, var(--color-primary-container) ${fill}%, var(--color-surface-variant) ${fill}%)` }}
-          />
-          <div className="flex justify-between mt-1">
-            <span className="text-[10px] text-outline/70 tabular-nums">{mmss(REST_MIN)}</span>
-            <span className="text-[10px] text-outline/70">começa sozinho ao registrar série</span>
-            <span className="text-[10px] text-outline/70 tabular-nums">{mmss(REST_MAX)}</span>
-          </div>
-        </div>
-        <button
-          onClick={() => onStart(pref)}
-          aria-label="Começar descanso"
-          title="Começar descanso"
-          className="w-9 h-9 mb-4 shrink-0 grid place-items-center rounded-full border border-primary/40 text-primary hover:bg-primary/10 active:scale-95 transition"
-        >
-          <MI name="play_arrow" fill className="text-lg" />
-        </button>
-      </div>
-    );
-  }
-
-  // Rodando precisa acompanhar o scroll. A barra é opaca e preenche o sticky inteiro,
-  // então não sobra fresta — dispensa fundo no wrapper.
-  return (
-    <div className="sticky top-0 z-30 mb-2">
-      <div className={`relative overflow-hidden rounded-xl border ${ending ? "border-error/50" : "border-primary-container/40"} bg-surface-container-high`}>
-        <div
-          className={`absolute inset-y-0 left-0 ${ending ? "bg-error/25" : "bg-primary-container/25"}`}
-          style={{ width: `${pct}%`, transition: "width .3s linear" }}
-        />
-        <div className="relative flex items-center gap-3 px-3 py-3">
-          <span className={`font-headline-lg text-[30px] leading-none tabular-nums ${ending ? "text-error" : "text-primary"}`}>{mmss(left)}</span>
-          <Caps className="text-on-surface-variant text-[10px] flex-1">DESCANSO</Caps>
-          <button onClick={onBump} className="px-2.5 py-1.5 rounded font-label-caps text-[11px] border border-white/15 text-on-surface-variant hover:border-white/30 transition shrink-0">
-            +30s
-          </button>
-          <button onClick={onSkip} aria-label="Pular descanso" className="w-9 h-9 grid place-items-center rounded-full text-outline hover:text-on-surface hover:bg-surface-variant/50 transition shrink-0">
-            <MI name="skip_next" />
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -737,49 +659,6 @@ export default function ExercicioPage() {
   const getRow = (ex) => rowForms[ex] || { weight: "", reps: "", failure: false };
   const setRow = (ex, patch) => setRowForms((f) => ({ ...f, [ex]: { ...getRow(ex), ...patch } }));
 
-  // ===== descanso entre séries =====
-  // Ancorado no relógio (endRef), não na contagem de ticks: aba em segundo plano é
-  // estrangulada pelo navegador, então contar intervalos atrasaria o cronômetro.
-  const restPref = state.settings?.restSec || 90;
-  const [restLeft, setRestLeft] = useState(0);
-  const [restTotal, setRestTotal] = useState(0); // duração da rodada atual, p/ o % da barra
-  const restEndRef = useRef(0);
-
-  const startRest = (sec = restPref) => {
-    restEndRef.current = Date.now() + sec * 1000;
-    setRestTotal(sec);
-    setRestLeft(sec);
-  };
-  const stopRest = () => {
-    restEndRef.current = 0;
-    setRestLeft(0);
-  };
-  const bumpRest = (delta) => {
-    if (!restEndRef.current) return;
-    restEndRef.current = Math.max(Date.now(), restEndRef.current + delta * 1000);
-    setRestTotal((t) => t + delta); // senão +30s trava a barra em 100%
-    setRestLeft(Math.max(0, Math.round((restEndRef.current - Date.now()) / 1000)));
-  };
-
-  useEffect(() => {
-    if (!restEndRef.current) return;
-    const tick = () => {
-      const left = Math.max(0, Math.round((restEndRef.current - Date.now()) / 1000));
-      setRestLeft(left);
-      if (left === 0) {
-        restEndRef.current = 0;
-        playAlarm();
-        toast("Descanso acabou", { sub: "Próxima série.", icon: "fitness_center" });
-      }
-    };
-    const id = setInterval(tick, 250);
-    document.addEventListener("visibilitychange", tick); // volta pra aba → recalcula na hora
-    return () => {
-      clearInterval(id);
-      document.removeEventListener("visibilitychange", tick);
-    };
-  }, [restLeft > 0, toast]);
-
   // registra série p/ um exercício (ficha ou avulso). Retorna true se gravou.
   function pushSet(exercise, { weight, reps, failure }) {
     const ex = exercise.trim().slice(0, 60);
@@ -808,7 +687,6 @@ export default function ExercicioPage() {
         { id: crypto.randomUUID(), date: sessionDate, exercise: ex, weight: w, reps: isNaN(r) || r <= 0 ? null : r, failure: !!failure },
       ],
     }));
-    if (!isRetro) startRest(); // série retroativa não é descanso de agora
     return true;
   }
   const chartExercise = chartEx || gymExercises(gymSets)[0] || null;
@@ -1046,22 +924,6 @@ export default function ExercicioPage() {
                       {isRetro ? `SALVAM EM ${ddmm(sessionDate)}` : "SALVAM AO ADICIONAR"}
                     </Caps>
                   </div>
-
-                  {/* descanso: começa sozinho ao registrar série */}
-                  {!isRetro && (
-                    <RestTimer
-                      left={restLeft}
-                      total={restTotal}
-                      pref={restPref}
-                      onPick={(s) => setSetting("restSec", s)}
-                      onStart={(s) => {
-                        if (s !== restPref) setSetting("restSec", s);
-                        startRest(s);
-                      }}
-                      onBump={() => bumpRest(30)}
-                      onSkip={stopRest}
-                    />
-                  )}
 
                   {trainDiv && trainItems.length === 0 && (
                     <div className="text-[12px] text-outline bg-surface-container-high rounded-lg border border-white/5 p-3 flex items-center justify-between gap-2">
