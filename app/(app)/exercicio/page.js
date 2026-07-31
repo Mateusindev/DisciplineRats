@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useApp } from "../AppContext";
-import { MI, Caps, StarRating, Select, inputCls, textareaCls } from "@/components/ui";
+import { MI, Caps, StarRating, Select, inputCls } from "@/components/ui";
 import {
   XP,
   award,
@@ -27,6 +27,7 @@ import {
 import { fetchExercises } from "@/lib/persistence";
 import { LineChart } from "@/components/charts";
 import { ExerciseModal, guessMuscle } from "@/components/ExerciseInfo";
+import ExerciseRegister from "@/components/ExerciseRegister";
 
 const GLOW = { boxShadow: "0 0 15px var(--brand-glow)" };
 const ddmm = (d) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : "");
@@ -830,6 +831,50 @@ export default function ExercicioPage() {
     setState((prev) => ({ ...prev, workoutHistory: (prev.workoutHistory || []).filter((e) => e.id !== entry.id) }));
   }
 
+  // tudo que o formulário de registro precisa, num objeto só
+  const registerProps = {
+    sessionDate,
+    setSessionDate,
+    minDate,
+    today,
+    isRetro,
+    ddmm,
+    type,
+    changeType,
+    modalityNames,
+    divisionNames,
+    effectiveDivision,
+    setDivision,
+    isGymSession,
+    trainDiv,
+    trainItems,
+    sessionByEx,
+    looseByEx,
+    getRow,
+    setRow,
+    addRowSet,
+    removeSet,
+    gymPR: (ex) => gymPR(gymSets, ex),
+    lastSetOf: (ex) => {
+      const all = gymSets.filter((g) => g.exercise === ex);
+      return all.length ? all[all.length - 1] : null;
+    },
+    openInfo,
+    knownExercises,
+    setForm,
+    setSetForm,
+    setFailure,
+    setSetFailure,
+    addSet,
+    duration,
+    setDuration,
+    intensity,
+    setIntensity,
+    note,
+    setNote,
+    logWorkout,
+    setTab,
+  };
   function updateGoal(delta) {
     setState((prev) => ({
       ...prev,
@@ -869,256 +914,10 @@ export default function ExercicioPage() {
       {/* ============ ABA: REGISTRAR ============ */}
       {tab === "registrar" && (
         <>
-          {/* Sessão unificada */}
-          <section className="col-span-12 lg:col-span-7 glass-card p-6 md:p-8 rounded-xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-              <MI name="edit_note" className="text-[120px]" />
-            </div>
-            <h2 className="font-headline-md text-headline-md text-primary mb-6 flex items-center gap-2">
-              <MI name="edit_note" /> SESSÃO
-              {isRetro && (
-                <Caps className="text-outline text-[10px] border border-white/10 rounded-full px-2 py-1 ml-1">
-                  RETROATIVO · {ddmm(sessionDate)}
-                </Caps>
-              )}
-            </h2>
+          <ExerciseRegister r={registerProps} />
 
-            <div className="flex flex-col gap-5">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                <div className="space-y-2">
-                  <Caps className="text-on-surface-variant">DATA</Caps>
-                  <input
-                    type="date"
-                    value={sessionDate}
-                    min={minDate}
-                    max={today}
-                    onChange={(e) => setSessionDate(e.target.value || today)}
-                    aria-label="Data da sessão"
-                    className={`${inputCls} w-full py-2 ${isRetro ? "border-primary-container/40" : ""}`}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Caps className="text-on-surface-variant">TIPO DE TREINO</Caps>
-                  <Select
-                    value={type}
-                    options={modalityNames}
-                    onChange={changeType}
-                    disabled={modalityNames.length === 0}
-                    placeholder="Cadastre uma modalidade em Meus Treinos"
-                  />
-                </div>
-                {divisionNames.length > 0 && (
-                  <div className="space-y-2">
-                    <Caps className="text-on-surface-variant">DIVISÃO</Caps>
-                    <Select value={effectiveDivision} options={divisionNames} onChange={setDivision} placeholder="Selecione a divisão" />
-                  </div>
-                )}
-              </div>
-
-              {/* ficha da academia: séries por exercício, salvam na hora */}
-              {isGymSession && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <Caps className="text-on-surface-variant">SÉRIES · {trainDiv ? trainDiv.name.toUpperCase() : "SEM DIVISÃO"}</Caps>
-                    <Caps className={`text-[9px] ${isRetro ? "text-primary-container" : "text-outline"}`}>
-                      {isRetro ? `SALVAM EM ${ddmm(sessionDate)}` : "SALVAM AO ADICIONAR"}
-                    </Caps>
-                  </div>
-
-                  {trainDiv && trainItems.length === 0 && (
-                    <div className="text-[12px] text-outline bg-surface-container-high rounded-lg border border-white/5 p-3 flex items-center justify-between gap-2">
-                      <span>Divisão sem exercícios.</span>
-                      <button onClick={() => setTab("treinos")} className="font-label-caps text-[10px] text-primary hover:underline shrink-0">
-                        CADASTRAR →
-                      </button>
-                    </div>
-                  )}
-
-                  {trainItems.length > 0 && (
-                    <div className="space-y-2.5">
-                      {trainItems.map((it) => {
-                        const sets = sessionByEx[it.name] || [];
-                        const row = getRow(it.name);
-                        const pr = gymPR(gymSets, it.name);
-                        return (
-                          <div key={it.id} className="bg-surface-container-high rounded-lg border border-white/5 p-3">
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${sets.length ? "bg-primary-container" : "bg-surface-variant"}`} />
-                              <button onClick={() => openInfo(it.name)} className="flex-1 min-w-0 flex items-center gap-1 text-[13px] font-bold text-on-surface truncate text-left hover:text-primary transition" title="Ver músculo + vídeo">
-                                <span className="truncate">{it.name}</span>
-                                <MI name="info" className="text-sm text-outline shrink-0" />
-                              </button>
-                              {pr && (
-                                <span
-                                  title={`Recorde pessoal: ${pr.weight}kg${pr.reps ? ` × ${pr.reps}` : ""}`}
-                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-primary-container/15 border border-primary-container/30 text-primary-container text-[10px] font-bold tabular-nums shrink-0"
-                                >
-                                  <MI name="emoji_events" fill className="text-[11px]" /> {pr.weight}kg{pr.reps ? `×${pr.reps}` : ""}
-                                </span>
-                              )}
-                              {it.detail && <Caps className="text-outline text-[9px] shrink-0">{it.detail}</Caps>}
-                            </div>
-                            {sets.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5 mb-2">
-                                {sets.map((s) => (
-                                  <span key={s.id} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-surface-container-lowest border border-white/10 text-[11px] text-on-surface tabular-nums">
-                                    {s.weight}kg×{s.reps ?? "F"}
-                                    {s.failure && s.reps != null && <span className="text-error text-[9px] font-bold">F</span>}
-                                    <button onClick={() => removeSet(s.id)} aria-label="Remover série" className="text-outline hover:text-error transition flex items-center">
-                                      <MI name="close" className="text-[13px]" />
-                                    </button>
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                            <div className="grid grid-cols-12 gap-1.5">
-                              <input
-                                value={row.weight}
-                                onChange={(e) => setRow(it.name, { weight: e.target.value })}
-                                inputMode="decimal"
-                                placeholder="kg"
-                                className={`${inputCls} col-span-3 text-[12px] py-1.5`}
-                              />
-                              <input
-                                value={row.reps}
-                                onChange={(e) => setRow(it.name, { reps: e.target.value })}
-                                onKeyDown={(e) => e.key === "Enter" && addRowSet(it.name)}
-                                inputMode="numeric"
-                                placeholder="reps"
-                                className={`${inputCls} col-span-3 text-[12px] py-1.5`}
-                              />
-                              <button
-                                onClick={() => setRow(it.name, { failure: !row.failure })}
-                                aria-pressed={row.failure}
-                                className={`col-span-3 rounded-lg font-label-caps text-[9px] border transition ${
-                                  row.failure ? "bg-error text-on-error border-error" : "border-error/40 text-error hover:bg-error/10"
-                                }`}
-                              >
-                                FALHA
-                              </button>
-                              <button onClick={() => addRowSet(it.name)} aria-label={`Adicionar série de ${it.name}`} className="col-span-3 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center active:scale-95 transition py-1.5">
-                                <MI name="add" className="text-lg" />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* avulso compacto */}
-                  <details className="mt-3 group">
-                    <summary className="cursor-pointer font-label-caps text-[10px] text-outline hover:text-primary transition list-none flex items-center gap-1">
-                      <MI name="chevron_right" className="text-sm transition-transform group-open:rotate-90" /> EXERCÍCIO AVULSO
-                    </summary>
-                    <div className="grid grid-cols-12 gap-2 mt-2">
-                      <input
-                        value={setForm.exercise}
-                        onChange={(e) => setSetForm((f) => ({ ...f, exercise: e.target.value }))}
-                        list="gym-exercises"
-                        placeholder="Exercício (ex.: Supino reto)"
-                        className={`${inputCls} col-span-12 text-[13px]`}
-                      />
-                      <datalist id="gym-exercises">
-                        {knownExercises.map((n) => (
-                          <option key={n} value={n} />
-                        ))}
-                      </datalist>
-                      <input
-                        value={setForm.weight}
-                        onChange={(e) => setSetForm((f) => ({ ...f, weight: e.target.value }))}
-                        inputMode="decimal"
-                        placeholder="kg"
-                        className={`${inputCls} col-span-3 text-[13px]`}
-                      />
-                      <input
-                        value={setForm.reps}
-                        onChange={(e) => setSetForm((f) => ({ ...f, reps: e.target.value }))}
-                        onKeyDown={(e) => e.key === "Enter" && addSet()}
-                        inputMode="numeric"
-                        placeholder="reps"
-                        className={`${inputCls} col-span-3 text-[13px]`}
-                      />
-                      <button
-                        onClick={() => setSetFailure((v) => !v)}
-                        aria-pressed={setFailure}
-                        className={`col-span-3 rounded-lg font-label-caps text-[10px] border transition ${
-                          setFailure ? "bg-error text-on-error border-error" : "border-error/40 text-error hover:bg-error/10"
-                        }`}
-                      >
-                        FALHA
-                      </button>
-                      <button onClick={addSet} aria-label="Adicionar série avulsa" className="col-span-3 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center active:scale-95 transition">
-                        <MI name="add" />
-                      </button>
-                    </div>
-                    {Object.keys(looseByEx).length > 0 && (
-                      <div className="space-y-2 mt-3">
-                        {Object.entries(looseByEx).map(([ex, sets]) => (
-                          <div key={ex}>
-                            <Caps className="text-primary-container text-[10px] block mb-1">{ex}</Caps>
-                            <div className="flex flex-wrap gap-1.5">
-                              {sets.map((s) => (
-                                <span key={s.id} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-surface-container-lowest border border-white/10 text-[11px] text-on-surface tabular-nums">
-                                  {s.weight}kg×{s.reps ?? "F"}
-                                  <button onClick={() => removeSet(s.id)} aria-label="Remover série" className="text-outline hover:text-error transition flex items-center">
-                                    <MI name="close" className="text-[13px]" />
-                                  </button>
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </details>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="space-y-2">
-                  <Caps className="text-on-surface-variant">DURAÇÃO (MIN)</Caps>
-                  <input
-                    value={duration}
-                    onChange={(e) => setDuration(e.target.value)}
-                    inputMode="numeric"
-                    placeholder="60"
-                    className={`${inputCls} w-full py-2.5`}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Caps className="text-on-surface-variant">INTENSIDADE</Caps>
-                  <div className="py-2">
-                    <StarRating value={intensity} onChange={setIntensity} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Caps className="text-on-surface-variant">NOTAS</Caps>
-                <textarea
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="Como se sentiu, observações..."
-                  maxLength={200}
-                  rows={2}
-                  className={textareaCls}
-                />
-              </div>
-
-              <button
-                onClick={logWorkout}
-                style={GLOW}
-                className="w-full py-4 bg-primary text-on-primary font-headline-md text-headline-md uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-primary-container active:scale-[0.99] transition-colors rounded-lg"
-              >
-                REGISTRAR SESSÃO
-                <MI name="chevron_right" />
-              </button>
-            </div>
-          </section>
-
-          {/* Feed treinos da semana */}
-          <div className="col-span-12 lg:col-span-5 glass-card p-5 rounded-xl border-primary/20 bg-primary/5 self-start">
+          {/* Histórico da semana — abaixo do formulário, largura cheia */}
+          <div className="col-span-12 glass-card p-5 rounded-xl border-primary/20 bg-primary/5">
             <div className="flex items-center gap-3 text-primary mb-3">
               <MI name="sensors" />
               <Caps>TREINOS DA SEMANA</Caps>
@@ -1126,7 +925,8 @@ export default function ExercicioPage() {
             {weekLogs.length === 0 ? (
               <p className="text-[12px] text-on-surface-variant">Nenhum treino registrado ainda.</p>
             ) : (
-              <ul className="flex flex-col gap-2 max-h-[420px] overflow-y-auto ff-scroll">
+              /* largura cheia: em coluna única os cards ficariam esticados */
+              <ul className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
                 {weekLogs.map((l) => (
                   <li key={l.id} className="flex flex-col gap-1 rounded-lg px-3 py-2 bg-surface-container-high border border-white/5">
                     <div className="flex items-center gap-2">
