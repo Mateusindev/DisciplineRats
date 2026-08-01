@@ -3,16 +3,63 @@
 import { useState } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps, inputCls } from "@/components/ui";
-import { dietTotals, dietItemTotals, dietItemQty, dietItemPortionGrams, DIET_UNITS } from "@/lib/state";
+import {
+  dietTotals,
+  dietItemTotals,
+  dietItemQty,
+  dietItemPortionGrams,
+  dietItemBaseGrams,
+  dietQtyFromGrams,
+  isMassUnit,
+  DIET_UNITS,
+} from "@/lib/state";
 import MetasEditor from "@/components/MetasEditor";
 import NutriProfile from "@/components/NutriProfile";
 
 // Formulário de item: os macros são de UMA porção. `qty` multiplica na hora de somar,
 // então corrigir "1 ovo" pra 2 é mexer num número, não redigitar a tabela nutricional.
-const EMPTY_ITEM = { name: "", qty: "1", unit: "un", portionGrams: "", kcal: "", protein: "", carbs: "", fat: "" };
+const EMPTY_ITEM = { name: "", qty: "1", unit: "un", grams: "", portionGrams: "", kcal: "", protein: "", carbs: "", fat: "" };
 
 const qtyFmt = (n) => String(Math.round(n * 100) / 100).replace(".", ",");
 const gFmt = (n) => `${Math.round(n)} g`;
+
+const G_STEPS = [10, 50, 100];
+
+// Total em gramas com −/+ no passo escolhido. Passo é alternável porque 10 g serve pra
+// ajustar e 100 g pra montar — obrigar um dos dois deixa o outro caso insuportável.
+function MassStepper({ grams, step, onStep, onChange, size = "sm" }) {
+  const g = Number(grams) > 0 ? Number(grams) : 0;
+  const big = size === "lg";
+  const btn = `${big ? "w-8 h-8" : "w-7 h-7"} rounded-lg border border-white/10 text-on-surface-variant hover:border-white/25 active:scale-95 transition grid place-items-center shrink-0`;
+  return (
+    <div className="flex items-center gap-1 shrink-0">
+      <button onClick={() => onChange(Math.max(0, g - step))} aria-label={`Menos ${step} gramas`} className={btn}>
+        −
+      </button>
+      <input
+        value={g || ""}
+        onChange={(e) => {
+          const n = parseFloat(String(e.target.value).replace(",", "."));
+          onChange(Number.isFinite(n) && n >= 0 ? n : 0);
+        }}
+        inputMode="numeric"
+        placeholder="0"
+        aria-label="Total em gramas"
+        className={`${big ? "w-16 text-[15px]" : "w-14 text-[13px]"} bg-transparent text-center font-bold text-on-surface tabular-nums outline-none border-b border-white/10 focus:border-primary-container/60 transition`}
+      />
+      <button onClick={() => onChange(g + step)} aria-label={`Mais ${step} gramas`} className={btn}>
+        +
+      </button>
+      <button
+        onClick={() => onStep(G_STEPS[(G_STEPS.indexOf(step) + 1) % G_STEPS.length])}
+        title="Passo do ajuste"
+        className="px-1.5 h-7 rounded-lg border border-white/10 font-label-caps text-[9px] text-outline hover:border-white/25 transition tabular-nums shrink-0"
+      >
+        ±{step}g
+      </button>
+    </div>
+  );
+}
 
 // quantidade com −/+ e digitação livre (aceita 0,5 e 1,5)
 function QtyStepper({ value, unit, onChange, size = "sm" }) {
@@ -78,6 +125,7 @@ export default function DietaPage() {
   const [forms, setForms] = useState({}); // { [mealId]: {name,grams,...} }
   const [edits, setEdits] = useState({}); // { [itemId]: {name,grams,...} } — item em edição
   const [newMeal, setNewMeal] = useState("");
+  const [gStep, setGStep] = useState(10); // passo do ajuste em gramas (10 / 50 / 100)
 
   const plan = state.dietPlan || [];
   const allItems = plan.flatMap((m) => m.items || []);
@@ -109,6 +157,23 @@ export default function DietaPage() {
     setState((prev) => ({ ...prev, dietPlan: (prev.dietPlan || []).map((m) => (m.id === id ? { ...m, name } : m)) }));
   }
 
+  // Normaliza unidade/porção/quantidade do formulário. Em massa o campo digitado é o
+  // TOTAL em gramas e a tabela é "por N g" (100 se não informado, como no rótulo);
+  // qty vira o fator derivado. Por unidade, qty é o que a pessoa digitou.
+  function itemQtyFields(f) {
+    const unit = DIET_UNITS.includes(f.unit) ? f.unit : "un";
+    if (isMassUnit(unit)) {
+      const base = Math.round(num(f.portionGrams)) || 100;
+      const total = String(f.grams).trim() === "" ? base : num(f.grams); // vazio = uma tabela
+      return { unit, portionGrams: base, qty: dietQtyFromGrams(total, base) };
+    }
+    return {
+      unit,
+      portionGrams: Math.round(num(f.portionGrams)),
+      qty: num(f.qty) > 0 ? Math.round(num(f.qty) * 100) / 100 : 1,
+    };
+  }
+
   // ---- itens ----
   const getForm = (mealId) => forms[mealId] || EMPTY_ITEM;
   const setField = (mealId, key) => (e) =>
@@ -124,9 +189,7 @@ export default function DietaPage() {
     const item = {
       id: Date.now(),
       name: name.slice(0, 60),
-      qty: num(f.qty) > 0 ? Math.round(num(f.qty) * 100) / 100 : 1,
-      unit: DIET_UNITS.includes(f.unit) ? f.unit : "un",
-      portionGrams: Math.round(num(f.portionGrams)),
+      ...itemQtyFields(f),
       kcal: Math.round(num(f.kcal)),
       protein: Math.round(num(f.protein) * 10) / 10,
       carbs: Math.round(num(f.carbs) * 10) / 10,
@@ -164,6 +227,7 @@ export default function DietaPage() {
         qty: dietItemQty(item),
         unit: item.unit || "un",
         portionGrams: dietItemPortionGrams(item) || "",
+        grams: dietItemTotals(item).grams || "",
         kcal: item.kcal,
         protein: item.protein,
         carbs: item.carbs,
@@ -187,9 +251,7 @@ export default function DietaPage() {
     }
     const patch = {
       name: name.slice(0, 60),
-      qty: num(f.qty) > 0 ? Math.round(num(f.qty) * 100) / 100 : 1,
-      unit: DIET_UNITS.includes(f.unit) ? f.unit : "un",
-      portionGrams: Math.round(num(f.portionGrams)),
+      ...itemQtyFields(f),
       kcal: Math.round(num(f.kcal)),
       protein: Math.round(num(f.protein) * 10) / 10,
       carbs: Math.round(num(f.carbs) * 10) / 10,
@@ -311,16 +373,34 @@ export default function DietaPage() {
                         <div className="space-y-2">
                           <div className="flex flex-wrap items-center gap-2">
                             <input value={ed.name} onChange={editField(e.id, "name")} onKeyDown={(k) => k.key === "Enter" && saveEdit(m.id, e.id)} placeholder="Alimento" className={`${inputCls} flex-1 min-w-[140px] text-[13px]`} />
-                            <QtyStepper value={ed.qty} onChange={(q) => setEdits((es) => ({ ...es, [e.id]: { ...es[e.id], qty: q } }))} />
                             <select value={ed.unit} onChange={editField(e.id, "unit")} aria-label="Unidade da porção" className={`${inputCls} w-24 text-[13px]`}>
                               {DIET_UNITS.map((u) => (
                                 <option key={u} value={u}>{u}</option>
                               ))}
                             </select>
-                            <input value={ed.portionGrams} onChange={editField(e.id, "portionGrams")} type="number" min="0" placeholder="g/porção" aria-label="Gramas por porção" className={`${inputCls} w-24 text-[13px]`} />
+                            {isMassUnit(ed.unit) ? (
+                              <>
+                                <MassStepper
+                                  grams={ed.grams}
+                                  step={gStep}
+                                  onStep={setGStep}
+                                  onChange={(g) => setEdits((es) => ({ ...es, [e.id]: { ...es[e.id], grams: g } }))}
+                                />
+                                <label className="flex items-center gap-1.5">
+                                  <Caps className="text-outline text-[9px]">TABELA POR</Caps>
+                                  <input value={ed.portionGrams} onChange={editField(e.id, "portionGrams")} type="number" min="0" placeholder="100" aria-label="Gramas da tabela" className={`${inputCls} w-16 text-[13px]`} />
+                                  <Caps className="text-outline text-[9px]">G</Caps>
+                                </label>
+                              </>
+                            ) : (
+                              <>
+                                <QtyStepper value={ed.qty} onChange={(q) => setEdits((es) => ({ ...es, [e.id]: { ...es[e.id], qty: q } }))} />
+                                <input value={ed.portionGrams} onChange={editField(e.id, "portionGrams")} type="number" min="0" placeholder="g/porção" aria-label="Gramas por porção" className={`${inputCls} w-24 text-[13px]`} />
+                              </>
+                            )}
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <Caps className="text-outline text-[9px]">POR PORÇÃO</Caps>
+                            <Caps className="text-outline text-[9px]">{isMassUnit(ed.unit) ? `POR ${Math.round(num(ed.portionGrams)) || 100} G` : "POR PORÇÃO"}</Caps>
                             <input value={ed.kcal} onChange={editField(e.id, "kcal")} type="number" min="0" placeholder="kcal" className={`${inputCls} w-20 text-[13px]`} />
                             <input value={ed.protein} onChange={editField(e.id, "protein")} type="number" min="0" placeholder="P (g)" className={`${inputCls} w-20 text-[13px]`} />
                             <input value={ed.carbs} onChange={editField(e.id, "carbs")} type="number" min="0" placeholder="C (g)" className={`${inputCls} w-20 text-[13px]`} />
@@ -339,23 +419,35 @@ export default function DietaPage() {
                   }
                   const t = dietItemTotals(e);
                   const pg = dietItemPortionGrams(e);
+                  const mass = isMassUnit(e.unit);
+                  const base = dietItemBaseGrams(e);
                   const scaled = t.qty !== 1;
                   return (
                     <div key={e.id} className="flex items-center gap-3 p-3 bg-surface-container-high rounded-lg border border-white/5">
-                      {/* quantidade recalcula na hora: o resto da linha e todos os totais seguem */}
-                      <QtyStepper value={t.qty} unit={e.unit || "un"} onChange={(q) => patchItem(m.id, e.id, { qty: q })} />
+                      {/* ajuste recalcula na hora: em massa o controle é o total em gramas,
+                          por unidade é a quantidade de porções */}
+                      {mass ? (
+                        <MassStepper
+                          grams={t.grams}
+                          step={gStep}
+                          onStep={setGStep}
+                          onChange={(g) => patchItem(m.id, e.id, { qty: dietQtyFromGrams(g, base) })}
+                        />
+                      ) : (
+                        <QtyStepper value={t.qty} unit={e.unit || "un"} onChange={(q) => patchItem(m.id, e.id, { qty: q })} />
+                      )}
                       <div className="flex-1 min-w-0">
                         <div className="text-[13px] font-bold text-on-surface truncate">
                           {e.name}
-                          {t.grams ? <span className="text-outline font-normal"> · {gFmt(t.grams)}</span> : null}
+                          {!mass && t.grams ? <span className="text-outline font-normal"> · {gFmt(t.grams)}</span> : null}
                         </div>
                         <div className="text-[11px] text-on-surface-variant tabular-nums">
                           {t.kcal} kcal · P {t.protein}g · C {t.carbs}g · G {t.fat}g
                         </div>
-                        {scaled && (
+                        {(scaled || mass) && (
                           <div className="text-[10px] text-outline tabular-nums">
-                            porção: {e.kcal || 0} kcal · P {e.protein || 0} · C {e.carbs || 0} · G {e.fat || 0}
-                            {pg ? ` · ${gFmt(pg)}` : ""}
+                            {mass ? `por ${gFmt(base)}` : "porção"}: {e.kcal || 0} kcal · P {e.protein || 0} · C {e.carbs || 0} · G {e.fat || 0}
+                            {!mass && pg ? ` · ${gFmt(pg)}` : ""}
                           </div>
                         )}
                       </div>
@@ -375,25 +467,46 @@ export default function DietaPage() {
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 <input value={f.name} onChange={setField(m.id, "name")} onKeyDown={(e) => e.key === "Enter" && addItem(m.id)} placeholder="Alimento (ex.: Ovo cozido)" className={`${inputCls} flex-1 min-w-[160px] text-[13px]`} />
-                <QtyStepper value={f.qty} onChange={(q) => setForms((fs) => ({ ...fs, [m.id]: { ...getForm(m.id), qty: q } }))} />
                 <select value={f.unit} onChange={setField(m.id, "unit")} aria-label="Unidade da porção" className={`${inputCls} w-24 text-[13px]`}>
                   {DIET_UNITS.map((u) => (
                     <option key={u} value={u}>{u}</option>
                   ))}
                 </select>
-                <input value={f.portionGrams} onChange={setField(m.id, "portionGrams")} type="number" min="0" placeholder="g/porção" aria-label="Gramas por porção" className={`${inputCls} w-24 text-[13px]`} />
+                {isMassUnit(f.unit) ? (
+                  <>
+                    <MassStepper
+                      grams={f.grams}
+                      step={gStep}
+                      onStep={setGStep}
+                      onChange={(g) => setForms((fs) => ({ ...fs, [m.id]: { ...getForm(m.id), grams: g } }))}
+                    />
+                    <label className="flex items-center gap-1.5">
+                      <Caps className="text-outline text-[9px]">TABELA POR</Caps>
+                      <input value={f.portionGrams} onChange={setField(m.id, "portionGrams")} type="number" min="0" placeholder="100" aria-label="Gramas da tabela" className={`${inputCls} w-16 text-[13px]`} />
+                      <Caps className="text-outline text-[9px]">G</Caps>
+                    </label>
+                  </>
+                ) : (
+                  <>
+                    <QtyStepper value={f.qty} onChange={(q) => setForms((fs) => ({ ...fs, [m.id]: { ...getForm(m.id), qty: q } }))} />
+                    <input value={f.portionGrams} onChange={setField(m.id, "portionGrams")} type="number" min="0" placeholder="g/porção" aria-label="Gramas por porção" className={`${inputCls} w-24 text-[13px]`} />
+                  </>
+                )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Caps className="text-outline text-[9px]">POR PORÇÃO</Caps>
+                <Caps className="text-outline text-[9px]">{isMassUnit(f.unit) ? `POR ${Math.round(num(f.portionGrams)) || 100} G` : "POR PORÇÃO"}</Caps>
                 <input value={f.kcal} onChange={setField(m.id, "kcal")} onKeyDown={(e) => e.key === "Enter" && addItem(m.id)} type="number" min="0" placeholder="kcal" className={`${inputCls} w-20 text-[13px]`} />
                 <input value={f.protein} onChange={setField(m.id, "protein")} onKeyDown={(e) => e.key === "Enter" && addItem(m.id)} type="number" min="0" placeholder="P (g)" className={`${inputCls} w-20 text-[13px]`} />
                 <input value={f.carbs} onChange={setField(m.id, "carbs")} onKeyDown={(e) => e.key === "Enter" && addItem(m.id)} type="number" min="0" placeholder="C (g)" className={`${inputCls} w-20 text-[13px]`} />
                 <input value={f.fat} onChange={setField(m.id, "fat")} onKeyDown={(e) => e.key === "Enter" && addItem(m.id)} type="number" min="0" placeholder="G (g)" className={`${inputCls} w-20 text-[13px]`} />
-                {num(f.qty) > 1 && num(f.kcal) > 0 && (
-                  <Caps className="text-primary-container text-[9px] tabular-nums">
-                    = {Math.round(num(f.kcal) * num(f.qty))} KCAL
-                  </Caps>
-                )}
+                {(() => {
+                  const factor = isMassUnit(f.unit)
+                    ? dietQtyFromGrams(num(f.grams), Math.round(num(f.portionGrams)) || 100)
+                    : num(f.qty);
+                  return factor > 0 && factor !== 1 && num(f.kcal) > 0 ? (
+                    <Caps className="text-primary-container text-[9px] tabular-nums">= {Math.round(num(f.kcal) * factor)} KCAL</Caps>
+                  ) : null;
+                })()}
                 <span className="flex-1" />
                 <button onClick={() => addItem(m.id)} aria-label="Adicionar item" className="px-4 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center gap-1 py-2 active:scale-95 transition font-label-caps text-[11px]">
                   <MI name="add" className="text-lg" /> ADD
