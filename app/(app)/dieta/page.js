@@ -3,11 +3,45 @@
 import { useState } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps, inputCls } from "@/components/ui";
-import { dietTotals } from "@/lib/state";
+import { dietTotals, dietItemTotals, dietItemQty, dietItemPortionGrams, DIET_UNITS } from "@/lib/state";
 import MetasEditor from "@/components/MetasEditor";
 import NutriProfile from "@/components/NutriProfile";
 
-const EMPTY_ITEM = { name: "", grams: "", kcal: "", protein: "", carbs: "", fat: "" };
+// Formulário de item: os macros são de UMA porção. `qty` multiplica na hora de somar,
+// então corrigir "1 ovo" pra 2 é mexer num número, não redigitar a tabela nutricional.
+const EMPTY_ITEM = { name: "", qty: "1", unit: "un", portionGrams: "", kcal: "", protein: "", carbs: "", fat: "" };
+
+const qtyFmt = (n) => String(Math.round(n * 100) / 100).replace(".", ",");
+const gFmt = (n) => `${Math.round(n)} g`;
+
+// quantidade com −/+ e digitação livre (aceita 0,5 e 1,5)
+function QtyStepper({ value, unit, onChange, size = "sm" }) {
+  const q = Number(value) > 0 ? Number(value) : 1;
+  const step = q <= 1 ? 0.5 : 1;
+  const big = size === "lg";
+  const btn = `${big ? "w-8 h-8" : "w-7 h-7"} rounded-lg border border-white/10 text-on-surface-variant hover:border-white/25 active:scale-95 transition grid place-items-center shrink-0`;
+  return (
+    <div className="flex items-center gap-1 shrink-0">
+      <button onClick={() => onChange(Math.max(0.25, Math.round((q - step) * 100) / 100))} aria-label="Diminuir quantidade" className={btn}>
+        −
+      </button>
+      <input
+        value={qtyFmt(q)}
+        onChange={(e) => {
+          const n = parseFloat(String(e.target.value).replace(",", "."));
+          onChange(Number.isFinite(n) && n > 0 ? n : 1);
+        }}
+        inputMode="decimal"
+        aria-label="Quantidade"
+        className={`${big ? "w-14 text-[15px]" : "w-11 text-[13px]"} bg-transparent text-center font-bold text-on-surface tabular-nums outline-none border-b border-white/10 focus:border-primary-container/60 transition`}
+      />
+      <button onClick={() => onChange(Math.round((q + step) * 100) / 100)} aria-label="Aumentar quantidade" className={btn}>
+        +
+      </button>
+      {unit && <Caps className="text-outline text-[9px] w-8">{unit}</Caps>}
+    </div>
+  );
+}
 
 const TABS_DIETA = [
   { id: "plano", label: "PLANO", short: "PLANO", icon: "restaurant_menu" },
@@ -90,7 +124,9 @@ export default function DietaPage() {
     const item = {
       id: Date.now(),
       name: name.slice(0, 60),
-      grams: Math.round(num(f.grams)),
+      qty: num(f.qty) > 0 ? Math.round(num(f.qty) * 100) / 100 : 1,
+      unit: DIET_UNITS.includes(f.unit) ? f.unit : "un",
+      portionGrams: Math.round(num(f.portionGrams)),
       kcal: Math.round(num(f.kcal)),
       protein: Math.round(num(f.protein) * 10) / 10,
       carbs: Math.round(num(f.carbs) * 10) / 10,
@@ -102,6 +138,16 @@ export default function DietaPage() {
     }));
     setForms((fs) => ({ ...fs, [mealId]: EMPTY_ITEM }));
   }
+  // patch direto no item — usado pela quantidade, que é ajuste de um clique
+  function patchItem(mealId, itemId, patch) {
+    setState((prev) => ({
+      ...prev,
+      dietPlan: (prev.dietPlan || []).map((m) =>
+        m.id === mealId ? { ...m, items: (m.items || []).map((i) => (i.id === itemId ? { ...i, ...patch } : i)) } : m
+      ),
+    }));
+  }
+
   function removeItem(mealId, itemId) {
     setState((prev) => ({
       ...prev,
@@ -111,7 +157,19 @@ export default function DietaPage() {
 
   // ---- edição de item ----
   const startEdit = (item) =>
-    setEdits((es) => ({ ...es, [item.id]: { name: item.name, grams: item.grams, kcal: item.kcal, protein: item.protein, carbs: item.carbs, fat: item.fat } }));
+    setEdits((es) => ({
+      ...es,
+      [item.id]: {
+        name: item.name,
+        qty: dietItemQty(item),
+        unit: item.unit || "un",
+        portionGrams: dietItemPortionGrams(item) || "",
+        kcal: item.kcal,
+        protein: item.protein,
+        carbs: item.carbs,
+        fat: item.fat,
+      },
+    }));
   const cancelEdit = (itemId) =>
     setEdits((es) => {
       const { [itemId]: _, ...rest } = es;
@@ -129,7 +187,9 @@ export default function DietaPage() {
     }
     const patch = {
       name: name.slice(0, 60),
-      grams: Math.round(num(f.grams)),
+      qty: num(f.qty) > 0 ? Math.round(num(f.qty) * 100) / 100 : 1,
+      unit: DIET_UNITS.includes(f.unit) ? f.unit : "un",
+      portionGrams: Math.round(num(f.portionGrams)),
       kcal: Math.round(num(f.kcal)),
       protein: Math.round(num(f.protein) * 10) / 10,
       carbs: Math.round(num(f.carbs) * 10) / 10,
@@ -248,18 +308,28 @@ export default function DietaPage() {
                   if (ed) {
                     return (
                       <div key={e.id} className="p-3 bg-surface-container-high rounded-lg border border-primary-container/30">
-                        <div className="grid grid-cols-2 md:grid-cols-12 gap-2">
-                          <input value={ed.name} onChange={editField(e.id, "name")} onKeyDown={(k) => k.key === "Enter" && saveEdit(m.id, e.id)} placeholder="Alimento" className={`${inputCls} col-span-2 md:col-span-4 text-[13px]`} />
-                          <input value={ed.grams} onChange={editField(e.id, "grams")} type="number" min="0" placeholder="g" className={`${inputCls} md:col-span-1 text-[13px]`} />
-                          <input value={ed.kcal} onChange={editField(e.id, "kcal")} type="number" min="0" placeholder="kcal" className={`${inputCls} md:col-span-2 text-[13px]`} />
-                          <input value={ed.protein} onChange={editField(e.id, "protein")} type="number" min="0" placeholder="P (g)" className={`${inputCls} md:col-span-1 text-[13px]`} />
-                          <input value={ed.carbs} onChange={editField(e.id, "carbs")} type="number" min="0" placeholder="C (g)" className={`${inputCls} md:col-span-1 text-[13px]`} />
-                          <input value={ed.fat} onChange={editField(e.id, "fat")} type="number" min="0" placeholder="G (g)" className={`${inputCls} md:col-span-1 text-[13px]`} />
-                          <div className="md:col-span-2 flex gap-2">
-                            <button onClick={() => saveEdit(m.id, e.id)} aria-label="Salvar item" className="flex-1 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center py-2 active:scale-95 transition">
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <input value={ed.name} onChange={editField(e.id, "name")} onKeyDown={(k) => k.key === "Enter" && saveEdit(m.id, e.id)} placeholder="Alimento" className={`${inputCls} flex-1 min-w-[140px] text-[13px]`} />
+                            <QtyStepper value={ed.qty} onChange={(q) => setEdits((es) => ({ ...es, [e.id]: { ...es[e.id], qty: q } }))} />
+                            <select value={ed.unit} onChange={editField(e.id, "unit")} aria-label="Unidade da porção" className={`${inputCls} w-24 text-[13px]`}>
+                              {DIET_UNITS.map((u) => (
+                                <option key={u} value={u}>{u}</option>
+                              ))}
+                            </select>
+                            <input value={ed.portionGrams} onChange={editField(e.id, "portionGrams")} type="number" min="0" placeholder="g/porção" aria-label="Gramas por porção" className={`${inputCls} w-24 text-[13px]`} />
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Caps className="text-outline text-[9px]">POR PORÇÃO</Caps>
+                            <input value={ed.kcal} onChange={editField(e.id, "kcal")} type="number" min="0" placeholder="kcal" className={`${inputCls} w-20 text-[13px]`} />
+                            <input value={ed.protein} onChange={editField(e.id, "protein")} type="number" min="0" placeholder="P (g)" className={`${inputCls} w-20 text-[13px]`} />
+                            <input value={ed.carbs} onChange={editField(e.id, "carbs")} type="number" min="0" placeholder="C (g)" className={`${inputCls} w-20 text-[13px]`} />
+                            <input value={ed.fat} onChange={editField(e.id, "fat")} type="number" min="0" placeholder="G (g)" className={`${inputCls} w-20 text-[13px]`} />
+                            <span className="flex-1" />
+                            <button onClick={() => saveEdit(m.id, e.id)} aria-label="Salvar item" className="px-3 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center py-2 active:scale-95 transition">
                               <MI name="check" className="text-lg" />
                             </button>
-                            <button onClick={() => cancelEdit(e.id)} aria-label="Cancelar edição" className="flex-1 rounded-lg bg-surface-variant text-on-surface-variant flex items-center justify-center py-2 active:scale-95 transition">
+                            <button onClick={() => cancelEdit(e.id)} aria-label="Cancelar edição" className="px-3 rounded-lg bg-surface-variant text-on-surface-variant flex items-center justify-center py-2 active:scale-95 transition">
                               <MI name="close" className="text-lg" />
                             </button>
                           </div>
@@ -267,11 +337,27 @@ export default function DietaPage() {
                       </div>
                     );
                   }
+                  const t = dietItemTotals(e);
+                  const pg = dietItemPortionGrams(e);
+                  const scaled = t.qty !== 1;
                   return (
                     <div key={e.id} className="flex items-center gap-3 p-3 bg-surface-container-high rounded-lg border border-white/5">
+                      {/* quantidade recalcula na hora: o resto da linha e todos os totais seguem */}
+                      <QtyStepper value={t.qty} unit={e.unit || "un"} onChange={(q) => patchItem(m.id, e.id, { qty: q })} />
                       <div className="flex-1 min-w-0">
-                        <div className="text-[13px] font-bold text-on-surface truncate">{e.name}{e.grams ? ` · ${e.grams}g` : ""}</div>
-                        <div className="text-[10px] text-outline">{e.kcal} kcal · P {e.protein}g · C {e.carbs}g · G {e.fat}g</div>
+                        <div className="text-[13px] font-bold text-on-surface truncate">
+                          {e.name}
+                          {t.grams ? <span className="text-outline font-normal"> · {gFmt(t.grams)}</span> : null}
+                        </div>
+                        <div className="text-[11px] text-on-surface-variant tabular-nums">
+                          {t.kcal} kcal · P {t.protein}g · C {t.carbs}g · G {t.fat}g
+                        </div>
+                        {scaled && (
+                          <div className="text-[10px] text-outline tabular-nums">
+                            porção: {e.kcal || 0} kcal · P {e.protein || 0} · C {e.carbs || 0} · G {e.fat || 0}
+                            {pg ? ` · ${gFmt(pg)}` : ""}
+                          </div>
+                        )}
                       </div>
                       <button onClick={() => startEdit(e)} aria-label="Editar item" className="text-outline hover:text-primary-container transition p-1">
                         <MI name="edit" className="text-lg" />
@@ -286,16 +372,33 @@ export default function DietaPage() {
             )}
 
             {/* add item inline */}
-            <div className="grid grid-cols-2 md:grid-cols-12 gap-2">
-              <input value={f.name} onChange={setField(m.id, "name")} onKeyDown={(e) => e.key === "Enter" && addItem(m.id)} placeholder="Alimento" className={`${inputCls} col-span-2 md:col-span-4 text-[13px]`} />
-              <input value={f.grams} onChange={setField(m.id, "grams")} type="number" min="0" placeholder="g" className={`${inputCls} md:col-span-1 text-[13px]`} />
-              <input value={f.kcal} onChange={setField(m.id, "kcal")} type="number" min="0" placeholder="kcal" className={`${inputCls} md:col-span-2 text-[13px]`} />
-              <input value={f.protein} onChange={setField(m.id, "protein")} type="number" min="0" placeholder="P (g)" className={`${inputCls} md:col-span-1 text-[13px]`} />
-              <input value={f.carbs} onChange={setField(m.id, "carbs")} type="number" min="0" placeholder="C (g)" className={`${inputCls} md:col-span-1 text-[13px]`} />
-              <input value={f.fat} onChange={setField(m.id, "fat")} type="number" min="0" placeholder="G (g)" className={`${inputCls} md:col-span-1 text-[13px]`} />
-              <button onClick={() => addItem(m.id)} aria-label="Adicionar item" className="md:col-span-2 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center gap-1 py-2 active:scale-95 transition font-label-caps text-[11px]">
-                <MI name="add" className="text-lg" /> ADD
-              </button>
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <input value={f.name} onChange={setField(m.id, "name")} onKeyDown={(e) => e.key === "Enter" && addItem(m.id)} placeholder="Alimento (ex.: Ovo cozido)" className={`${inputCls} flex-1 min-w-[160px] text-[13px]`} />
+                <QtyStepper value={f.qty} onChange={(q) => setForms((fs) => ({ ...fs, [m.id]: { ...getForm(m.id), qty: q } }))} />
+                <select value={f.unit} onChange={setField(m.id, "unit")} aria-label="Unidade da porção" className={`${inputCls} w-24 text-[13px]`}>
+                  {DIET_UNITS.map((u) => (
+                    <option key={u} value={u}>{u}</option>
+                  ))}
+                </select>
+                <input value={f.portionGrams} onChange={setField(m.id, "portionGrams")} type="number" min="0" placeholder="g/porção" aria-label="Gramas por porção" className={`${inputCls} w-24 text-[13px]`} />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Caps className="text-outline text-[9px]">POR PORÇÃO</Caps>
+                <input value={f.kcal} onChange={setField(m.id, "kcal")} onKeyDown={(e) => e.key === "Enter" && addItem(m.id)} type="number" min="0" placeholder="kcal" className={`${inputCls} w-20 text-[13px]`} />
+                <input value={f.protein} onChange={setField(m.id, "protein")} onKeyDown={(e) => e.key === "Enter" && addItem(m.id)} type="number" min="0" placeholder="P (g)" className={`${inputCls} w-20 text-[13px]`} />
+                <input value={f.carbs} onChange={setField(m.id, "carbs")} onKeyDown={(e) => e.key === "Enter" && addItem(m.id)} type="number" min="0" placeholder="C (g)" className={`${inputCls} w-20 text-[13px]`} />
+                <input value={f.fat} onChange={setField(m.id, "fat")} onKeyDown={(e) => e.key === "Enter" && addItem(m.id)} type="number" min="0" placeholder="G (g)" className={`${inputCls} w-20 text-[13px]`} />
+                {num(f.qty) > 1 && num(f.kcal) > 0 && (
+                  <Caps className="text-primary-container text-[9px] tabular-nums">
+                    = {Math.round(num(f.kcal) * num(f.qty))} KCAL
+                  </Caps>
+                )}
+                <span className="flex-1" />
+                <button onClick={() => addItem(m.id)} aria-label="Adicionar item" className="px-4 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center gap-1 py-2 active:scale-95 transition font-label-caps text-[11px]">
+                  <MI name="add" className="text-lg" /> ADD
+                </button>
+              </div>
             </div>
           </section>
         );
