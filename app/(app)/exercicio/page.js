@@ -770,6 +770,111 @@ export default function ExercicioPage() {
     toast("Treino registrado", { sub: `${label.toUpperCase()}${when} · ${durationMin} MIN · +${XP.exercise} XP`, icon: "fitness_center" });
     if (isRetro) setSessionDate(today); // evita segunda sessão acidental na data velha
   }
+  async function removeLog(id) {
+    const log = state.exerciseLogs.find((l) => l.id === id);
+    const ok = await confirm({ title: "Remover treino?", body: log?.xp ? `Devolve ${log.xp} XP ganho nesse treino.` : "", confirmLabel: "REMOVER" });
+    if (!ok) return;
+    setState((prev) => ({
+      ...prev,
+      exerciseLogs: prev.exerciseLogs.filter((l) => l.id !== id),
+      stats: { ...prev.stats, xp: Math.max(0, (prev.stats.xp || 0) - (log?.xp || 0)) },
+    }));
+  }
+  // ===== ciclo e histórico de fichas =====
+  function setCycle(modId, patch) {
+    setState((prev) => ({
+      ...prev,
+      workoutPlan: prev.workoutPlan.map((m) =>
+        m.id !== modId
+          ? m
+          : { ...m, cycle: { startDate: m.cycle?.startDate || getDateStr(0), weeks: m.cycle?.weeks || 0, ...patch } }
+      ),
+    }));
+  }
+
+  async function archiveCurrentFicha(mod, clearItems) {
+    const cyc = fichaCycle(mod);
+    const st = fichaStats(state, mod.name, cyc?.start || getDateStr(0), null);
+    const ok = await confirm({
+      title: clearItems ? "Arquivar e montar ficha nova?" : "Arquivar ficha atual?",
+      body: clearItems
+        ? `${st.sessions} treino(s) e ${st.sets} série(s) vão pro histórico e as divisões ficam vazias pra você montar do zero. As séries registradas não são apagadas.`
+        : `${st.sessions} treino(s) e ${st.sets} série(s) vão pro histórico. Os exercícios continuam no plano e o ciclo recomeça hoje.`,
+      confirmLabel: clearItems ? "ARQUIVAR E LIMPAR" : "ARQUIVAR",
+      danger: clearItems,
+    });
+    if (!ok) return;
+    setState((prev) => archiveFicha(prev, mod.id, { clearItems }));
+    toast("Ficha arquivada", { sub: "Está no histórico, no fim desta aba.", icon: "inventory_2" });
+  }
+
+  async function restoreFichaEntry(entry) {
+    const target = plan.find((m) => m.name === entry.name) || plan.find(isGymModality);
+    if (!target) return toast("Sem modalidade pra restaurar", { type: "error" });
+    const ok = await confirm({
+      title: `Restaurar ficha de ${ddmm(entry.startDate)}?`,
+      body: `As divisões atuais de ${target.name} são substituídas pelas dessa ficha, e o ciclo recomeça hoje. Arquive a atual antes se não quiser perdê-la.`,
+      confirmLabel: "RESTAURAR",
+    });
+    if (!ok) return;
+    setState((prev) => restoreFicha(prev, target.id, entry.id));
+    toast("Ficha restaurada", { sub: `${target.name} · ciclo recomeçou hoje`, icon: "restore" });
+  }
+
+  async function deleteFichaEntry(entry) {
+    const ok = await confirm({
+      title: "Excluir do histórico?",
+      body: `A ficha de ${ddmm(entry.startDate)} a ${ddmm(entry.endDate)} sai do histórico. As séries e treinos registrados não são afetados.`,
+      confirmLabel: "EXCLUIR",
+    });
+    if (!ok) return;
+    setState((prev) => ({ ...prev, workoutHistory: (prev.workoutHistory || []).filter((e) => e.id !== entry.id) }));
+  }
+
+  // tudo que o formulário de registro precisa, num objeto só
+  const registerProps = {
+    sessionDate,
+    setSessionDate,
+    minDate,
+    today,
+    isRetro,
+    ddmm,
+    type,
+    changeType,
+    modalityNames,
+    divisionNames,
+    effectiveDivision,
+    setDivision,
+    isGymSession,
+    trainDiv,
+    trainItems,
+    sessionByEx,
+    looseByEx,
+    getRow,
+    setRow,
+    addRowSet,
+    removeSet,
+    gymPR: (ex) => gymPR(gymSets, ex),
+    lastSetOf: (ex) => {
+      const all = gymSets.filter((g) => g.exercise === ex);
+      return all.length ? all[all.length - 1] : null;
+    },
+    openInfo,
+    knownExercises,
+    setForm,
+    setSetForm,
+    setFailure,
+    setSetFailure,
+    addSet,
+    duration,
+    setDuration,
+    intensity,
+    setIntensity,
+    note,
+    setNote,
+    logWorkout,
+    setTab,
+  };
   function updateGoal(delta) {
     setState((prev) => ({
       ...prev,
@@ -807,7 +912,41 @@ export default function ExercicioPage() {
       </div>
 
       {/* ============ ABA: REGISTRAR ============ */}
-      {tab === "registrar" && <ExerciseRegister r={registerProps} />}
+      {tab === "registrar" && (
+        <>
+          <ExerciseRegister r={registerProps} />
+
+          {/* Histórico da semana — abaixo do formulário, largura cheia */}
+          <div className="col-span-12 glass-card p-5 rounded-xl border-primary/20 bg-primary/5">
+            <div className="flex items-center gap-3 text-primary mb-3">
+              <MI name="sensors" />
+              <Caps>TREINOS DA SEMANA</Caps>
+            </div>
+            {weekLogs.length === 0 ? (
+              <p className="text-[12px] text-on-surface-variant">Nenhum treino registrado ainda.</p>
+            ) : (
+              /* largura cheia: em coluna única os cards ficariam esticados */
+              <ul className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                {weekLogs.map((l) => (
+                  <li key={l.id} className="flex flex-col gap-1 rounded-lg px-3 py-2 bg-surface-container-high border border-white/5">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-body-md text-on-surface truncate">{l.type}{l.division ? ` · ${l.division}` : ""} · {l.durationMin} min</p>
+                        <Caps className="text-outline text-[10px]">{weekdayShort(l.date)}, {l.date}</Caps>
+                      </div>
+                      <StarRating value={l.intensity} onChange={() => {}} size="text-sm" />
+                      <button onClick={() => removeLog(l.id)} aria-label="Remover" className="text-outline hover:text-error transition">
+                        <MI name="close" className="text-lg" />
+                      </button>
+                    </div>
+                    {l.note && <p className="text-[12px] text-on-surface-variant">{l.note}</p>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </>
+      )}
 
       {/* ============ ABA: PROGRESSO ============ */}
       {tab === "progresso" && (
