@@ -22,6 +22,9 @@ import {
   archiveFicha,
   restoreFicha,
   FICHA_WEEK_OPTIONS,
+  toggleRestDay,
+  restDaysInWeek,
+  restReason,
   DOW_SHORT,
 } from "@/lib/state";
 import { fetchExercises } from "@/lib/persistence";
@@ -714,6 +717,18 @@ export default function ExercicioPage() {
   // mais recente primeiro; empate na data mantém ordem de inserção (prepend)
   const weekLogs = state.exerciseLogs.filter((l) => daysSet.has(l.date)).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   const goal = state.settings.exerciseWeeklyGoal;
+  // folga justificada: abate a meta da semana e conta como dia ativo (lib/state.js)
+  const restDays = state.restDays || {};
+  const restThisWeek = restDaysInWeek(restDays, weekStartOf(getDateStr(0)));
+  const effectiveGoal = Math.max(0, goal - restThisWeek);
+  function toggleRest(date, reason = "doente") {
+    setState((prev) => toggleRestDay(prev, date, reason));
+    const on = !restDays[date];
+    toast(on ? "Folga justificada marcada" : "Folga removida", {
+      sub: on ? `${restReason(reason).label} · ${ddmm(date)} — meta da semana cai 1 treino` : ddmm(date),
+      icon: on ? "sick" : "undo",
+    });
+  }
   // meta semanal = dias treinados na SEMANA do calendário (começa segunda), não janela móvel
   const weekStart = weekStartOf(getDateStr(0));
   const weekDone = new Set(state.exerciseLogs.filter((l) => l.date >= weekStart).map((l) => l.date)).size;
@@ -874,6 +889,8 @@ export default function ExercicioPage() {
     setNote,
     logWorkout,
     setTab,
+    restDay: restDays[sessionDate] || null,
+    toggleRest,
   };
   function updateGoal(delta) {
     setState((prev) => ({
@@ -916,7 +933,12 @@ export default function ExercicioPage() {
         <>
           <ExerciseRegister r={registerProps} />
 
-          {/* Histórico da semana — abaixo do formulário, largura cheia */}
+          {/* Card TREINOS DA SEMANA desativado nesta aba: abaixo do formulário competia
+              com a ficha, que é o que a tela de registro pede. Comentado em vez de
+              removido porque `removeLog` só é chamado aqui — sem ele não há como excluir
+              uma sessão registrada. A lista era grid de até 3 colunas porque em coluna
+              única, na largura cheia, os cards ficavam esticados.
+
           <div className="col-span-12 glass-card p-5 rounded-xl border-primary/20 bg-primary/5">
             <div className="flex items-center gap-3 text-primary mb-3">
               <MI name="sensors" />
@@ -925,7 +947,6 @@ export default function ExercicioPage() {
             {weekLogs.length === 0 ? (
               <p className="text-[12px] text-on-surface-variant">Nenhum treino registrado ainda.</p>
             ) : (
-              /* largura cheia: em coluna única os cards ficariam esticados */
               <ul className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
                 {weekLogs.map((l) => (
                   <li key={l.id} className="flex flex-col gap-1 rounded-lg px-3 py-2 bg-surface-container-high border border-white/5">
@@ -945,6 +966,7 @@ export default function ExercicioPage() {
               </ul>
             )}
           </div>
+          */}
         </>
       )}
 
@@ -1051,13 +1073,23 @@ export default function ExercicioPage() {
                   <button onClick={() => updateGoal(1)} aria-label="Aumentar meta" className="w-7 h-7 rounded-full bg-surface-variant text-on-surface flex items-center justify-center hover:brightness-125 active:scale-95 transition">+</button>
                 </div>
               </div>
+              {/* halteres da meta, e no fim os dias de folga justificada — que não são
+                  treino feito nem cobrança pendente, então têm marca própria */}
               <div className="flex items-center gap-2 flex-wrap">
-                {Array.from({ length: goal }).map((_, i) => (
+                {Array.from({ length: effectiveGoal }).map((_, i) => (
                   <MI key={i} name="fitness_center" fill={i < weekDone} className={`text-2xl ${i < weekDone ? "text-primary" : "text-surface-variant"}`} />
                 ))}
-                {weekDone > goal && <Caps className="text-outline ml-1">+{weekDone - goal}</Caps>}
+                {Array.from({ length: restThisWeek }).map((_, i) => (
+                  <MI key={`rest-${i}`} name="sick" className="text-2xl text-outline" title="Folga justificada: abatida da meta" />
+                ))}
+                {weekDone > effectiveGoal && <Caps className="text-outline ml-1">+{weekDone - effectiveGoal}</Caps>}
               </div>
-              <p className="text-[12px] text-on-surface-variant mt-3">{weekDone} de {goal} treinos essa semana</p>
+              <p className="text-[12px] text-on-surface-variant mt-3">
+                {weekDone} de {effectiveGoal} treinos essa semana
+                {restThisWeek > 0 && (
+                  <span className="text-outline"> · {restThisWeek} folga(s) justificada(s) abatida(s) da meta de {goal}</span>
+                )}
+              </p>
             </div>
           </div>
 

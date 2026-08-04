@@ -18,6 +18,7 @@
 
 import { useState } from "react";
 import { MI, Caps, StarRating, Select, inputCls } from "@/components/ui";
+import { REST_REASONS, restReason } from "@/lib/state";
 
 const KG_STEPS = [1, 2.5, 5];
 const kgFmt = (n) => String(Math.round(n * 100) / 100).replace(".", ",");
@@ -280,6 +281,70 @@ function CloseSession({ r }) {
   );
 }
 
+// Folga justificada do dia: doença, lesão, descanso planejado, imprevisto.
+// Marcar abate a meta semanal e mantém a sequência geral — não vale XP e não conta
+// como treino, porque o que se remove é a punição, não o esforço que não houve.
+function RestDayControl({ r }) {
+  const [open, setOpen] = useState(false);
+  const rest = r.restDay;
+  if (rest) {
+    const rr = restReason(rest.reason);
+    return (
+      <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-white/5">
+        <span className="flex items-center gap-1.5 h-8 px-2.5 rounded-full bg-primary-container/15 border border-primary-container/40 text-primary-container font-label-caps text-[10px]">
+          <MI name={rr.icon} className="text-[15px]" />
+          {rr.label.toUpperCase()} · {r.ddmm(r.sessionDate)}
+        </span>
+        <span className="text-[11px] text-outline flex-1 min-w-[180px]">
+          {rest.note ? `“${rest.note}” · ` : ""}A meta da semana cai em 1 treino e a sequência não quebra.
+        </span>
+        <button
+          onClick={() => r.toggleRest(r.sessionDate)}
+          className="h-8 px-2.5 rounded-full border border-white/10 text-on-surface-variant hover:border-white/25 font-label-caps text-[10px] transition"
+        >
+          DESMARCAR
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="pt-3 border-t border-white/5">
+      {!open ? (
+        <button
+          onClick={() => setOpen(true)}
+          className="flex items-center gap-1.5 font-label-caps text-[10px] text-outline hover:text-primary transition"
+        >
+          <MI name="sick" className="text-base" /> NÃO TREINEI — MARCAR FOLGA JUSTIFICADA
+        </button>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Caps className="text-outline text-[9px] mr-1">MOTIVO EM {r.ddmm(r.sessionDate)}</Caps>
+            {REST_REASONS.map((x) => (
+              <button
+                key={x.id}
+                onClick={() => {
+                  r.toggleRest(r.sessionDate, x.id);
+                  setOpen(false);
+                }}
+                className="h-8 px-2.5 rounded-full border border-white/10 text-on-surface-variant hover:border-primary-container/50 hover:text-primary-container font-label-caps text-[10px] flex items-center gap-1 transition"
+              >
+                <MI name={x.icon} className="text-[15px]" /> {x.label.toUpperCase()}
+              </button>
+            ))}
+            <button onClick={() => setOpen(false)} aria-label="Cancelar" className="w-8 h-8 rounded-full text-outline hover:text-on-surface grid place-items-center transition">
+              <MI name="close" className="text-base" />
+            </button>
+          </div>
+          <p className="text-[11px] text-outline">
+            Abate 1 treino da meta da semana e conta como dia ativo pra sequência. Não dá XP e não entra como treino.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EmptyDivision({ r }) {
   return (
     <div className="text-[12px] text-outline bg-surface-container-high rounded-lg border border-white/5 p-3 flex items-center justify-between gap-2">
@@ -416,6 +481,7 @@ export default function ExerciseRegister({ r }) {
         <p className="text-[12px] text-outline">Modalidade sem ficha de séries — registre a sessão abaixo.</p>
       )}
 
+      <RestDayControl r={r} />
       <CloseSession r={r} />
     </section>
   );

@@ -37,6 +37,7 @@ alter table public.profiles add column if not exists books        jsonb not null
 alter table public.profiles add column if not exists calendar     jsonb not null default '{}'::jsonb;  -- agenda: { [date]: [eventos] }
 alter table public.profiles add column if not exists mapa         jsonb not null default '{}'::jsonb;  -- mapa de longo prazo: { lanes, nodes, edges, focusId }
 alter table public.profiles add column if not exists workout_history jsonb not null default '[]'::jsonb;  -- fichas de treino arquivadas (snapshot imutável do plano em cada ciclo)
+alter table public.profiles add column if not exists rest_days     jsonb not null default '{}'::jsonb;  -- folgas justificadas: { date: {reason,note} } — abatem a meta semanal de treino
 alter table public.profiles add column if not exists agenda_rules jsonb not null default '[]'::jsonb;  -- agenda: regras de recorrência semanal (ocorrência é calculada, não gravada)
 alter table public.profiles add column if not exists body         jsonb not null default '{}'::jsonb;  -- perfil corporal: sexo, nascimento, altura, %gordura, objetivo (idade é derivada)
 alter table public.profiles drop column if exists state;           -- blob legado removido

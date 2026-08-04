@@ -258,7 +258,7 @@ export function AppProvider({ children }) {
         // rotina removida do app — sem penalidade de XP.
 
         // exercício: treinos faltantes na meta semanal, por semana fechada
-        const ep = computeExercisePenalty(s.exerciseLogs, s.settings?.exerciseWeeklyGoal, s.settings?.exercisePenaltyWeek, today);
+        const ep = computeExercisePenalty(s.exerciseLogs, s.settings?.exerciseWeeklyGoal, s.settings?.exercisePenaltyWeek, today, s.restDays);
         if (ep) {
           s.settings = { ...(s.settings || {}), exercisePenaltyWeek: ep.lastWeek };
           if (ep.xp > 0) {
