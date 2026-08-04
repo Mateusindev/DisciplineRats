@@ -7,7 +7,7 @@ import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, isSa
 import { ptBR } from "date-fns/locale";
 import { useApp } from "../AppContext";
 import { MI, Caps, PageHeader, inputCls } from "@/components/ui";
-import { CALENDAR_CATS, calCat, sortEvents, eventTimeLabel, eventsForDate, eventsInRange, dowIndex, DOW_SHORT } from "@/lib/state";
+import { CALENDAR_CATS, calCat, eventTimeLabel, eventsForDate, eventsInRange, dowIndex, DOW_SHORT } from "@/lib/state";
 
 const ds = (d) => format(d, "yyyy-MM-dd");
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -426,11 +426,56 @@ export default function CalendarioPage() {
   );
 }
 
-// ===== visão mensal: dot-map grid =====
+// ===== visão mensal: grade compacta + coluna do dia selecionado =====
+// Lista da agenda do dia no formato da coluna direita: coluna de hora, barra da
+// categoria e título. Diferente do EventRow (chip) porque aqui o que orienta a
+// leitura é a HORA — é a pergunta "o que vem agora", não "o que existe nesse dia".
+function DayList({ events, onEdit }) {
+  return (
+    <div className="flex-1 min-h-0 overflow-y-auto ff-scroll p-2 space-y-1">
+      {events.map((ev) => {
+        const cat = calCat(ev.cat);
+        return (
+          <button
+            key={ev.id}
+            onClick={() => onEdit(ev)}
+            className="w-full text-left flex gap-2 p-2 rounded-lg bg-surface-container-low hover:bg-surface-container-high transition group"
+          >
+            <span className="flex flex-col items-center min-w-[38px] shrink-0">
+              {ev.allDay ? (
+                <Caps className="text-outline text-[9px] leading-tight">DIA</Caps>
+              ) : (
+                <>
+                  <span className="text-[13px] text-on-surface tabular-nums leading-tight">{ev.start || "--:--"}</span>
+                  {ev.end && <span className="text-[10px] text-outline tabular-nums">{ev.end}</span>}
+                </>
+              )}
+            </span>
+            <span className="w-[2px] rounded-full shrink-0 transition" style={{ background: `${cat.color}55` }} />
+            <span className="flex-1 min-w-0 flex flex-col justify-center">
+              <span className="text-[13px] text-on-surface truncate leading-tight">{ev.title}</span>
+              <span className="text-[11px] truncate" style={{ color: cat.color }}>
+                {cat.label}
+              </span>
+            </span>
+            {ev.source === "workout" ? (
+              <MI name="fitness_center" className="text-outline text-base shrink-0 self-center" title="Do plano de treino" />
+            ) : ev.ruleId ? (
+              <MI name="repeat" className="text-outline text-base shrink-0 self-center" title="Repete toda semana" />
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function MonthView({ month, setMonth, selected, setSelected, state, eventsOn, onAdd, onEdit }) {
-  // matriz de 42 dias (6 semanas), começando no domingo
+  // Grade de semanas começando no domingo. Só as semanas que o mês realmente ocupa —
+  // fixar 6 linhas obriga uma faixa inteira de dias de fora quando o mês fecha em 5.
   const gridStart = startOfWeek(startOfMonth(month), { weekStartsOn: 0 });
-  const cells = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+  const weeks = Math.ceil((startOfMonth(month).getDay() + endOfMonth(month).getDate()) / 7);
+  const cells = Array.from({ length: weeks * 7 }, (_, i) => addDays(gridStart, i));
 
   // stats do mês — por range, não varrendo o mapa: ocorrência de regra não está gravada
   const monthEvents = eventsInRange(state, ds(startOfMonth(month)), ds(endOfMonth(month)));
@@ -439,6 +484,11 @@ function MonthView({ month, setMonth, selected, setSelected, state, eventsOn, on
   const topCatId = Object.entries(byCat).sort((a, b) => b[1] - a[1])[0]?.[0];
   const topCat = topCatId ? calCat(topCatId) : null;
 
+  const today = new Date();
+  const todayEvents = eventsOn(today);
+  const next7 = eventsInRange(state, ds(today), ds(addDays(today, 6)));
+  const selEvents = eventsOn(selected);
+
   const pick = (d) => {
     setSelected(d);
     if (!isSameMonth(d, month)) setMonth(startOfMonth(d));
@@ -446,82 +496,157 @@ function MonthView({ month, setMonth, selected, setSelected, state, eventsOn, on
 
   return (
     <div className="flex flex-col gap-gutter">
-      {/* overview + navegação */}
-      <section className="flex flex-col md:flex-row justify-between md:items-end gap-6">
-        <div className="flex flex-col gap-1">
-          <span className="font-label-caps text-[10px] text-primary tracking-[0.2em] uppercase">Visão do mês</span>
-          <h1 className="font-headline-lg text-headline-lg text-on-surface capitalize leading-none">{format(month, "LLLL yyyy", { locale: ptBR })}</h1>
-          <p className="text-on-surface-variant mt-2 text-body-md">
-            {monthEvents.length > 0 ? (
-              <>
-                <span className="text-primary font-bold">{monthEvents.length} evento{monthEvents.length > 1 ? "s" : ""}</span> neste mês
-                {topCat && <> · mais em <span style={{ color: topCat.color }}>{topCat.label}</span></>}
-              </>
-            ) : (
-              "Nenhum evento neste mês ainda."
-            )}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1">
-            <button onClick={() => setMonth(addMonths(month, -1))} aria-label="Mês anterior" className="w-9 h-9 rounded-full grid place-items-center text-on-surface-variant hover:bg-surface-container-high transition"><MI name="chevron_left" /></button>
-            <button onClick={() => { setMonth(new Date()); setSelected(new Date()); }} className="px-3 h-9 rounded-full text-on-surface-variant hover:bg-surface-container-high transition font-label-caps text-[10px]">HOJE</button>
-            <button onClick={() => setMonth(addMonths(month, 1))} aria-label="Próximo mês" className="w-9 h-9 rounded-full grid place-items-center text-on-surface-variant hover:bg-surface-container-high transition"><MI name="chevron_right" /></button>
+      <div className="flex flex-col lg:flex-row gap-gutter lg:h-[calc(100vh-230px)] lg:min-h-[540px]">
+        {/* ---------- coluna esquerda: o mês ---------- */}
+        <div className="w-full lg:w-[60%] flex flex-col bg-surface-container rounded-2xl border border-outline-variant/20 overflow-hidden">
+          <div className="flex items-center justify-between gap-3 p-3 bg-surface-container-high">
+            <div className="min-w-0">
+              <h1 className="font-headline-md text-headline-md text-on-surface capitalize leading-none truncate">
+                {format(month, "LLLL yyyy", { locale: ptBR })}
+              </h1>
+              <span className="text-[12px] text-on-surface-variant">
+                {endOfMonth(month).getDate()} dias
+                {monthEvents.length > 0 && (
+                  <>
+                    {" · "}
+                    {monthEvents.length} evento{monthEvents.length > 1 ? "s" : ""}
+                    {topCat && <> · mais em <span style={{ color: topCat.color }}>{topCat.label}</span></>}
+                  </>
+                )}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button onClick={() => setMonth(addMonths(month, -1))} aria-label="Mês anterior" className="w-8 h-8 rounded-full bg-surface-container hover:bg-surface-variant grid place-items-center text-on-surface transition">
+                <MI name="chevron_left" className="text-[20px]" />
+              </button>
+              <button onClick={() => { setMonth(new Date()); setSelected(new Date()); }} className="px-3 h-8 rounded-full bg-surface-container hover:bg-surface-variant text-on-surface font-label-caps text-[10px] transition">
+                HOJE
+              </button>
+              <button onClick={() => setMonth(addMonths(month, 1))} aria-label="Próximo mês" className="w-8 h-8 rounded-full bg-surface-container hover:bg-surface-variant grid place-items-center text-on-surface transition">
+                <MI name="chevron_right" className="text-[20px]" />
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-7 bg-surface-container-high text-center py-1 border-y border-outline-variant/15">
+            {WEEKDAYS.map((w) => (
+              <div key={w} className="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-widest">{w}</div>
+            ))}
+          </div>
+
+          {/* As linhas dividem a altura do cartão (fr), então a grade termina onde o
+              cartão termina em vez de esticar a página. No mobile a altura é livre. */}
+          <div
+            className="flex-1 min-h-0 grid grid-cols-7 gap-px bg-outline-variant/15 overflow-y-auto ff-scroll"
+            style={{ gridTemplateRows: `repeat(${weeks}, minmax(72px, 1fr))` }}
+          >
+            {cells.map((d) => {
+              const evs = eventsOn(d);
+              const outside = !isSameMonth(d, month);
+              const isNow = isToday(d);
+              const sel = isSameDay(d, selected);
+              const shown = evs.slice(0, 2);
+              return (
+                <button
+                  key={ds(d)}
+                  onClick={() => pick(d)}
+                  onDoubleClick={() => onAdd(d)}
+                  title={evs.length ? evs.map((e) => `${eventTimeLabel(e)} ${e.title}`).join("\n") : undefined}
+                  className={`relative p-1 flex flex-col text-left transition ${
+                    outside ? "bg-surface-container" : "bg-surface-container-low hover:bg-surface-container-high"
+                  } ${sel ? "ring-2 ring-primary ring-inset z-10" : ""}`}
+                >
+                  {/* hoje: círculo contornado com o dígito no accent. Preenchido, o par
+                      accent/on-accent do tema claro fica em 4,4:1 — abaixo do mínimo. */}
+                  <span
+                    className={`self-end shrink-0 w-5 h-5 grid place-items-center rounded-full text-[12px] tabular-nums ${
+                      isNow ? "border border-primary-container text-primary font-bold" : outside ? "text-outline/40" : "text-on-surface"
+                    }`}
+                  >
+                    {format(d, "d")}
+                  </span>
+
+                  <span className="mt-0.5 flex-1 min-h-0 w-full flex flex-col gap-px overflow-hidden">
+                    {shown.map((e) => {
+                      const cat = calCat(e.cat);
+                      return (
+                        <span
+                          key={e.id}
+                          className="flex items-center gap-1 pl-1 pr-1 py-px rounded-[3px] w-full min-w-0"
+                          style={{ background: `${cat.color}24` }}
+                        >
+                          <span className="w-[3px] h-2.5 rounded-full shrink-0" style={{ background: cat.color }} />
+                          <span className="truncate text-[9px] leading-tight text-on-surface">
+                            {!e.allDay && e.start ? <span className="text-on-surface-variant tabular-nums">{e.start} </span> : null}
+                            {e.title}
+                          </span>
+                        </span>
+                      );
+                    })}
+                    {evs.length > shown.length && (
+                      <span className="px-1 py-px rounded-[3px] bg-surface-container-highest text-on-surface-variant text-[9px] leading-tight text-center">
+                        +{evs.length - shown.length} mais
+                      </span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
-      </section>
 
-      {/* dot-map grid */}
-      <div className="grid grid-cols-7 gap-px bg-outline-variant/20 rounded-3xl overflow-hidden border border-white/10 shadow-xl">
-        {WEEKDAYS.map((w) => (
-          <div key={w} className="bg-surface-container-low py-3 text-center font-label-caps text-[10px] text-outline uppercase tracking-widest">{w}</div>
-        ))}
-        {cells.map((d) => {
-          const evs = eventsOn(d);
-          const outside = !isSameMonth(d, month);
-          const today = isToday(d);
-          const sel = isSameDay(d, selected);
-          return (
-            <button
-              key={ds(d)}
-              onClick={() => pick(d)}
-              onDoubleClick={() => onAdd(d)}
-              className={`relative aspect-square p-2 sm:p-3 flex flex-col justify-between text-left transition group ${
-                outside ? "bg-surface/30" : "bg-surface-container-lowest hover:bg-surface-container-high"
-              } ${sel ? "ring-2 ring-primary ring-inset z-10" : ""}`}
-            >
-              <div className="flex justify-between items-start">
-                <span className={`font-headline-md text-body-lg ${outside ? "text-outline/40" : today ? "text-primary font-bold" : "text-on-surface-variant"}`}>{format(d, "d")}</span>
-                {today && <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />}
+        {/* ---------- coluna direita: números do momento + dia selecionado ---------- */}
+        <div className="w-full lg:w-[40%] flex flex-col gap-gutter lg:h-full">
+          <div className="bg-surface-container rounded-2xl border border-outline-variant/20 p-4">
+            <Caps className="text-outline text-[9px] block mb-2">NÚMEROS DO MOMENTO</Caps>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-surface-container-low rounded-xl p-3">
+                <Caps className="text-outline text-[9px] block">HOJE</Caps>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="font-headline-lg text-[26px] leading-none text-primary tabular-nums">{todayEvents.length}</span>
+                  <span className="text-[11px] text-outline">evento(s)</span>
+                </div>
               </div>
-              {evs.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-auto">
-                  {evs.slice(0, 4).map((e) => (
-                    <span key={e.id} className="w-1.5 h-1.5 rounded-full transition-transform group-hover:scale-125" style={{ background: calCat(e.cat).color }} />
-                  ))}
-                  {evs.length > 4 && <span className="text-[8px] text-outline leading-none self-center">+{evs.length - 4}</span>}
+              <div className="bg-surface-container-low rounded-xl p-3">
+                <Caps className="text-outline text-[9px] block">PRÓXIMOS 7 DIAS</Caps>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="font-headline-lg text-[26px] leading-none text-on-surface tabular-nums">{next7.length}</span>
+                  <span className="text-[11px] text-outline">no total</span>
                 </div>
-              )}
+              </div>
+            </div>
+          </div>
 
-              {/* popover (desktop hover) */}
-              {evs.length > 0 && (
-                <div className="hidden md:block absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-48 bg-inverse-surface text-inverse-on-surface p-3 rounded-xl opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 transition-all z-50 shadow-xl">
-                  <p className="font-label-caps text-[9px] uppercase opacity-70 mb-2">{format(d, "d 'de' MMM", { locale: ptBR })}</p>
-                  <div className="space-y-1.5">
-                    {evs.slice(0, 4).map((e) => (
-                      <div key={e.id} className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: calCat(e.cat).color }} />
-                        <p className="text-[11px] truncate">{e.title}</p>
-                      </div>
-                    ))}
-                    {evs.length > 4 && <p className="text-[10px] opacity-50">+{evs.length - 4} mais</p>}
-                  </div>
-                  <span className="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent" style={{ borderTopColor: "var(--color-inverse-surface)" }} />
+          <div className="bg-surface-container rounded-2xl border border-outline-variant/20 flex-1 min-h-0 flex flex-col overflow-hidden">
+            <div className="p-3 bg-surface-container-high flex items-center justify-between gap-2 border-b border-outline-variant/15">
+              <div className="min-w-0">
+                <Caps className="text-primary text-[9px] block">DIA SELECIONADO</Caps>
+                <h2 className="font-headline-md text-[19px] text-on-surface capitalize truncate leading-tight">
+                  {format(selected, "EEEE, d 'de' MMM", { locale: ptBR })}
+                </h2>
+              </div>
+              <button
+                onClick={() => onAdd(selected)}
+                aria-label="Adicionar evento"
+                className="w-8 h-8 rounded-full bg-primary-container text-on-primary-container grid place-items-center shrink-0 hover:brightness-110 active:scale-95 transition"
+              >
+                <MI name="add" className="text-[18px]" />
+              </button>
+            </div>
+
+            {selEvents.length === 0 ? (
+              <div className="flex-1 grid place-items-center text-center p-6">
+                <div className="space-y-2">
+                  <MI name="event_available" className="text-4xl text-outline/50" />
+                  <p className="text-[13px] text-outline">Nada marcado nesse dia.</p>
+                  <button onClick={() => onAdd(selected)} className="text-primary text-[11px] font-label-caps hover:underline">+ ADICIONAR EVENTO</button>
                 </div>
-              )}
-            </button>
-          );
-        })}
+              </div>
+            ) : (
+              <DayList events={selEvents} onEdit={(ev) => onEdit(ds(selected), ev)} />
+            )}
+          </div>
+        </div>
       </div>
 
       {/* legenda */}
@@ -532,58 +657,6 @@ function MonthView({ month, setMonth, selected, setSelected, state, eventsOn, on
           </span>
         ))}
       </div>
-
-      {/* agenda do dia + próximos */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
-        <div className="lg:col-span-6">
-          <DayAgenda date={selected} events={eventsOn(selected)} onAdd={() => onAdd(selected)} onEdit={(ev) => onEdit(ds(selected), ev)} />
-        </div>
-        <div className="lg:col-span-6">
-          <Upcoming state={state} onEdit={onEdit} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// próximos eventos a partir de hoje
-function Upcoming({ state, onEdit }) {
-  // janela de 60 dias à frente: recorrência é infinita, então varrer "tudo" não existe mais
-  const today = new Date();
-  const items = eventsInRange(state, ds(today), ds(addDays(today, 60))).map((ev) => ({ dateStr: ev.date, ev }));
-  items.sort((a, b) => a.dateStr.localeCompare(b.dateStr) || (a.ev.allDay ? "" : a.ev.start || "").localeCompare(b.ev.allDay ? "" : b.ev.start || ""));
-  const next = items.slice(0, 6);
-
-  return (
-    <div className="glass-card p-5 rounded-xl h-full">
-      <div className="flex items-center gap-3 mb-5">
-        <div className="h-px flex-1 bg-outline-variant/40" />
-        <Caps className="text-outline text-[10px]">PRÓXIMOS</Caps>
-      </div>
-      {next.length === 0 ? (
-        <p className="text-[13px] text-outline text-center py-8">Nada agendado à frente.</p>
-      ) : (
-        <div className="space-y-2">
-          {next.map(({ dateStr, ev }) => {
-            const d = new Date(dateStr + "T00:00:00");
-            const cat = calCat(ev.cat);
-            return (
-              <button key={ev.id} onClick={() => onEdit(dateStr, ev)} className="w-full flex items-center gap-4 p-2.5 rounded-xl hover:bg-surface-container transition group text-left">
-                <div className="text-center min-w-[42px]">
-                  <p className="font-headline-md text-body-lg text-on-surface leading-none">{format(d, "d")}</p>
-                  <p className="text-[9px] font-label-caps text-outline uppercase">{format(d, "MMM", { locale: ptBR })}</p>
-                </div>
-                <div className="w-1 h-10 rounded-full shrink-0" style={{ background: cat.color }} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-body-md text-on-surface truncate">{ev.title}</p>
-                  <p className="text-[11px] text-on-surface-variant">{cat.label} · {eventTimeLabel(ev)}</p>
-                </div>
-                <MI name="chevron_right" className="text-outline opacity-0 group-hover:opacity-100 transition" />
-              </button>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
@@ -670,45 +743,6 @@ function DayTimeline({ date, events, onSlot, onAdd, onEdit }) {
       <button onClick={onAdd} className="w-full py-2.5 border-t border-white/5 text-outline hover:text-primary hover:bg-surface-variant/20 transition font-label-caps text-[11px] flex items-center justify-center gap-1">
         <MI name="add" className="text-base" /> NOVO EVENTO
       </button>
-    </div>
-  );
-}
-
-// painel de agenda de um dia
-function DayAgenda({ date, events, onAdd, onEdit, hideHeader }) {
-  return (
-    <div className="glass-card p-5 rounded-xl h-full flex flex-col">
-      {!hideHeader && (
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="font-headline-md text-headline-md capitalize">{format(date, "EEEE", { locale: ptBR })}</h3>
-            <Caps className="text-outline">{format(date, "d 'de' MMMM", { locale: ptBR })}</Caps>
-          </div>
-          <button onClick={onAdd} aria-label="Adicionar evento" className="w-9 h-9 rounded-lg border border-primary/30 text-primary hover:bg-primary/10 grid place-items-center active:scale-95 transition">
-            <MI name="add" />
-          </button>
-        </div>
-      )}
-      {events.length === 0 ? (
-        <div className="flex-1 grid place-items-center text-center py-10">
-          <div className="space-y-2">
-            <MI name="event_available" className="text-4xl text-outline/50" />
-            <p className="text-[13px] text-outline">Nada marcado nesse dia.</p>
-            <button onClick={onAdd} className="text-primary text-[11px] font-label-caps hover:underline">+ ADICIONAR EVENTO</button>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {events.map((ev) => (
-            <EventRow key={ev.id} ev={ev} onClick={() => onEdit(ev)} />
-          ))}
-          {hideHeader && (
-            <button onClick={onAdd} className="w-full py-2 rounded-lg border border-dashed border-white/10 text-outline hover:text-primary hover:border-primary/30 transition font-label-caps text-[11px] flex items-center justify-center gap-1">
-              <MI name="add" className="text-base" /> ADICIONAR
-            </button>
-          )}
-        </div>
-      )}
     </div>
   );
 }
