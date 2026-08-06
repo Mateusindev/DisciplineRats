@@ -24,6 +24,9 @@ import {
   routineBlockOf,
   routineItemsFor,
   routineDayStats,
+  routineItemDone,
+  routineHabit,
+  habitPriority,
   toggleRoutineCheck,
   weekdayShort,
 } from "@/lib/state";
@@ -78,13 +81,38 @@ function DowMini({ value, onChange }) {
   );
 }
 
+// Seleção do hábito vinculado. Vício fica de fora: lá se registra a recaída, não o
+// acerto — "feito" não significa nada naquele fluxo.
+function HabitSelect({ habits, value, onChange }) {
+  return (
+    <label className="flex items-center gap-1.5 min-w-[190px]">
+      <MI name="link" className="text-outline text-base shrink-0" />
+      <select
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value || null)}
+        aria-label="Hábito vinculado"
+        title="Marcar este item também marca o hábito escolhido"
+        className={`${inputCls} flex-1 text-[12px] py-1.5`}
+      >
+        <option value="">sem vínculo com hábito</option>
+        {habits.map((h) => (
+          <option key={h.id} value={h.id}>
+            {h.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 export default function RotinaPage() {
   const { state, setState, toast, confirm } = useApp();
   const today = getDateStr(0);
   const [date, setDate] = useState(today); // dá pra fechar ontem sem inventar histórico
-  const [form, setForm] = useState({ name: "", time: "", weekdays: [] });
+  const [form, setForm] = useState({ name: "", time: "", weekdays: [], habitId: null });
   const [edits, setEdits] = useState({}); // { [id]: {name,time,weekdays} }
 
+  const linkable = (state.habits || []).filter((h) => (h.kind || "build") !== "quit");
   const items = routineItemsFor(state, date);
   const dayChecks = state.routineChecks?.[date] || {};
   const stats = routineDayStats(state, date);
@@ -101,9 +129,9 @@ export default function RotinaPage() {
   function addItem() {
     const name = form.name.trim();
     if (!name) return toast("Informe o item", { type: "error" });
-    const item = { id: crypto.randomUUID(), name: name.slice(0, 80), time: form.time || "", weekdays: form.weekdays };
+    const item = { id: crypto.randomUUID(), name: name.slice(0, 80), time: form.time || "", weekdays: form.weekdays, habitId: form.habitId || null };
     setState((prev) => ({ ...prev, routine: { ...(prev.routine || {}), items: [...(prev.routine?.items || []), item] } }));
-    setForm({ name: "", time: "", weekdays: [] });
+    setForm({ name: "", time: "", weekdays: [], habitId: null });
   }
 
   async function removeItem(item) {
@@ -116,7 +144,7 @@ export default function RotinaPage() {
     setState((prev) => ({ ...prev, routine: { ...(prev.routine || {}), items: (prev.routine?.items || []).filter((i) => i.id !== item.id) } }));
   }
 
-  const startEdit = (i) => setEdits((e) => ({ ...e, [i.id]: { name: i.name, time: i.time || "", weekdays: i.weekdays || [] } }));
+  const startEdit = (i) => setEdits((e) => ({ ...e, [i.id]: { name: i.name, time: i.time || "", weekdays: i.weekdays || [], habitId: i.habitId || null } }));
   const cancelEdit = (id) =>
     setEdits((e) => {
       const { [id]: _, ...rest } = e;
@@ -130,19 +158,23 @@ export default function RotinaPage() {
       ...prev,
       routine: {
         ...(prev.routine || {}),
-        items: (prev.routine?.items || []).map((i) => (i.id === id ? { ...i, name: name.slice(0, 80), time: f.time || "", weekdays: f.weekdays || [] } : i)),
+        items: (prev.routine?.items || []).map((i) =>
+          i.id === id ? { ...i, name: name.slice(0, 80), time: f.time || "", weekdays: f.weekdays || [], habitId: f.habitId || null } : i
+        ),
       },
     }));
     cancelEdit(id);
   }
 
-  function toggle(itemId) {
-    const wasDone = dayChecks[itemId] !== undefined;
-    setState((prev) => toggleRoutineCheck(prev, date, itemId));
+  const doneOf = (i) => routineItemDone(state, date, i);
+
+  function toggle(item) {
+    const wasDone = doneOf(item);
+    setState((prev) => toggleRoutineCheck(prev, date, item.id));
     if (wasDone) return;
-    // avisa o bônus quando este check fecha o dia (o reducer é quem decide de fato)
-    const willComplete = items.length > 0 && items.every((i) => i.id === itemId || dayChecks[i.id] !== undefined);
-    if (willComplete) toast("Rotina do dia fechada!", { sub: `+${XP.routineItem} XP · bônus +${XP.routineAll} XP`, icon: "task_alt" });
+    // avisa quando este check fecha o dia (o reducer é quem decide de fato)
+    const willComplete = items.length > 0 && items.every((i) => i.id === item.id || doneOf(i));
+    if (willComplete) toast("Rotina do dia fechada!", { sub: `bônus +${XP.routineAll} XP`, icon: "task_alt" });
   }
 
   const blocks = ROUTINE_BLOCKS.map((b) => ({ ...b, list: items.filter((i) => routineBlockOf(i).id === b.id) })).filter((b) => b.list.length);
@@ -208,7 +240,8 @@ export default function RotinaPage() {
               </div>
               <div className="space-y-2">
                 {b.list.map((i) => {
-                  const done = dayChecks[i.id] !== undefined;
+                  const done = doneOf(i);
+                  const linked = routineHabit(state, i);
                   const ed = edits[i.id];
                   if (ed) {
                     return (
@@ -235,7 +268,10 @@ export default function RotinaPage() {
                             <MI name="close" className="text-lg" />
                           </button>
                         </div>
-                        <DowMini value={ed.weekdays} onChange={(wd) => setEdits((es) => ({ ...es, [i.id]: { ...es[i.id], weekdays: wd } }))} />
+                        <div className="flex flex-wrap items-center gap-3">
+                          <DowMini value={ed.weekdays} onChange={(wd) => setEdits((es) => ({ ...es, [i.id]: { ...es[i.id], weekdays: wd } }))} />
+                          <HabitSelect habits={linkable} value={ed.habitId} onChange={(hid) => setEdits((es) => ({ ...es, [i.id]: { ...es[i.id], habitId: hid } }))} />
+                        </div>
                       </div>
                     );
                   }
@@ -245,7 +281,7 @@ export default function RotinaPage() {
                       className={`glass-card px-3 py-2.5 rounded-xl flex items-center gap-3 transition ${done ? "border border-primary-container/30" : ""}`}
                     >
                       <button
-                        onClick={() => toggle(i.id)}
+                        onClick={() => toggle(i)}
                         aria-pressed={done}
                         aria-label={`${done ? "Desmarcar" : "Marcar"} ${i.name}`}
                         className={`w-9 h-9 rounded-full grid place-items-center shrink-0 border transition active:scale-95 ${
@@ -256,10 +292,18 @@ export default function RotinaPage() {
                       </button>
                       <div className="flex-1 min-w-0">
                         <p className={`text-[14px] truncate ${done ? "text-on-surface-variant line-through" : "text-on-surface"}`}>{i.name}</p>
-                        <span className="text-[10px] text-outline font-label-caps">
-                          {i.time || "SEM HORA"}
-                          {i.weekdays?.length ? ` · ${i.weekdays.map((d) => DOW_SHORT[d]).join(" ")}` : ""}
-                          {done ? ` · +${dayChecks[i.id]} XP` : ""}
+                        <span className="text-[10px] text-outline font-label-caps flex flex-wrap items-center gap-x-1.5">
+                          <span>
+                            {i.time || "SEM HORA"}
+                            {i.weekdays?.length ? ` · ${i.weekdays.map((d) => DOW_SHORT[d]).join(" ")}` : ""}
+                          </span>
+                          {linked ? (
+                            <span className="flex items-center gap-0.5 text-primary-container" title={`Marcar aqui marca o hábito "${linked.name}" — o XP é o dele`}>
+                              <MI name="link" className="text-[12px]" /> {linked.name} · +{habitPriority(linked).xp} XP
+                            </span>
+                          ) : done ? (
+                            <span>· +{dayChecks[i.id]} XP</span>
+                          ) : null}
                         </span>
                       </div>
                       <button onClick={() => startEdit(i)} aria-label="Editar" className="text-outline hover:text-primary-container transition p-1 shrink-0">
@@ -301,11 +345,13 @@ export default function RotinaPage() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <DowMini value={form.weekdays} onChange={(wd) => setForm((f) => ({ ...f, weekdays: wd }))} />
-          <p className="text-[11px] text-outline">
-            Item com hora entra na <strong className="font-semibold">Agenda</strong> naquele horário e pode ser marcado por lá. Cada item vale{" "}
-            {XP.routineItem} XP; fechar todos os do dia dá {XP.routineAll} de bônus.
-          </p>
+          <HabitSelect habits={linkable} value={form.habitId} onChange={(hid) => setForm((f) => ({ ...f, habitId: hid }))} />
         </div>
+        <p className="text-[11px] text-outline">
+          Item com hora entra na <strong className="font-semibold">Agenda</strong> naquele horário e pode ser marcado por lá. Cada item vale {XP.routineItem} XP;
+          fechar todos os do dia dá {XP.routineAll} de bônus. <strong className="font-semibold">Vinculado a um hábito</strong>, marcar aqui marca o hábito — e o
+          XP que entra é o dele, não os dois.
+        </p>
       </div>
 
       {/* ---- últimos 7 dias ---- */}

@@ -394,7 +394,7 @@ function RoutineStrip({ items, onToggle }) {
             key={it.id}
             onClick={() => onToggle(it.itemId)}
             aria-pressed={it.done}
-            title={`${it.done ? "Desmarcar" : "Marcar"} ${it.title}${it.start ? ` (${it.start})` : ""}`}
+            title={`${it.done ? "Desmarcar" : "Marcar"} ${it.title}${it.start ? ` (${it.start})` : ""}${it.habitId ? " · vinculado a um hábito" : ""}`}
             className={`flex items-center gap-1 pl-1 pr-2 py-0.5 rounded-full border text-[10px] transition ${
               it.done
                 ? "bg-primary-container/20 border-primary-container/40 text-primary line-through"
@@ -404,6 +404,7 @@ function RoutineStrip({ items, onToggle }) {
             <MI name={it.done ? "check_circle" : "radio_button_unchecked"} className="text-[13px]" />
             {it.start && <span className="tabular-nums text-outline">{it.start}</span>}
             <span className="truncate max-w-[120px]">{it.title}</span>
+            {it.habitId && <MI name="link" className="text-[12px] text-outline" title="Vinculado a um hábito — marcar aqui marca ele" />}
           </button>
         ))}
       </div>
