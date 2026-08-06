@@ -7,7 +7,19 @@ import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, isSa
 import { ptBR } from "date-fns/locale";
 import { useApp } from "../AppContext";
 import { MI, Caps, PageHeader, inputCls } from "@/components/ui";
-import { CALENDAR_CATS, calCat, eventTimeLabel, eventsForDate, eventsInRange, dowIndex, DOW_SHORT } from "@/lib/state";
+import {
+  CALENDAR_CATS,
+  calCat,
+  eventTimeLabel,
+  eventsForDate,
+  eventsInRange,
+  dowIndex,
+  DOW_SHORT,
+  routineOccurrences,
+  routineDayStats,
+  toggleRoutineCheck,
+  getDateStr,
+} from "@/lib/state";
 
 const ds = (d) => format(d, "yyyy-MM-dd");
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -183,6 +195,15 @@ export default function CalendarioPage() {
 
   // Única leitura da agenda: junta eventos gravados + ocorrências de regra + treino do plano.
   const eventsOn = (d) => eventsForDate(state, ds(d));
+  // Rotina entra por fora: é ritmo, não compromisso. Misturada em eventsForDate ela
+  // inflaria a contagem do mês e afogaria a grade em chips repetidos todo dia.
+  const routineOn = (d) => routineOccurrences(state, ds(d));
+  const routineStats = (d) => routineDayStats(state, ds(d));
+  // marcar direto da agenda: mesmo reducer da página de Rotina, sem futuro
+  const toggleRoutine = (dateStr, itemId) => {
+    if (dateStr > getDateStr(0)) return toast("Item de rotina não se marca no futuro", { type: "error" });
+    setState((prev) => toggleRoutineCheck(prev, dateStr, itemId));
+  };
 
   // ---- CRUD ----
   const blank = (date, start, end) => ({ date, title: "", cat: "pessoal", allDay: false, start, end, note: "", repeat: false, weekdays: [dowIndex(date)] });
@@ -339,6 +360,9 @@ export default function CalendarioPage() {
           setSelected={setSelected}
           state={state}
           eventsOn={eventsOn}
+          routineOn={routineOn}
+          routineStats={routineStats}
+          onToggleRoutine={toggleRoutine}
           onAdd={openNew}
           onEdit={openEdit}
         />
@@ -400,7 +424,15 @@ export default function CalendarioPage() {
               <button onClick={() => setSelected(addDays(selected, 1))} aria-label="Próximo dia" className="w-8 h-8 rounded-lg grid place-items-center text-on-surface-variant hover:bg-surface-variant/60 transition"><MI name="chevron_right" /></button>
             </div>
           </div>
-          <DayTimeline date={selected} events={eventsOn(selected)} onSlot={(h) => openSlot(selected, h)} onAdd={() => openNew(selected)} onEdit={(ev) => openEdit(ds(selected), ev)} />
+          <DayTimeline
+            date={selected}
+            events={eventsOn(selected)}
+            routine={routineOn(selected)}
+            onToggleRoutine={(itemId) => toggleRoutine(ds(selected), itemId)}
+            onSlot={(h) => openSlot(selected, h)}
+            onAdd={() => openNew(selected)}
+            onEdit={(ev) => openEdit(ds(selected), ev)}
+          />
         </div>
       )}
 
@@ -470,7 +502,43 @@ function DayList({ events, onEdit }) {
   );
 }
 
-function MonthView({ month, setMonth, selected, setSelected, state, eventsOn, onAdd, onEdit }) {
+// Faixa de rotina dentro da agenda: marcável ali mesmo. É o ponto da integração —
+// a rotina do dia se fecha de onde você já está olhando o dia.
+function RoutineStrip({ items, onToggle }) {
+  if (!items.length) return null;
+  const done = items.filter((i) => i.done).length;
+  const complete = done === items.length;
+  return (
+    <div className="px-3 py-2 border-b border-outline-variant/15 bg-surface-container-low">
+      <div className="flex items-center gap-2 mb-1.5">
+        <MI name={complete ? "task_alt" : "checklist"} className={`text-base ${complete ? "text-primary" : "text-outline"}`} />
+        <Caps className="text-outline text-[9px] flex-1">ROTINA · {done}/{items.length}</Caps>
+        <Link href="/rotina" className="font-label-caps text-[9px] text-primary hover:underline">EDITAR</Link>
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {items.map((it) => (
+          <button
+            key={it.id}
+            onClick={() => onToggle(it.itemId)}
+            aria-pressed={it.done}
+            title={`${it.done ? "Desmarcar" : "Marcar"} ${it.title}${it.start ? ` (${it.start})` : ""}`}
+            className={`flex items-center gap-1 pl-1 pr-2 py-0.5 rounded-full border text-[10px] transition ${
+              it.done
+                ? "bg-primary-container/20 border-primary-container/40 text-primary line-through"
+                : "border-white/10 text-on-surface-variant hover:border-primary-container/50"
+            }`}
+          >
+            <MI name={it.done ? "check_circle" : "radio_button_unchecked"} className="text-[13px]" />
+            {it.start && <span className="tabular-nums text-outline">{it.start}</span>}
+            <span className="truncate max-w-[120px]">{it.title}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MonthView({ month, setMonth, selected, setSelected, state, eventsOn, routineOn, routineStats, onToggleRoutine, onAdd, onEdit }) {
   // Grade de semanas começando no domingo. Só as semanas que o mês realmente ocupa —
   // fixar 6 linhas obriga uma faixa inteira de dias de fora quando o mês fecha em 5.
   const gridStart = startOfWeek(startOfMonth(month), { weekStartsOn: 0 });
@@ -588,6 +656,23 @@ function MonthView({ month, setMonth, selected, setSelected, state, eventsOn, on
                         +{evs.length - shown.length} mais
                       </span>
                     )}
+                    {/* rotina do dia como completude, não como lista: seis itens iguais
+                        todo dia viram ruído, e o que interessa no mês é se fechou */}
+                    {(() => {
+                      const rs = routineStats(d);
+                      if (!rs.total) return null;
+                      return (
+                        <span
+                          className={`mt-auto self-start flex items-center gap-1 px-1 py-px rounded-full text-[9px] leading-tight tabular-nums ${
+                            rs.complete ? "bg-primary-container/25 text-primary" : "bg-surface-container-highest text-on-surface-variant"
+                          }`}
+                          title={`Rotina: ${rs.done} de ${rs.total}`}
+                        >
+                          <MI name={rs.complete ? "task_alt" : "checklist"} className="text-[11px]" />
+                          {rs.done}/{rs.total}
+                        </span>
+                      );
+                    })()}
                   </span>
                 </button>
               );
@@ -634,6 +719,8 @@ function MonthView({ month, setMonth, selected, setSelected, state, eventsOn, on
               </button>
             </div>
 
+            <RoutineStrip items={routineOn(selected)} onToggle={onToggleRoutine} />
+
             {selEvents.length === 0 ? (
               <div className="flex-1 grid place-items-center text-center p-6">
                 <div className="space-y-2">
@@ -662,7 +749,7 @@ function MonthView({ month, setMonth, selected, setSelected, state, eventsOn, on
 }
 
 // ===== visão de dia: timeline por hora (tipo Google Agenda) =====
-function DayTimeline({ date, events, onSlot, onAdd, onEdit }) {
+function DayTimeline({ date, events, routine = [], onToggleRoutine, onSlot, onAdd, onEdit }) {
   const allDay = events.filter((e) => e.allDay || !e.start);
   const timed = events.filter((e) => !e.allDay && e.start);
 
@@ -691,6 +778,7 @@ function DayTimeline({ date, events, onSlot, onAdd, onEdit }) {
 
   return (
     <div className="glass-card rounded-xl overflow-hidden">
+      {routine.length > 0 && <RoutineStrip items={routine} onToggle={onToggleRoutine} />}
       {allDay.length > 0 && (
         <div className="p-3 border-b border-white/5 space-y-1">
           <Caps className="text-outline text-[9px] mb-1 block">DIA INTEIRO</Caps>

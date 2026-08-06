@@ -255,7 +255,8 @@ export function AppProvider({ children }) {
         let penaltyXp = 0;
 
         // missões viraram quadro Trello (state.board) — sem penalidade/rollover.
-        // rotina removida do app — sem penalidade de XP.
+        // rotina: sem penalidade por decisão — errar um dia do esqueleto do dia é um
+        // dia, não recaída. O ganho é o XP do item + bônus de fechar (lib/state.js).
 
         // exercício: treinos faltantes na meta semanal, por semana fechada
         const ep = computeExercisePenalty(s.exerciseLogs, s.settings?.exerciseWeeklyGoal, s.settings?.exercisePenaltyWeek, today, s.restDays);
