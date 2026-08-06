@@ -606,14 +606,14 @@ function MonthView({ month, setMonth, selected, setSelected, state, eventsOn, ro
               cartão termina em vez de esticar a página. No mobile a altura é livre. */}
           <div
             className="flex-1 min-h-0 grid grid-cols-7 gap-px bg-outline-variant/15 overflow-y-auto ff-scroll"
-            style={{ gridTemplateRows: `repeat(${weeks}, minmax(72px, 1fr))` }}
+            style={{ gridTemplateRows: `repeat(${weeks}, minmax(62px, 1fr))` }}
           >
             {cells.map((d) => {
               const evs = eventsOn(d);
               const outside = !isSameMonth(d, month);
               const isNow = isToday(d);
               const sel = isSameDay(d, selected);
-              const shown = evs.slice(0, 2);
+              const shown = evs.slice(0, 6); // bolinha ocupa pouco: cabe mais que chip
               return (
                 <button
                   key={ds(d)}
@@ -634,46 +634,40 @@ function MonthView({ month, setMonth, selected, setSelected, state, eventsOn, ro
                     {format(d, "d")}
                   </span>
 
-                  <span className="mt-0.5 flex-1 min-h-0 w-full flex flex-col gap-px overflow-hidden">
-                    {shown.map((e) => {
-                      const cat = calCat(e.cat);
-                      return (
-                        <span
-                          key={e.id}
-                          className="flex items-center gap-1 pl-1 pr-1 py-px rounded-[3px] w-full min-w-0"
-                          style={{ background: `${cat.color}24` }}
-                        >
-                          <span className="w-[3px] h-2.5 rounded-full shrink-0" style={{ background: cat.color }} />
-                          <span className="truncate text-[9px] leading-tight text-on-surface">
-                            {!e.allDay && e.start ? <span className="text-on-surface-variant tabular-nums">{e.start} </span> : null}
-                            {e.title}
-                          </span>
-                        </span>
-                      );
-                    })}
+                  {/* Bolinhas por categoria, não títulos: no quadradinho o nome fica
+                      espremido em 9px e truncado, o que não informa e ainda polui.
+                      O que é o evento se lê no card do dia, ao lado. */}
+                  <span className="mt-1 flex-1 min-h-0 w-full flex flex-wrap content-start items-center gap-1 overflow-hidden">
+                    {shown.map((e) => (
+                      <span
+                        key={e.id}
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ background: calCat(e.cat).color }}
+                        title={`${eventTimeLabel(e)} ${e.title}`}
+                      />
+                    ))}
                     {evs.length > shown.length && (
-                      <span className="px-1 py-px rounded-[3px] bg-surface-container-highest text-on-surface-variant text-[9px] leading-tight text-center">
-                        +{evs.length - shown.length} mais
-                      </span>
+                      <span className="text-[9px] leading-none text-outline tabular-nums">+{evs.length - shown.length}</span>
                     )}
-                    {/* rotina do dia como completude, não como lista: seis itens iguais
-                        todo dia viram ruído, e o que interessa no mês é se fechou */}
-                    {(() => {
-                      const rs = routineStats(d);
-                      if (!rs.total) return null;
-                      return (
-                        <span
-                          className={`mt-auto self-start flex items-center gap-1 px-1 py-px rounded-full text-[9px] leading-tight tabular-nums ${
-                            rs.complete ? "bg-primary-container/25 text-primary" : "bg-surface-container-highest text-on-surface-variant"
-                          }`}
-                          title={`Rotina: ${rs.done} de ${rs.total}`}
-                        >
-                          <MI name={rs.complete ? "task_alt" : "checklist"} className="text-[11px]" />
-                          {rs.done}/{rs.total}
-                        </span>
-                      );
-                    })()}
                   </span>
+
+                  {/* rotina do dia como completude, não como lista: seis itens iguais
+                      todo dia viram ruído, e o que interessa no mês é se fechou */}
+                  {(() => {
+                    const rs = routineStats(d);
+                    if (!rs.total) return null;
+                    return (
+                      <span
+                        className={`self-start flex items-center gap-0.5 px-1 rounded-full text-[9px] leading-tight tabular-nums shrink-0 ${
+                          rs.complete ? "bg-primary-container/25 text-primary" : "text-outline"
+                        }`}
+                        title={`Rotina: ${rs.done} de ${rs.total}`}
+                      >
+                        <MI name={rs.complete ? "task_alt" : "checklist"} className="text-[11px]" />
+                        {rs.done}/{rs.total}
+                      </span>
+                    );
+                  })()}
                 </button>
               );
             })}
