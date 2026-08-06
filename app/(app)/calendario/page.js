@@ -23,46 +23,6 @@ import {
 
 const ds = (d) => format(d, "yyyy-MM-dd");
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-const HOUR_H = 56; // altura de 1 hora na timeline (px)
-const toMin = (t) => {
-  const [h, m] = (t || "0:0").split(":").map(Number);
-  return (h || 0) * 60 + (m || 0);
-};
-const VIEWS = [
-  { id: "month", label: "Mês", icon: "calendar_month" },
-  { id: "week", label: "Semana", icon: "calendar_view_week" },
-  { id: "day", label: "Dia", icon: "calendar_view_day" },
-];
-
-// chip/linha de um evento
-function EventRow({ ev, onClick, compact }) {
-  const cat = calCat(ev.cat);
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full text-left rounded-lg flex items-center gap-2 transition hover:brightness-110 active:scale-[.98] ${
-        compact ? "px-1.5 py-1" : "px-3 py-2"
-      }`}
-      style={{ background: `${cat.color}22`, borderLeft: `3px solid ${cat.color}` }}
-    >
-      <div className="flex-1 min-w-0">
-        <p className={`truncate text-on-surface ${compact ? "text-[11px] leading-tight" : "text-body-md"}`}>{ev.title}</p>
-        {!compact && <Caps className="text-outline text-[9px]">{eventTimeLabel(ev)}</Caps>}
-        {compact && ev.start && !ev.allDay && <span className="text-[9px] text-outline">{ev.start}</span>}
-      </div>
-      {/* marca o que não é evento avulso: repetição, ou treino puxado do plano */}
-      {ev.source === "workout" ? (
-        <span className="flex items-center gap-1 shrink-0">
-          {ev.allDay && !compact && <Caps className="text-outline/70 text-[9px]">SEM HORA</Caps>}
-          <MI name="fitness_center" className={`text-outline ${compact ? "text-[11px]" : "text-sm"}`} title="Do plano de treino" />
-        </span>
-      ) : ev.ruleId ? (
-        <MI name="repeat" className={`text-outline shrink-0 ${compact ? "text-[11px]" : "text-sm"}`} title="Repete toda semana" />
-      ) : null}
-    </button>
-  );
-}
-
 // picker de dias da semana da recorrência (0=Seg..6=Dom)
 function WeekdayPicker({ value, onChange }) {
   const sel = new Set(value || []);
@@ -186,7 +146,6 @@ function RulesModal({ rules, onEdit, onRemove, onClearSkips, onClose }) {
 export default function CalendarioPage() {
   const { state, setState } = useApp();
 
-  const [view, setView] = useState("month");
   const [selected, setSelected] = useState(new Date());
   const [month, setMonth] = useState(new Date());
   const [form, setForm] = useState(null); // { id?, ruleId?, date, title, cat, allDay, start, end, note, repeat, weekdays }
@@ -208,7 +167,6 @@ export default function CalendarioPage() {
   // ---- CRUD ----
   const blank = (date, start, end) => ({ date, title: "", cat: "pessoal", allDay: false, start, end, note: "", repeat: false, weekdays: [dowIndex(date)] });
   const openNew = (d) => setForm(blank(ds(d), "09:00", "10:00"));
-  const openSlot = (d, hour) => setForm(blank(ds(d), `${String(hour).padStart(2, "0")}:00`, `${String((hour + 1) % 24).padStart(2, "0")}:00`));
 
   function openEdit(dateStr, ev) {
     // treino vem do plano de exercício: a agenda não edita, só explica e aponta pra lá
@@ -311,28 +269,13 @@ export default function CalendarioPage() {
   const clearSkips = (id) =>
     setState((prev) => ({ ...prev, agendaRules: (prev.agendaRules || []).map((r) => (r.id === id ? { ...r, skips: [] } : r)) }));
 
-  const weekStart = startOfWeek(selected, { weekStartsOn: 1 });
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   return (
     <>
-      <PageHeader title="AGENDA" subtitle="Organize seus dias, semanas e meses. Sem XP, sem cobrança — só planejamento." />
+      <PageHeader title="AGENDA" subtitle="O mês inteiro na tela, e abaixo o dia que você escolher. Sem XP, sem cobrança — só planejamento." />
 
-      {/* barra: alternador de view + novo evento */}
-      <div className="glass-card p-3 rounded-xl mb-gutter flex items-center justify-between gap-3">
-        <div className="flex rounded-lg overflow-hidden border border-white/10">
-          {VIEWS.map((v) => (
-            <button
-              key={v.id}
-              onClick={() => setView(v.id)}
-              className={`px-3 py-1.5 font-label-caps text-[10px] flex items-center gap-1.5 transition ${
-                view === v.id ? "bg-primary/15 text-primary" : "text-on-surface-variant hover:bg-surface-variant/40"
-              }`}
-            >
-              <MI name={v.icon} className="text-sm" /> {v.label}
-            </button>
-          ))}
-        </div>
+      {/* barra de ações (o app tem uma visão só: o mês) */}
+      <div className="glass-card p-3 rounded-xl mb-gutter flex items-center justify-end gap-3">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowRules(true)}
@@ -351,90 +294,20 @@ export default function CalendarioPage() {
         </div>
       </div>
 
-      {/* ===== MÊS ===== */}
-      {view === "month" && (
-        <MonthView
-          month={month}
-          setMonth={setMonth}
-          selected={selected}
-          setSelected={setSelected}
-          state={state}
-          eventsOn={eventsOn}
-          routineOn={routineOn}
-          routineStats={routineStats}
-          onToggleRoutine={toggleRoutine}
-          onAdd={openNew}
-          onEdit={openEdit}
-        />
-      )}
+      <MonthView
+        month={month}
+        setMonth={setMonth}
+        selected={selected}
+        setSelected={setSelected}
+        state={state}
+        eventsOn={eventsOn}
+        routineOn={routineOn}
+        routineStats={routineStats}
+        onToggleRoutine={toggleRoutine}
+        onAdd={openNew}
+        onEdit={openEdit}
+      />
 
-      {/* ===== SEMANA ===== */}
-      {view === "week" && (
-        <div className="glass-card p-4 rounded-xl">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-headline-md text-headline-md text-primary capitalize">
-              {format(weekStart, "d MMM", { locale: ptBR })} – {format(addDays(weekStart, 6), "d MMM", { locale: ptBR })}
-            </h3>
-            <div className="flex items-center gap-1">
-              <button onClick={() => setSelected(addDays(selected, -7))} aria-label="Semana anterior" className="w-8 h-8 rounded-lg grid place-items-center text-on-surface-variant hover:bg-surface-variant/60 transition"><MI name="chevron_left" /></button>
-              <button onClick={() => setSelected(new Date())} className="px-2 h-8 rounded-lg text-on-surface-variant hover:bg-surface-variant/60 transition font-label-caps text-[10px]">HOJE</button>
-              <button onClick={() => setSelected(addDays(selected, 7))} aria-label="Próxima semana" className="w-8 h-8 rounded-lg grid place-items-center text-on-surface-variant hover:bg-surface-variant/60 transition"><MI name="chevron_right" /></button>
-            </div>
-          </div>
-          <div className="grid grid-cols-7 gap-2">
-            {weekDays.map((d) => {
-              const evs = eventsOn(d);
-              const today = isToday(d);
-              const sel = isSameDay(d, selected);
-              return (
-                <div key={ds(d)} className={`rounded-lg border min-h-[180px] flex flex-col ${sel ? "border-primary/40" : "border-white/5"}`}>
-                  <button
-                    onClick={() => setSelected(d)}
-                    className={`px-2 py-1.5 flex flex-col items-center border-b transition ${today ? "text-primary" : "text-on-surface-variant"} ${sel ? "bg-primary/10 border-primary/30" : "border-white/5 hover:bg-surface-variant/30"}`}
-                  >
-                    <Caps className="text-[9px]">{format(d, "EEE", { locale: ptBR })}</Caps>
-                    <span className={`text-body-md ${today ? "font-bold" : ""}`}>{format(d, "d")}</span>
-                  </button>
-                  <div className="flex-1 p-1 space-y-1 overflow-y-auto">
-                    {evs.map((ev) => (
-                      <EventRow key={ev.id} ev={ev} compact onClick={() => openEdit(ds(d), ev)} />
-                    ))}
-                    <button onClick={() => openNew(d)} className="w-full py-1 rounded text-outline hover:text-primary hover:bg-surface-variant/30 transition grid place-items-center">
-                      <MI name="add" className="text-sm" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ===== DIA ===== */}
-      {view === "day" && (
-        <div>
-          <div className="glass-card p-4 rounded-xl mb-gutter flex items-center justify-between">
-            <div>
-              <h3 className="font-headline-md text-headline-md text-primary capitalize">{format(selected, "EEEE", { locale: ptBR })}</h3>
-              <Caps className="text-outline">{format(selected, "d 'de' MMMM 'de' yyyy", { locale: ptBR })}</Caps>
-            </div>
-            <div className="flex items-center gap-1">
-              <button onClick={() => setSelected(addDays(selected, -1))} aria-label="Dia anterior" className="w-8 h-8 rounded-lg grid place-items-center text-on-surface-variant hover:bg-surface-variant/60 transition"><MI name="chevron_left" /></button>
-              <button onClick={() => setSelected(new Date())} className="px-2 h-8 rounded-lg text-on-surface-variant hover:bg-surface-variant/60 transition font-label-caps text-[10px]">HOJE</button>
-              <button onClick={() => setSelected(addDays(selected, 1))} aria-label="Próximo dia" className="w-8 h-8 rounded-lg grid place-items-center text-on-surface-variant hover:bg-surface-variant/60 transition"><MI name="chevron_right" /></button>
-            </div>
-          </div>
-          <DayTimeline
-            date={selected}
-            events={eventsOn(selected)}
-            routine={routineOn(selected)}
-            onToggleRoutine={(itemId) => toggleRoutine(ds(selected), itemId)}
-            onSlot={(h) => openSlot(selected, h)}
-            onAdd={() => openNew(selected)}
-            onEdit={(ev) => openEdit(ds(selected), ev)}
-          />
-        </div>
-      )}
 
       {form && (
         <EventModal form={form} setForm={setForm} onSave={saveForm} onDelete={deleteForm} onSkip={skipOccurrence} onClose={() => setForm(null)} />
@@ -460,11 +333,11 @@ export default function CalendarioPage() {
 
 // ===== visão mensal: grade compacta + coluna do dia selecionado =====
 // Lista da agenda do dia no formato da coluna direita: coluna de hora, barra da
-// categoria e título. Diferente do EventRow (chip) porque aqui o que orienta a
-// leitura é a HORA — é a pergunta "o que vem agora", não "o que existe nesse dia".
+// categoria e título. O que orienta a leitura aqui é a HORA — a pergunta é "o que
+// vem agora", e o quadradinho do mês só marca que existe algo.
 function DayList({ events, onEdit }) {
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto ff-scroll p-2 space-y-1">
+    <div className="max-h-[360px] overflow-y-auto ff-scroll p-2 space-y-1">
       {events.map((ev) => {
         const cat = calCat(ev.cat);
         return (
@@ -564,9 +437,8 @@ function MonthView({ month, setMonth, selected, setSelected, state, eventsOn, ro
 
   return (
     <div className="flex flex-col gap-gutter">
-      <div className="flex flex-col lg:flex-row gap-gutter lg:h-[calc(100vh-230px)] lg:min-h-[540px]">
-        {/* ---------- coluna esquerda: o mês ---------- */}
-        <div className="w-full lg:w-[60%] flex flex-col bg-surface-container rounded-2xl border border-outline-variant/20 overflow-hidden">
+      {/* ---------- o mês, em largura cheia ---------- */}
+      <div className="w-full flex flex-col bg-surface-container rounded-2xl border border-outline-variant/20 overflow-hidden">
           <div className="flex items-center justify-between gap-3 p-3 bg-surface-container-high">
             <div className="min-w-0">
               <h1 className="font-headline-md text-headline-md text-on-surface capitalize leading-none truncate">
@@ -605,8 +477,8 @@ function MonthView({ month, setMonth, selected, setSelected, state, eventsOn, ro
           {/* As linhas dividem a altura do cartão (fr), então a grade termina onde o
               cartão termina em vez de esticar a página. No mobile a altura é livre. */}
           <div
-            className="flex-1 min-h-0 grid grid-cols-7 gap-px bg-outline-variant/15 overflow-y-auto ff-scroll"
-            style={{ gridTemplateRows: `repeat(${weeks}, minmax(62px, 1fr))` }}
+            className="grid grid-cols-7 gap-px bg-outline-variant/15"
+            style={{ gridTemplateRows: `repeat(${weeks}, minmax(96px, 1fr))` }}
           >
             {cells.map((d) => {
               const evs = eventsOn(d);
@@ -674,59 +546,58 @@ function MonthView({ month, setMonth, selected, setSelected, state, eventsOn, ro
           </div>
         </div>
 
-        {/* ---------- coluna direita: números do momento + dia selecionado ---------- */}
-        <div className="w-full lg:w-[40%] flex flex-col gap-gutter lg:h-full">
-          <div className="bg-surface-container rounded-2xl border border-outline-variant/20 p-4">
-            <Caps className="text-outline text-[9px] block mb-2">NÚMEROS DO MOMENTO</Caps>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-surface-container-low rounded-xl p-3">
-                <Caps className="text-outline text-[9px] block">HOJE</Caps>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="font-headline-lg text-[26px] leading-none text-primary tabular-nums">{todayEvents.length}</span>
-                  <span className="text-[11px] text-outline">evento(s)</span>
-                </div>
+      {/* ---------- abaixo do mês: o dia escolhido, e os números do momento ---------- */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+        <div className="lg:col-span-4 lg:order-2 bg-surface-container rounded-2xl border border-outline-variant/20 p-4 self-start">
+          <Caps className="text-outline text-[9px] block mb-2">NÚMEROS DO MOMENTO</Caps>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-surface-container-low rounded-xl p-3">
+              <Caps className="text-outline text-[9px] block">HOJE</Caps>
+              <div className="flex items-baseline gap-1.5">
+                <span className="font-headline-lg text-[26px] leading-none text-primary tabular-nums">{todayEvents.length}</span>
+                <span className="text-[11px] text-outline">evento(s)</span>
               </div>
-              <div className="bg-surface-container-low rounded-xl p-3">
-                <Caps className="text-outline text-[9px] block">PRÓXIMOS 7 DIAS</Caps>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="font-headline-lg text-[26px] leading-none text-on-surface tabular-nums">{next7.length}</span>
-                  <span className="text-[11px] text-outline">no total</span>
-                </div>
+            </div>
+            <div className="bg-surface-container-low rounded-xl p-3">
+              <Caps className="text-outline text-[9px] block">PRÓXIMOS 7 DIAS</Caps>
+              <div className="flex items-baseline gap-1.5">
+                <span className="font-headline-lg text-[26px] leading-none text-on-surface tabular-nums">{next7.length}</span>
+                <span className="text-[11px] text-outline">no total</span>
               </div>
             </div>
           </div>
+        </div>
 
-          <div className="bg-surface-container rounded-2xl border border-outline-variant/20 flex-1 min-h-0 flex flex-col overflow-hidden">
-            <div className="p-3 bg-surface-container-high flex items-center justify-between gap-2 border-b border-outline-variant/15">
-              <div className="min-w-0">
-                <Caps className="text-primary text-[9px] block">DIA SELECIONADO</Caps>
-                <h2 className="font-headline-md text-[19px] text-on-surface capitalize truncate leading-tight">
-                  {format(selected, "EEEE, d 'de' MMM", { locale: ptBR })}
-                </h2>
-              </div>
-              <button
-                onClick={() => onAdd(selected)}
-                aria-label="Adicionar evento"
-                className="w-8 h-8 rounded-full bg-primary-container text-on-primary-container grid place-items-center shrink-0 hover:brightness-110 active:scale-95 transition"
-              >
-                <MI name="add" className="text-[18px]" />
-              </button>
+        <div className="lg:col-span-8 lg:order-1 bg-surface-container rounded-2xl border border-outline-variant/20 flex flex-col overflow-hidden">
+          <div className="p-3 bg-surface-container-high flex items-center justify-between gap-2 border-b border-outline-variant/15">
+            <div className="min-w-0">
+              <Caps className="text-primary text-[9px] block">DIA SELECIONADO</Caps>
+              <h2 className="font-headline-md text-[19px] text-on-surface capitalize truncate leading-tight">
+                {format(selected, "EEEE, d 'de' MMM", { locale: ptBR })}
+              </h2>
             </div>
-
-            <RoutineStrip items={routineOn(selected)} onToggle={onToggleRoutine} />
-
-            {selEvents.length === 0 ? (
-              <div className="flex-1 grid place-items-center text-center p-6">
-                <div className="space-y-2">
-                  <MI name="event_available" className="text-4xl text-outline/50" />
-                  <p className="text-[13px] text-outline">Nada marcado nesse dia.</p>
-                  <button onClick={() => onAdd(selected)} className="text-primary text-[11px] font-label-caps hover:underline">+ ADICIONAR EVENTO</button>
-                </div>
-              </div>
-            ) : (
-              <DayList events={selEvents} onEdit={(ev) => onEdit(ds(selected), ev)} />
-            )}
+            <button
+              onClick={() => onAdd(selected)}
+              aria-label="Adicionar evento"
+              className="w-8 h-8 rounded-full bg-primary-container text-on-primary-container grid place-items-center shrink-0 hover:brightness-110 active:scale-95 transition"
+            >
+              <MI name="add" className="text-[18px]" />
+            </button>
           </div>
+
+          <RoutineStrip items={routineOn(selected)} onToggle={onToggleRoutine} />
+
+          {selEvents.length === 0 ? (
+            <div className="grid place-items-center text-center p-8">
+              <div className="space-y-2">
+                <MI name="event_available" className="text-4xl text-outline/50" />
+                <p className="text-[13px] text-outline">Nada marcado nesse dia.</p>
+                <button onClick={() => onAdd(selected)} className="text-primary text-[11px] font-label-caps hover:underline">+ ADICIONAR EVENTO</button>
+              </div>
+            </div>
+          ) : (
+            <DayList events={selEvents} onEdit={(ev) => onEdit(ds(selected), ev)} />
+          )}
         </div>
       </div>
 
@@ -738,93 +609,6 @@ function MonthView({ month, setMonth, selected, setSelected, state, eventsOn, ro
           </span>
         ))}
       </div>
-    </div>
-  );
-}
-
-// ===== visão de dia: timeline por hora (tipo Google Agenda) =====
-function DayTimeline({ date, events, routine = [], onToggleRoutine, onSlot, onAdd, onEdit }) {
-  const allDay = events.filter((e) => e.allDay || !e.start);
-  const timed = events.filter((e) => !e.allDay && e.start);
-
-  // atribui "lanes" p/ eventos sobrepostos ficarem lado a lado
-  const items = timed
-    .map((e) => {
-      const s = toMin(e.start);
-      const en = Math.max(e.end ? toMin(e.end) : s + 60, s + 30);
-      return { e, s, en };
-    })
-    .sort((a, b) => a.s - b.s || a.en - b.en);
-  const laneEnds = [];
-  for (const it of items) {
-    let idx = laneEnds.findIndex((end) => end <= it.s);
-    if (idx === -1) {
-      idx = laneEnds.length;
-      laneEnds.push(it.en);
-    } else laneEnds[idx] = it.en;
-    it.lane = idx;
-  }
-  const laneCount = Math.max(1, laneEnds.length);
-
-  const today = isToday(date);
-  const now = new Date();
-  const nowMin = today ? now.getHours() * 60 + now.getMinutes() : null;
-
-  return (
-    <div className="glass-card rounded-xl overflow-hidden">
-      {routine.length > 0 && <RoutineStrip items={routine} onToggle={onToggleRoutine} />}
-      {allDay.length > 0 && (
-        <div className="p-3 border-b border-white/5 space-y-1">
-          <Caps className="text-outline text-[9px] mb-1 block">DIA INTEIRO</Caps>
-          {allDay.map((ev) => (
-            <EventRow key={ev.id} ev={ev} onClick={() => onEdit(ev)} />
-          ))}
-        </div>
-      )}
-      <div className="relative overflow-y-auto max-h-[68vh]">
-        <div className="relative" style={{ height: 24 * HOUR_H }}>
-          {Array.from({ length: 24 }, (_, h) => (
-            <button
-              key={h}
-              onClick={() => onSlot(h)}
-              className="absolute left-0 right-0 border-t border-white/5 flex text-left hover:bg-surface-variant/20 transition group"
-              style={{ top: h * HOUR_H, height: HOUR_H }}
-            >
-              <span className="w-14 shrink-0 -mt-2 pl-2 text-[10px] text-outline font-label-caps">{String(h).padStart(2, "0")}:00</span>
-              <span className="flex-1 grid place-items-center opacity-0 group-hover:opacity-100"><MI name="add" className="text-sm text-outline" /></span>
-            </button>
-          ))}
-
-          {items.map(({ e, s, en, lane }) => {
-            const cat = calCat(e.cat);
-            const top = (s / 60) * HOUR_H;
-            const height = Math.max(20, ((en - s) / 60) * HOUR_H);
-            const width = `calc((100% - 3.5rem) / ${laneCount})`;
-            const left = `calc(3.5rem + ${lane} * (100% - 3.5rem) / ${laneCount})`;
-            return (
-              <button
-                key={e.id}
-                onClick={() => onEdit(e)}
-                className="absolute rounded-lg px-2 py-1 text-left overflow-hidden hover:brightness-110 transition z-10"
-                style={{ top, height, left, width, background: `${cat.color}26`, borderLeft: `3px solid ${cat.color}` }}
-              >
-                <p className="text-[11px] text-on-surface truncate font-medium leading-tight">{e.title}</p>
-                {height > 32 && <p className="text-[9px] text-outline">{eventTimeLabel(e)}</p>}
-              </button>
-            );
-          })}
-
-          {nowMin !== null && (
-            <div className="absolute left-14 right-0 flex items-center z-20 pointer-events-none" style={{ top: (nowMin / 60) * HOUR_H }}>
-              <span className="w-2 h-2 rounded-full bg-error -ml-1" />
-              <span className="flex-1 h-px bg-error" />
-            </div>
-          )}
-        </div>
-      </div>
-      <button onClick={onAdd} className="w-full py-2.5 border-t border-white/5 text-outline hover:text-primary hover:bg-surface-variant/20 transition font-label-caps text-[11px] flex items-center justify-center gap-1">
-        <MI name="add" className="text-base" /> NOVO EVENTO
-      </button>
     </div>
   );
 }
