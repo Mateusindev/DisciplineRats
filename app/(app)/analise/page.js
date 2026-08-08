@@ -2,77 +2,9 @@
 
 import { useApp } from "../AppContext";
 import { MI, Caps } from "@/components/ui";
-import { getDateStr, weekdayShort, minutesToHm, lastNDates, MOOD_OPTIONS, MOOD_PERIODS, MOOD_TAGS, moodDayAvg, moodPeriods, moodPeriodAverages, moodTagAverages, bedtimeLateness, SLEEP_LIMIT_DEFAULT } from "@/lib/state";
+import { getDateStr, weekdayShort, minutesToHm, lastNDates, bedtimeLateness, SLEEP_LIMIT_DEFAULT } from "@/lib/state";
 
 const N = 30; // janela de dias do panorama combinado
-
-function mean(a) {
-  return a.reduce((s, x) => s + x, 0) / a.length;
-}
-// coeficiente de correlação de Pearson; null se n<3 ou variância zero
-function pearson(xs, ys) {
-  const n = xs.length;
-  if (n < 3) return null;
-  const mx = mean(xs);
-  const my = mean(ys);
-  let num = 0;
-  let dx = 0;
-  let dy = 0;
-  for (let i = 0; i < n; i++) {
-    const a = xs[i] - mx;
-    const b = ys[i] - my;
-    num += a * b;
-    dx += a * a;
-    dy += b * b;
-  }
-  if (dx === 0 || dy === 0) return null;
-  return num / Math.sqrt(dx * dy);
-}
-function strength(r) {
-  const a = Math.abs(r);
-  if (a < 0.2) return "desprezível";
-  if (a < 0.4) return "fraca";
-  if (a < 0.6) return "moderada";
-  if (a < 0.8) return "forte";
-  return "muito forte";
-}
-function moodColor(v) {
-  return v === 5 ? "var(--color-primary-container)" : v === 1 ? "#ffb4ab" : "var(--color-primary)";
-}
-
-function CorrCard({ icon, title, r, n, positiveHint, negativeHint }) {
-  if (r === null) {
-    return (
-      <div className="glass-card p-6 rounded-xl flex flex-col gap-2">
-        <div className="flex items-center gap-2 text-primary">
-          <MI name={icon} /> <Caps>{title}</Caps>
-        </div>
-        <p className="text-body-md text-on-surface-variant">Dados insuficientes. Registre ao menos 3 dias com ambos pra calcular.</p>
-        <Caps className="text-outline text-[10px]">{n} dia(s) com dados</Caps>
-      </div>
-    );
-  }
-  const pct = Math.round(Math.abs(r) * 100);
-  const positive = r >= 0;
-  const hint = positive ? positiveHint : negativeHint;
-  return (
-    <div className="glass-card p-6 rounded-xl flex flex-col gap-3">
-      <div className="flex items-center gap-2 text-primary">
-        <MI name={icon} /> <Caps>{title}</Caps>
-      </div>
-      <div className="flex items-end gap-3">
-        <span className="font-headline-lg text-headline-lg text-primary leading-none">{r >= 0 ? "+" : ""}{r.toFixed(2)}</span>
-        <span className="font-label-caps text-label-caps text-on-surface-variant mb-1">r · {n} dias</span>
-      </div>
-      <div className="w-full h-2 bg-surface-container rounded-full overflow-hidden border border-white/5">
-        <div className={`h-full rounded-full ${positive ? "bg-primary-container" : "bg-error"}`} style={{ width: `${pct}%` }} />
-      </div>
-      <p className="text-body-md text-on-surface">
-        Correlação <span className="text-primary font-bold">{strength(r)}</span> {positive ? "positiva" : "negativa"}. {hint}
-      </p>
-    </div>
-  );
-}
 
 function dayOfMonth(dateStr) {
   return Number(dateStr.slice(8, 10));
@@ -217,7 +149,6 @@ export default function AnalisePage() {
     const s = state.sleep[d];
     return {
       date: d,
-      mood: moodDayAvg(state.mood[d]),
       sleepMin: s?.durationMin ?? null,
       sleepQuality: s?.quality ?? null,
       sleepBed: s?.bedtime ?? null,
@@ -228,81 +159,16 @@ export default function AnalisePage() {
     };
   });
 
-  // usa TODO o histórico pra correlação (não só a janela de 14d)
-  const allDates = new Set([...Object.keys(state.mood), ...Object.keys(state.sleep), ...Object.keys(trainByDate)]);
-
-  // humor médio do dia (média dos períodos); helper tolera formato legado
-  const dayMood = (d) => moodDayAvg(state.mood[d]);
-
-  // sono (h) × humor
-  const sm = [...allDates].filter((d) => state.sleep[d] && dayMood(d) !== null);
-  const rSleepMood = pearson(sm.map((d) => state.sleep[d].durationMin / 60), sm.map((d) => dayMood(d)));
-
-  // qualidade do sono × humor
-  const qm = [...allDates].filter((d) => state.sleep[d]?.quality && dayMood(d) !== null);
-  const rQualMood = pearson(qm.map((d) => state.sleep[d].quality), qm.map((d) => dayMood(d)));
-
-  // treino × humor: média de humor em dias treinados vs descanso
-  const moodDates = [...allDates].filter((d) => dayMood(d) !== null);
-  const trainedMoods = moodDates.filter((d) => (trainByDate[d] || 0) > 0).map((d) => dayMood(d));
-  const restMoods = moodDates.filter((d) => !(trainByDate[d] || 0)).map((d) => dayMood(d));
-  const avgTrained = trainedMoods.length ? mean(trainedMoods) : null;
-  const avgRest = restMoods.length ? mean(restMoods) : null;
-  const moodDelta = avgTrained !== null && avgRest !== null ? avgTrained - avgRest : null;
-
-  // ---- humor por período do dia + efeito das atividades (tags) ----
-  const periodMood = moodPeriodAverages(state.mood); // { morning:{avg,n}, ... }
-  const tagMood = moodTagAverages(state.mood);       // { [tagId]:{avg,n} }
-  // baseline: humor médio de todos os registros de período
-  const allPeriodVals = [];
-  for (const d of Object.keys(state.mood)) for (const p of moodPeriods(state.mood[d])) allPeriodVals.push(p.mood);
-  const baseMood = allPeriodVals.length ? mean(allPeriodVals) : null;
-  // efeito de cada tag = média com a tag − baseline (≥2 registros p/ entrar)
-  const TAG_LABEL = Object.fromEntries(MOOD_TAGS.map((t) => [t.id, t]));
-  const tagEffects = Object.entries(tagMood)
-    .filter(([, v]) => v.n >= 2)
-    .map(([id, v]) => ({ id, label: TAG_LABEL[id]?.label || id, icon: TAG_LABEL[id]?.icon || "label", avg: v.avg, n: v.n, delta: baseMood !== null ? v.avg - baseMood : 0 }))
-    .sort((a, b) => b.delta - a.delta);
-  // humor à NOITE em dias com treino vs sem (efeito intradiário — o padrão "treino/jiu vira o dia")
-  const eveTrained = [];
-  const eveRest = [];
-  for (const d of Object.keys(state.mood)) {
-    const e = state.mood[d];
-    const ev = e && typeof e.mood !== "number" && e.evening && typeof e.evening.mood === "number" ? e.evening.mood : null;
-    if (ev === null) continue;
-    ((trainByDate[d] || 0) > 0 ? eveTrained : eveRest).push(ev);
-  }
-  const eveTrainedAvg = eveTrained.length ? mean(eveTrained) : null;
-  const eveRestAvg = eveRest.length ? mean(eveRest) : null;
-  const eveDelta = eveTrainedAvg !== null && eveRestAvg !== null ? eveTrainedAvg - eveRestAvg : null;
-
   // escala sono do gráfico
   const goalMin = state.settings.sleepGoalMin || 450;
   const maxSleep = Math.max(600, goalMin + 60, ...rows.map((r) => r.sleepMin || 0));
 
-  // pontos de humor pra linha (percentuais, para overlay SVG responsivo)
-  const moodPts = rows
-    .map((r, i) => (r.mood !== null ? { x: ((i + 0.5) / N) * 100, y: (1 - (r.mood - 1) / 4) * 100, v: r.mood } : null))
-    .filter(Boolean);
-  // segmentos só entre dias adjacentes com humor
-  const segments = [];
-  for (let i = 1; i < rows.length; i++) {
-    if (rows[i].mood !== null && rows[i - 1].mood !== null) {
-      segments.push({
-        x1: ((i - 0.5) / N) * 100,
-        y1: (1 - (rows[i - 1].mood - 1) / 4) * 100,
-        x2: ((i + 0.5) / N) * 100,
-        y2: (1 - (rows[i].mood - 1) / 4) * 100,
-      });
-    }
-  }
-
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="font-headline-lg text-headline-lg text-primary uppercase mb-2">Análise & Correlações</h2>
+        <h2 className="font-headline-lg text-headline-lg text-primary uppercase mb-2">Análise</h2>
         <p className="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">
-          Como sono e treino impactam seu humor. Quanto mais dias registrados, mais confiável a correlação.
+          Foco, sono e treino nos últimos 30 dias, lado a lado. Quanto mais dias registrados, mais confiável a leitura.
         </p>
       </div>
 
@@ -404,158 +270,12 @@ export default function AnalisePage() {
         )}
       </section>
 
-      {/* Correlation cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-card-gap">
-        <CorrCard
-          icon="bedtime"
-          title="SONO → HUMOR"
-          r={rSleepMood}
-          n={sm.length}
-          positiveHint="Dormir mais tende a elevar seu humor."
-          negativeHint="Curioso: mais sono não veio acompanhado de humor melhor."
-        />
-        <CorrCard
-          icon="star"
-          title="QUALIDADE SONO → HUMOR"
-          r={rQualMood}
-          n={qm.length}
-          positiveHint="Noites bem avaliadas puxam o humor pra cima."
-          negativeHint="Qualidade percebida não acompanhou o humor."
-        />
-        {/* Treino x humor (comparação de médias) */}
-        <div className="glass-card p-6 rounded-xl flex flex-col gap-3">
-          <div className="flex items-center gap-2 text-primary">
-            <MI name="fitness_center" /> <Caps>TREINO → HUMOR</Caps>
-          </div>
-          {moodDelta === null ? (
-            <p className="text-body-md text-on-surface-variant">Dados insuficientes. Registre humor em dias com e sem treino.</p>
-          ) : (
-            <>
-              <div className="flex items-end gap-3">
-                <span className="font-headline-lg text-headline-lg text-primary leading-none">
-                  {moodDelta >= 0 ? "+" : ""}{moodDelta.toFixed(1)}
-                </span>
-                <span className="font-label-caps text-label-caps text-on-surface-variant mb-1">no humor médio</span>
-              </div>
-              <div className="flex gap-4 text-body-md">
-                <div>
-                  <Caps className="text-outline text-[10px]">TREINO</Caps>
-                  <p className="text-primary font-bold">{avgTrained.toFixed(1)}<span className="text-outline text-xs">/5</span></p>
-                </div>
-                <div>
-                  <Caps className="text-outline text-[10px]">DESCANSO</Caps>
-                  <p className="text-on-surface font-bold">{avgRest.toFixed(1)}<span className="text-outline text-xs">/5</span></p>
-                </div>
-              </div>
-              <p className="text-body-md text-on-surface">
-                {moodDelta >= 0.1
-                  ? "Seu humor é melhor nos dias em que treina."
-                  : moodDelta <= -0.1
-                  ? "Seu humor tem sido pior nos dias de treino — atenção à carga."
-                  : "Treino e humor sem diferença clara até agora."}
-              </p>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Humor por período + efeito das atividades */}
-      <section className="glass-card p-6 md:p-8 rounded-xl space-y-6">
-        <div className="flex items-center gap-2 text-primary">
-          <MI name="schedule" /> <Caps>HUMOR POR PERÍODO & ATIVIDADES</Caps>
-        </div>
-
-        {baseMood === null ? (
-          <p className="text-body-md text-on-surface-variant">
-            Registre o humor por período (manhã/tarde/noite) em <span className="text-primary">Humor</span> pra ver aqui o padrão do dia e o efeito das atividades.
-          </p>
-        ) : (
-          <>
-            {/* média por período */}
-            <div className="grid grid-cols-3 gap-4">
-              {MOOD_PERIODS.map((p) => {
-                const a = periodMood[p.key];
-                const pct = a.avg ? ((a.avg - 1) / 4) * 100 : 0;
-                return (
-                  <div key={p.key} className="flex flex-col items-center gap-2">
-                    <div className="flex items-center gap-1.5 text-on-surface-variant">
-                      <MI name={p.icon} className="text-base" />
-                      <Caps className="text-[10px]">{p.label}</Caps>
-                    </div>
-                    <span className="font-headline-md text-headline-md" style={{ color: a.avg ? moodColor(Math.round(a.avg)) : "var(--color-outline)" }}>
-                      {a.avg ? a.avg.toFixed(1) : "—"}
-                    </span>
-                    <div className="w-full h-2 bg-surface-container rounded-full overflow-hidden border border-white/5">
-                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "var(--color-primary-container)" }} />
-                    </div>
-                    <Caps className="text-[9px] text-outline">{a.n} REG.</Caps>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* efeito do treino à noite */}
-            {eveDelta !== null && (
-              <div className="rounded-xl border border-white/10 p-4 flex items-center gap-4">
-                <MI name="sports_martial_arts" className="text-primary text-2xl shrink-0" />
-                <div className="flex-1">
-                  <Caps className="text-outline text-[10px]">HUMOR À NOITE — DIAS DE TREINO vs SEM</Caps>
-                  <p className="text-body-md text-on-surface">
-                    {eveDelta >= 0.1
-                      ? `Nas noites após treinar, seu humor é ${eveDelta.toFixed(1)} ponto(s) melhor. O padrão que você notou.`
-                      : eveDelta <= -0.1
-                      ? `Noites de treino vêm com humor ${Math.abs(eveDelta).toFixed(1)} ponto(s) pior — veja se é carga ou horário.`
-                      : "Sem diferença clara entre noites com e sem treino até agora."}
-                  </p>
-                </div>
-                <div className="flex gap-3 text-right shrink-0">
-                  <div>
-                    <Caps className="text-outline text-[10px]">TREINO</Caps>
-                    <p className="font-bold" style={{ color: moodColor(Math.round(eveTrainedAvg)) }}>{eveTrainedAvg.toFixed(1)}</p>
-                  </div>
-                  <div>
-                    <Caps className="text-outline text-[10px]">SEM</Caps>
-                    <p className="font-bold text-on-surface">{eveRestAvg.toFixed(1)}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* efeito de cada atividade (tag) sobre o humor */}
-            {tagEffects.length > 0 && (
-              <div className="space-y-2">
-                <Caps className="text-outline text-[10px]">O QUE MEXE NO SEU HUMOR (média vs sua base de {baseMood.toFixed(1)})</Caps>
-                {tagEffects.map((t) => {
-                  const up = t.delta >= 0;
-                  const w = Math.min(100, Math.abs(t.delta) / 2 * 100); // até 2 pts = barra cheia
-                  return (
-                    <div key={t.id} className="flex items-center gap-3">
-                      <div className="flex items-center gap-1.5 w-28 shrink-0 text-on-surface-variant">
-                        <MI name={t.icon} className="text-sm" />
-                        <span className="text-[12px] truncate">{t.label}</span>
-                      </div>
-                      <div className="flex-1 h-2 bg-surface-container rounded-full overflow-hidden border border-white/5 flex" style={{ justifyContent: up ? "flex-start" : "flex-end" }}>
-                        <div className="h-full rounded-full" style={{ width: `${w}%`, background: up ? "var(--color-primary-container)" : "#ffb4ab" }} />
-                      </div>
-                      <span className="w-12 text-right text-[12px] font-bold shrink-0" style={{ color: up ? "var(--color-primary-container)" : "#ffb4ab" }}>
-                        {up ? "+" : ""}{t.delta.toFixed(1)}
-                      </span>
-                      <Caps className="text-[9px] text-outline w-10 text-right shrink-0">{t.n}×</Caps>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </>
-        )}
-      </section>
-
       {/* Combined daily chart */}
       <section className="glass-card p-6 md:p-8 rounded-xl">
         <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-8">
           <div>
-            <h3 className="font-headline-md text-headline-md uppercase">Correlação Sono/Humor/Treino ({N}D)</h3>
-            <Caps className="text-on-surface-variant">HUMOR · SONO · TREINO LADO A LADO</Caps>
+            <h3 className="font-headline-md text-headline-md uppercase">Sono & Treino ({N}D)</h3>
+            <Caps className="text-on-surface-variant">SONO · TREINO LADO A LADO</Caps>
           </div>
           <div className="flex flex-wrap gap-4">
             <div className="flex items-center gap-2 text-[10px] font-label-caps">
@@ -563,9 +283,6 @@ export default function AnalisePage() {
             </div>
             <div className="flex items-center gap-2 text-[10px] font-label-caps">
               <span className="w-3 h-3 rounded-sm bg-error/45" /> DEITOU TARDE
-            </div>
-            <div className="flex items-center gap-2 text-[10px] font-label-caps">
-              <span className="w-3 h-3 rounded-full bg-primary" /> HUMOR (1–5)
             </div>
             <div className="flex items-center gap-2 text-[10px] font-label-caps">
               <MI name="fitness_center" className="text-primary-container text-base" /> TREINO
@@ -613,22 +330,6 @@ export default function AnalisePage() {
                   </div>
                 );
               })}
-
-              {/* overlay humor (linha + pontos) */}
-              <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
-                {segments.map((s, i) => (
-                  <line key={i} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} style={{ stroke: "var(--color-primary)" }} strokeWidth="0.6" vectorEffect="non-scaling-stroke" opacity="0.7" />
-                ))}
-              </svg>
-              {/* pontos de humor (divs pra ter tooltip + cor) */}
-              {moodPts.map((p, i) => (
-                <div
-                  key={i}
-                  className="absolute w-2.5 h-2.5 rounded-full border border-background -translate-x-1/2 -translate-y-1/2"
-                  style={{ left: `${p.x}%`, top: `${p.y}%`, background: moodColor(Math.round(p.v)) }}
-                  title={`Humor: ${MOOD_OPTIONS.find((o) => o.value === Math.round(p.v))?.label} (${p.v.toFixed(1)}/5)`}
-                />
-              ))}
             </div>
 
             {/* eixo: treino + dia */}

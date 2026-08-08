@@ -204,7 +204,7 @@ export function AppProvider({ children }) {
       if (st === prev.stats.streak && st <= (prev.stats.bestStreak || 0)) return prev;
       return { ...prev, stats: { ...prev.stats, streak: st, bestStreak: Math.max(prev.stats.bestStreak || 0, st) } };
     });
-  }, [loaded, state.habits, state.exerciseLogs, state.gymSets, state.sleep, state.mood, state.journal, state.routineChecks, state.focusHistory]);
+  }, [loaded, state.habits, state.exerciseLogs, state.gymSets, state.sleep, state.journal, state.routineChecks, state.focusHistory]);
 
   // redireciona ao /login em signout
   useEffect(() => {
@@ -514,7 +514,7 @@ export function AppProvider({ children }) {
   async function resetAllData() {
     const ok = await confirm({
       title: "Reiniciar todos os dados?",
-      body: "Apaga foco, hábitos, sono, treinos, dieta, humor e XP. Não dá pra desfazer.",
+      body: "Apaga foco, hábitos, sono, treinos, dieta e XP. Não dá pra desfazer.",
       confirmLabel: "APAGAR TUDO",
     });
     if (!ok) return;

@@ -16,7 +16,7 @@
   --brand-deepest:         #410002;                 /* darkest accent */
   --brand-on-accent:       #410002;                 /* text/icon ON the vivid accent */
   --brand-inverse:         #c00012;                 /* inverse primary */
-  --brand-glow:            rgba(255, 82, 82, 0.22); /* focus/mood glow shadow */
+  --brand-glow:            rgba(255, 82, 82, 0.22); /* focus glow shadow */
   --brand-outline:         #a08c8a;                 /* mid outline (neutral, brand-tinted) */
   --brand-outline-variant: #524342;                 /* dark outline */
   --brand-text-variant:    #d8c2c0;                 /* secondary text (neutral, brand-tinted) */

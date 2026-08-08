@@ -1,7 +1,7 @@
 -- ============================================================
 -- Discipline Rats — schema Supabase (normalizado)
 -- Rode no SQL Editor do painel Supabase (uma vez).
--- Logs (sono, humor, foco, treino, hábitos) viram tabelas.
+-- Logs (sono, foco, treino, hábitos) viram tabelas.
 -- Config/planos/tasks ficam como jsonb no profile.
 -- ============================================================
 
@@ -60,15 +60,9 @@ create table if not exists public.sleep_logs (
 alter table public.sleep_logs add column if not exists xp integer not null default 0;
 alter table public.sleep_logs add column if not exists late_reason text;
 
-create table if not exists public.mood_logs (
-  user_id  uuid not null references auth.users (id) on delete cascade,
-  date     date not null,
-  mood     smallint not null,                 -- média (arredondada) dos períodos do dia; legado = registro único
-  note     text,
-  periods  jsonb,                             -- { morning?, afternoon?, evening? } cada um { mood, note?, tags?[] }
-  primary key (user_id, date)
-);
-alter table public.mood_logs add column if not exists periods jsonb;
+-- Humor foi removido do app. A tabela não é mais criada nem lida.
+-- Se o seu banco já tem mood_logs e você quer se livrar dos dados, rode à mão:
+--   drop table if exists public.mood_logs;
 
 create table if not exists public.focus_days (
   user_id  uuid not null references auth.users (id) on delete cascade,
@@ -191,7 +185,6 @@ create index if not exists transactions_user_date on public.transactions (user_i
 alter table public.profiles     enable row level security;
 alter table public.transactions enable row level security;
 alter table public.sleep_logs   enable row level security;
-alter table public.mood_logs    enable row level security;
 alter table public.focus_days   enable row level security;
 alter table public.exercise_logs enable row level security;
 alter table public.habits       enable row level security;
@@ -212,7 +205,7 @@ create policy "own profile update" on public.profiles for update using (auth.uid
 do $$
 declare t text;
 begin
-  foreach t in array array['sleep_logs','mood_logs','focus_days','exercise_logs','habits','habit_checks','gym_sets','routine_checks','transactions','weight_logs']
+  foreach t in array array['sleep_logs','focus_days','exercise_logs','habits','habit_checks','gym_sets','routine_checks','transactions','weight_logs']
   loop
     execute format('drop policy if exists "own rows select" on public.%I', t);
     execute format('create policy "own rows select" on public.%I for select using (auth.uid() = user_id)', t);

@@ -1,6 +1,6 @@
 # Discipline Rats
 
-Painel de autodisciplina: registre foco, hábitos, sono, exercício e humor, ganhe XP e suba de nível. Análise de correlações entre sono/treino e humor.
+Painel de autodisciplina: registre foco, hábitos, sono, exercício e dieta, ganhe XP e suba de nível. Retrospecto de 30 dias na página de Análise.
 
 Construído com **Next.js 15** (App Router) + **Supabase**. Roda offline em `localStorage` quando o Supabase não está configurado.
 
@@ -10,8 +10,7 @@ Construído com **Next.js 15** (App Router) + **Supabase**. Roda offline em `loc
 - **Hábitos** — checklist diário com sequências.
 - **Sono** — registra hora de dormir/acordar, calcula duração, XP ao bater a meta.
 - **Exercício** — log de treinos, meta semanal, heatmap de volume e frequência (layout Iron Focus / bento grid).
-- **Humor** — registro diário 1–5 com avatar e histórico (layout Iron Focus).
-- **Análise** — correlação **sono × humor** e **qualidade do sono × humor** (Pearson), comparação **treino × humor**, e gráfico combinado diário (humor + sono + treino).
+- **Análise** — retrospecto de 30 dias de foco, sono e treino, com gráfico combinado sono + treino.
 - **Gamificação** — XP, níveis, tiers e multiplicador de sequência. Regras em [`GAMIFICATION.md`](GAMIFICATION.md).
 - **Toasts** — feedback ao salvar registros.
 
@@ -63,7 +62,7 @@ bun run lint    # lint
 
 ```
 app/
-  (app)/            rotas autenticadas (foco, habitos, sono, exercicio, humor, analise)
+  (app)/            rotas autenticadas (foco, habitos, sono, exercicio, dieta, analise)
     AppContext.js   estado global, persistência com debounce, toasts
     layout.js       navbar + sidebar + bottom nav
   login/            auth
