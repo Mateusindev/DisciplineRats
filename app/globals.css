@@ -9,23 +9,22 @@
      Every --color-primary* token derives from these; JS inline
      styles read them too (var(--brand-glow) etc.).
 
-     Duas famílias de acento, de propósito:
-       · PREENCHIMENTO (--brand-accent → primary-container) = VERDE
-         #10B981. É a cor de ação e de feito: botão salvar/adicionar,
-         barra de progresso, chip marcado.
-       · TEXTO/ATIVO (--brand-pale → primary) = AZUL #60A5FA, versão
-         legível do #2563EB. Títulos, item ativo do menu, links.
-       O #2563EB puro só entra como fundo (bg-primary-fixed-dim): como
-       TEXTO ele dá 3.0:1 no fundo #0B0E17, abaixo do mínimo de 4.5:1.
+     O acento é azul royal, em dois tons por função:
+       · PREENCHIMENTO (--brand-accent → primary-container) = #3B82F6.
+         Aba ativa, barra de progresso, botão de salvar, chip marcado.
+       · TEXTO (--brand-pale → primary) = #60A5FA, um tom acima: títulos,
+         item ativo do menu, links, valores em destaque.
+       Texto SOBRE o preenchimento é o próprio navy #0B0E17 (5.2:1) —
+       branco no #3B82F6 daria 3.7:1, abaixo do mínimo de 4.5:1.
      ============================================================ */
-  --brand-accent:          #10b981;                 /* verde de ação (botões, barras, chips) */
-  --brand-accent-dim:      #34d399;                 /* verde claro / tint */
+  --brand-accent:          #3b82f6;                 /* azul royal — preenchimento (abas, barras, botões) */
+  --brand-accent-dim:      #60a5fa;                 /* azul claro / tint */
   --brand-pale:            #60a5fa;                 /* azul de destaque — TEXTO sobre fundo escuro */
   --brand-deep:            #1d4ed8;                 /* azul fundo (bordas em tints) */
   --brand-deepest:         #0b2a6b;                 /* azul mais fundo */
-  --brand-on-accent:       #0b0e17;                 /* texto/ícone SOBRE o verde (7.6:1) */
+  --brand-on-accent:       #0b0e17;                 /* texto/ícone SOBRE o azul royal (5.2:1) */
   --brand-inverse:         #2563eb;                 /* inverse primary */
-  --brand-glow:            rgba(16, 185, 129, 0.28);/* focus glow shadow */
+  --brand-glow:            rgba(59, 130, 246, 0.28);/* focus glow shadow */
   --brand-outline:         #7d8ca3;                 /* label pequeno — 5.2:1 no card */
   --brand-outline-variant: #334155;                 /* traços fracos: grade de gráfico, estrela vazia, borda pontilhada */
   --brand-text-variant:    #94a3b8;                 /* texto secundário (7.5:1 no fundo) */
