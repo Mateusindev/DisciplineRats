@@ -103,8 +103,8 @@ function TimerWidget() {
   const pathname = usePathname();
   const router = useRouter();
   if (!timer || !timer.active || pathname === "/foco") return null;
-  const { phase, secondsLeft, isRunning, phaseTotal, toggleTimer } = timer;
-  const label = phase === "focus" ? "FOCO" : "PAUSA";
+  const { phase, secondsLeft, isRunning, pending, phaseTotal, toggleTimer } = timer;
+  const label = pending ? (phase === "focus" ? "SESSÃO PRONTA" : "PAUSA PRONTA") : phase === "focus" ? "FOCO" : "PAUSA";
   const R = 18;
   const CIRC = 2 * Math.PI * R;
   const offset = phaseTotal > 0 ? CIRC * (secondsLeft / phaseTotal) : CIRC;
@@ -137,8 +137,10 @@ function TimerWidget() {
       </div>
       <button
         onClick={toggleTimer}
-        aria-label={isRunning ? "Pausar" : "Retomar"}
-        className="w-9 h-9 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center active:scale-95 transition shrink-0"
+        aria-label={isRunning ? "Pausar" : pending ? `Iniciar ${phase === "focus" ? "sessão" : "pausa"}` : "Retomar"}
+        className={`w-9 h-9 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center active:scale-95 transition shrink-0 ${
+          pending ? "animate-pulse" : ""
+        }`}
       >
         <MI name={isRunning ? "pause" : "play_arrow"} fill className="text-lg" />
       </button>
@@ -354,6 +356,9 @@ export function AppProvider({ children }) {
   const [phase, setPhase] = useState("focus");
   const [secondsLeft, setSecondsLeft] = useState(defaultState().settings.focusMin * 60);
   const [isRunning, setIsRunning] = useState(false);
+  // fase anterior terminou e a próxima está carregada, mas parada esperando o
+  // start manual. Encadear sozinho já causou sessão contando com a pessoa longe.
+  const [pending, setPending] = useState(false);
   const endRef = useRef(null); // timestamp-alvo do fim da fase (ms)
   const endingRef = useRef(false); // guard de reentrância no fim da fase
   const phaseRef = useRef(phase);
@@ -373,6 +378,7 @@ export function AppProvider({ children }) {
     if (snap && snap.phase) {
       const phase = snap.phase === "focus" ? "focus" : "break"; // migra "longBreak" salvo → "break"
       setPhase(phase);
+      setPending(!!snap.pending);
       if (snap.isRunning && snap.endTarget) {
         const rem = Math.round((snap.endTarget - Date.now()) / 1000);
         if (rem > 0) {
@@ -400,10 +406,10 @@ export function AppProvider({ children }) {
     try {
       const snap = isRunning
         ? { phase, isRunning: true, endTarget: Date.now() + secondsLeft * 1000 }
-        : { phase, isRunning: false, secondsLeft };
+        : { phase, isRunning: false, secondsLeft, pending };
       localStorage.setItem(TIMER_KEY, JSON.stringify(snap));
     } catch (e) {}
-  }, [loaded, phase, isRunning, secondsLeft]);
+  }, [loaded, phase, isRunning, secondsLeft, pending]);
 
   const handlePhaseEnd = useCallback(() => {
     if (endingRef.current) return; // guard: interval tick + visibilitychange podem disparar juntos
@@ -412,17 +418,20 @@ export function AppProvider({ children }) {
     const hidden = typeof document !== "undefined" && document.visibilityState !== "visible";
     if (phaseRef.current === "focus") {
       playAlarm(); // fim do pomodoro: alarme forte
-      if (hidden) notify("Pomodoro concluído! 🍅", `+${focusXp(s.focusMin)} XP · pausa de ${s.breakMin} min começou.`);
+      if (hidden) notify("Pomodoro concluído! 🍅", `+${focusXp(s.focusMin)} XP · pausa de ${s.breakMin} min pronta, é só dar start.`);
       completeFocusSession();
       setPhase("break");
       setSecondsLeft(s.breakMin * 60);
     } else {
       playChime(); // fim da pausa: chime suave
-      if (hidden) notify("Pausa acabou", `Bora focar: ${s.focusMin} min.`);
+      if (hidden) notify("Pausa acabou", `Quando voltar, dê start na sessão de ${s.focusMin} min.`);
       setPhase("focus");
       setSecondsLeft(s.focusMin * 60);
     }
-    setIsRunning(true);
+    // a próxima fase NÃO começa sozinha: fica carregada esperando o start.
+    // Encadear automático fazia o cronômetro rodar sem ninguém na frente.
+    setIsRunning(false);
+    setPending(true);
   }, [completeFocusSession]);
 
   useEffect(() => {
@@ -457,10 +466,12 @@ export function AppProvider({ children }) {
 
   const toggleTimer = useCallback(() => {
     setIsRunning((r) => !r);
+    setPending(false); // o start manual aconteceu
     ensureNotifyPermission(); // gesto do usuário: momento certo de pedir permissão (idempotente)
   }, []);
   const resetPhase = useCallback(() => {
     setIsRunning(false);
+    setPending(false);
     const s = stateRef.current.settings;
     const p = phaseRef.current;
     const dur = p === "focus" ? s.focusMin : s.breakMin;
@@ -478,8 +489,11 @@ export function AppProvider({ children }) {
     phase,
     secondsLeft,
     isRunning,
+    pending,
     phaseTotal,
-    active: isRunning || secondsLeft < phaseTotal,
+    // `pending` mantém o widget na tela: a fase nova está cheia e parada, e sem
+    // isso o cronômetro sumiria justo na hora de avisar que ele espera o start
+    active: isRunning || pending || secondsLeft < phaseTotal,
     toggleTimer,
     resetPhase,
     skipPhase,

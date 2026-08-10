@@ -18,7 +18,7 @@ const ddmm = (d) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 
 export default function FocoPage() {
   const { state, setState, timer, updateSetting } = useApp();
-  const { phase, secondsLeft, isRunning, toggleTimer, resetPhase, skipPhase } = timer;
+  const { phase, secondsLeft, isRunning, pending, toggleTimer, resetPhase, skipPhase } = timer;
 
   const today = getDateStr(0);
   const cards = pendingCards(state);
@@ -68,13 +68,20 @@ export default function FocoPage() {
                 <div className="text-center">
                   <div className="font-display-timer text-[72px] md:text-display-timer text-primary leading-none">{formatTime(secondsLeft)}</div>
                   <Caps className="text-outline tracking-widest mt-2 uppercase block">{phaseLabel}</Caps>
+                  {pending && (
+                    <Caps className="text-primary text-[10px] tracking-widest mt-1 block">
+                      {phase === "focus" ? "TOQUE INICIAR PRA COMEÇAR" : "TOQUE INICIAR PRA DESCANSAR"}
+                    </Caps>
+                  )}
                 </div>
               </div>
 
               <div className="flex gap-4 mt-10 items-center">
                 <button
                   onClick={toggleTimer}
-                  className="px-8 md:px-10 py-4 bg-primary-container text-on-primary-container font-label-caps text-headline-md rounded-full font-black flex items-center gap-3 hover:scale-105 active:scale-95 transition-transform"
+                  className={`px-8 md:px-10 py-4 bg-primary-container text-on-primary-container font-label-caps text-headline-md rounded-full font-black flex items-center gap-3 hover:scale-105 active:scale-95 transition-transform ${
+                    pending ? "animate-pulse" : ""
+                  }`}
                 >
                   <MI name={isRunning ? "pause" : "play_arrow"} fill />
                   {isRunning ? "PAUSAR" : "INICIAR"}
