@@ -455,14 +455,14 @@ function BuildCard({ h, i, ctx }) {
         </div>
       ) : (
         sched && (
-          <Caps className="text-outline-variant text-[10px] mb-2 flex items-center gap-1">
+          <Caps className="text-outline text-[10px] mb-2 flex items-center gap-1">
             <MI name="event_repeat" className="text-sm" /> {sched}
           </Caps>
         )
       )}
 
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-1 text-outline-variant font-label-caps text-[10px]">
+        <div className="flex items-center gap-1 text-outline font-label-caps text-[10px]">
           <MI name="local_fire_department" className={`text-sm ${streak > 0 ? "text-primary-container" : ""}`} />
           {streak} {sched ? "EM SEQUÊNCIA" : "DIAS"}
         </div>
@@ -513,7 +513,7 @@ function WeeklyCard({ h, i, ctx }) {
         <div className={`h-full rounded-full ${over ? "bg-error" : "bg-primary-container"}`} style={{ width: `${pct}%` }} />
       </div>
       <div className="flex justify-between items-center mb-4">
-        <Caps className={`text-[10px] ${over ? "text-error" : hit ? "text-primary-container" : "text-outline-variant"}`}>
+        <Caps className={`text-[10px] ${over ? "text-error" : hit ? "text-primary-container" : "text-outline"}`}>
           {dir === "min" ? (hit ? "META BATIDA ✓" : `FALTAM ${target - count}`) : over ? "LIMITE ESTOURADO" : `RESTAM ${target - count}`}
         </Caps>
         <Caps className="text-outline text-[10px]">+{bonus} XP/SEMANA NA META</Caps>
@@ -554,7 +554,7 @@ function QuitCard({ h, i, ctx }) {
         <Caps className="text-outline">{clean === 1 ? "DIA LIMPO" : "DIAS LIMPO"}</Caps>
       </div>
       <div className="flex justify-between items-center mb-1 text-[11px]">
-        <Caps className="text-outline-variant text-[10px]">RECORDE: {best} {best === 1 ? "DIA" : "DIAS"}</Caps>
+        <Caps className="text-outline text-[10px]">RECORDE: {best} {best === 1 ? "DIA" : "DIAS"}</Caps>
         {next && (
           <Caps className="text-outline text-[10px]">
             PRÓX. MARCO: {next.days}D (+{Math.round(next.xp * prio.mult)} XP)
@@ -562,7 +562,7 @@ function QuitCard({ h, i, ctx }) {
         )}
       </div>
       <div className="flex justify-between items-center mb-4 text-[11px]">
-        <Caps className="text-outline-variant text-[10px]">30D: {last30} RECAÍDA(S)</Caps>
+        <Caps className="text-outline text-[10px]">30D: {last30} RECAÍDA(S)</Caps>
         {trend !== null && (
           <Caps className={`text-[10px] ${trend <= 0 ? "text-primary-container" : "text-error"}`}>
             {trend <= 0 ? "▼" : "▲"} {Math.abs(trend)} VS 30D ANTERIORES

@@ -4,22 +4,31 @@
 
 @theme {
   /* ============================================================
-     BRAND — DARK MODE default (vivid red).
+     BRAND — DARK MODE default (navy/slate + verde de ação).
      Light mode overrides these under `html.light` (see below).
      Every --color-primary* token derives from these; JS inline
      styles read them too (var(--brand-glow) etc.).
+
+     Duas famílias de acento, de propósito:
+       · PREENCHIMENTO (--brand-accent → primary-container) = VERDE
+         #10B981. É a cor de ação e de feito: botão salvar/adicionar,
+         barra de progresso, chip marcado.
+       · TEXTO/ATIVO (--brand-pale → primary) = AZUL #60A5FA, versão
+         legível do #2563EB. Títulos, item ativo do menu, links.
+       O #2563EB puro só entra como fundo (bg-primary-fixed-dim): como
+       TEXTO ele dá 3.0:1 no fundo #0B0E17, abaixo do mínimo de 4.5:1.
      ============================================================ */
-  --brand-accent:          #ff5252;                 /* vivid red accent (buttons, bars, ring) */
-  --brand-accent-dim:      #ff8a80;                 /* softer accent / tint */
-  --brand-pale:            #ffdad4;                 /* pale text/fill on dark */
-  --brand-deep:            #93000a;                 /* deep accent (borders on tints) */
-  --brand-deepest:         #410002;                 /* darkest accent */
-  --brand-on-accent:       #410002;                 /* text/icon ON the vivid accent */
-  --brand-inverse:         #c00012;                 /* inverse primary */
-  --brand-glow:            rgba(255, 82, 82, 0.22); /* focus glow shadow */
-  --brand-outline:         #a08c8a;                 /* mid outline (neutral, brand-tinted) */
-  --brand-outline-variant: #524342;                 /* dark outline */
-  --brand-text-variant:    #d8c2c0;                 /* secondary text (neutral, brand-tinted) */
+  --brand-accent:          #10b981;                 /* verde de ação (botões, barras, chips) */
+  --brand-accent-dim:      #34d399;                 /* verde claro / tint */
+  --brand-pale:            #60a5fa;                 /* azul de destaque — TEXTO sobre fundo escuro */
+  --brand-deep:            #1d4ed8;                 /* azul fundo (bordas em tints) */
+  --brand-deepest:         #0b2a6b;                 /* azul mais fundo */
+  --brand-on-accent:       #0b0e17;                 /* texto/ícone SOBRE o verde (7.6:1) */
+  --brand-inverse:         #2563eb;                 /* inverse primary */
+  --brand-glow:            rgba(16, 185, 129, 0.28);/* focus glow shadow */
+  --brand-outline:         #7d8ca3;                 /* label pequeno — 5.2:1 no card */
+  --brand-outline-variant: #334155;                 /* traços fracos: grade de gráfico, estrela vazia, borda pontilhada */
+  --brand-text-variant:    #94a3b8;                 /* texto secundário (7.5:1 no fundo) */
 
   /* colors — primary family maps to the brand vars above */
   --color-primary:                  var(--brand-pale);
@@ -27,7 +36,8 @@
   --color-primary-fixed:            var(--brand-pale);
   --color-primary-fixed-dim:        var(--brand-accent-dim);
   --color-surface-tint:             var(--brand-accent-dim);
-  --color-on-primary:               var(--brand-on-accent);
+  /* on-primary é o texto SOBRE o azul-claro (fill) → precisa ser escuro */
+  --color-on-primary:               #0b0e17;
   --color-on-primary-container:     var(--brand-on-accent);
   --color-on-primary-fixed:         var(--brand-deepest);
   --color-on-primary-fixed-variant: var(--brand-deep);
@@ -36,46 +46,51 @@
   --color-outline-variant:          var(--brand-outline-variant);
   --color-on-surface-variant:       var(--brand-text-variant);
 
-  /* colors — neutral / semantic (brand-independent) */
-  --color-tertiary-container: #cdcac9;
-  --color-on-error-container: #ffdad6;
-  --color-secondary: #c8c6c5;
-  --color-error: #ffb4ab;
-  --color-on-secondary: #313030;
-  --color-on-tertiary-container: #565555;
-  --color-surface-container-low: #1b1c1c;
-  --color-on-surface: #e3e2e2;
-  --color-on-tertiary-fixed-variant: #474646;
-  --color-tertiary-fixed-dim: #c9c6c5;
-  --color-on-tertiary: #313030;
-  --color-surface-container-lowest: #0d0e0f;
-  --color-on-error: #690005;
-  --color-surface-variant: #343535;
-  --color-error-container: #93000a;
-  --color-on-secondary-container: #bab8b7;
-  --color-secondary-fixed: #e5e2e1;
-  --color-on-background: #e3e2e2;
-  --color-inverse-on-surface: #303031;
-  --color-surface-bright: #383939;
-  --color-surface-dim: #121414;
-  --color-on-tertiary-fixed: #1c1b1b;
-  --color-surface-container-high: #292a2a;
-  --color-background: #121414;
-  --color-secondary-container: #4a4949;
-  --color-tertiary: #e9e6e5;
-  --color-on-secondary-fixed-variant: #474646;
-  --color-surface-container-highest: #343535;
-  --color-tertiary-fixed: #e5e2e1;
-  --color-surface: #121414;
-  --color-inverse-surface: #e3e2e2;
-  --color-on-secondary-fixed: #1c1b1b;
-  --color-surface-container: #1f2020;
-  --color-secondary-fixed-dim: #c8c6c5;
+  /* badge secundária (roxo). Fundo sólido com texto branco: 7.1:1, vale
+     igual no claro e no escuro, então não tem override em html.light. */
+  --color-badge:    #6d28d9;
+  --color-on-badge: #ffffff;
 
-  /* radius */
-  --radius: 0.125rem;
-  --radius-lg: 0.25rem;
-  --radius-xl: 0.5rem;
+  /* colors — neutral / semantic (brand-independent) */
+  --color-tertiary-container: #1e293b;
+  --color-on-error-container: #fecaca;
+  --color-secondary: #94a3b8;
+  --color-error: #f87171;
+  --color-on-secondary: #0b0e17;
+  --color-on-tertiary-container: #cbd5e1;
+  --color-surface-container-low: #0f1422;
+  --color-on-surface: #ffffff;
+  --color-on-tertiary-fixed-variant: #cbd5e1;
+  --color-tertiary-fixed-dim: #94a3b8;
+  --color-on-tertiary: #0b0e17;
+  --color-surface-container-lowest: #070a11;
+  --color-on-error: #0b0e17;
+  --color-surface-variant: #1e293b;
+  --color-error-container: #7f1d1d;
+  --color-on-secondary-container: #e2e8f0;
+  --color-secondary-fixed: #e2e8f0;
+  --color-on-background: #ffffff;
+  --color-inverse-on-surface: #0f1422;
+  --color-surface-bright: #2a3550;
+  --color-surface-dim: #0b0e17;
+  --color-on-tertiary-fixed: #0b0e17;
+  --color-surface-container-high: #171e33;
+  --color-background: #0b0e17;
+  --color-secondary-container: #1e293b;
+  --color-tertiary: #cbd5e1;
+  --color-on-secondary-fixed-variant: #cbd5e1;
+  --color-surface-container-highest: #1e293b;
+  --color-tertiary-fixed: #e2e8f0;
+  --color-surface: #0b0e17;
+  --color-inverse-surface: #e2e8f0;
+  --color-on-secondary-fixed: #0b0e17;
+  --color-surface-container: #121829;
+  --color-secondary-fixed-dim: #94a3b8;
+
+  /* radius — cantos suaves: card 12px, botão/input 8px, chip 4px */
+  --radius: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
 
   /* spacing */
   --spacing-container-padding: 2rem;
@@ -220,10 +235,23 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Card sólido: no fundo #0B0E17 um véu de 3% de branco praticamente
+   desaparece. O card agora é a própria cor de container da paleta. */
 .glass-card {
   backdrop-filter: blur(12px);
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--color-surface-container);
+  border: 1px solid #1e293b;
+}
+/* bordas escritas à mão como branco translúcido: no escuro viram a cor
+   de divisor da paleta, pra não existirem dois cinzas de borda */
+html:not(.light) .border-white\/10 {
+  border-color: #1e293b;
+}
+html:not(.light) .border-white\/5 {
+  border-color: rgba(30, 41, 59, 0.7);
+}
+html:not(.light) .bg-white\/5 {
+  background-color: rgba(30, 41, 59, 0.7);
 }
 
 .timer-glow {

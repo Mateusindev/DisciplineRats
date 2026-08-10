@@ -54,8 +54,8 @@ const ALL_MUSCLES = [
 function themeColors() {
   const light = typeof document !== "undefined" && document.documentElement.classList.contains("light");
   return {
-    accent: light ? "#2b88f5" : "#ff5252",
-    body: light ? "#c7d0db" : "#3d3f3f",
+    accent: light ? "#2b88f5" : "#10b981",
+    body: light ? "#c7d0db" : "#1e293b",
   };
 }
 

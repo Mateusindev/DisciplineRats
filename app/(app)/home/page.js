@@ -255,7 +255,7 @@ export default function HomePage() {
                     />
                   </div>
                   <div className="font-body-md text-[14px] text-on-surface leading-tight mb-1 line-clamp-2">{h.name}</div>
-                  <div className="flex items-center gap-1 text-outline-variant font-label-caps text-[9px]">
+                  <div className="flex items-center gap-1 text-outline font-label-caps text-[9px]">
                     <MI name="local_fire_department" className={`text-xs ${streak > 0 ? "text-primary-container" : ""}`} />
                     {streak}D
                     {!noXp && <span className="ml-auto">+{habitPriority(h).xp} XP</span>}

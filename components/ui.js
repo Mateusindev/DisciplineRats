@@ -189,7 +189,7 @@ export function Loader({ label = "Carregando..." }) {
 export function StatTile({ label, value, children }) {
   return (
     <div className="glass-card p-6 rounded-xl relative overflow-hidden">
-      <div className="text-outline-variant font-label-caps text-[10px] mb-1">{label}</div>
+      <div className="text-outline font-label-caps text-[10px] mb-1">{label}</div>
       <div className="flex items-center gap-2">
         <span className="text-headline-lg font-headline-lg text-primary">{value}</span>
         {children}

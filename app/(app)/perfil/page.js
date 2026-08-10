@@ -127,7 +127,9 @@ export default function PerfilPage() {
             {editingNick && nick.trim() && !nickValid && (
               <Caps className="text-error text-[10px] block mt-1">3–20 CARACTERES: LETRAS, NÚMEROS, _ . -</Caps>
             )}
-            <Caps className="text-primary-container">{g.tier}</Caps>
+            <span className="inline-flex items-center gap-1.5 mt-1 px-2.5 py-1 rounded-lg bg-badge text-on-badge font-label-caps text-[10px]">
+              <MI name="military_tech" className="text-sm" /> {g.tier}
+            </span>
 
             <div className="mt-4">
               <div className="flex justify-between text-[10px] font-label-caps text-outline mb-1">

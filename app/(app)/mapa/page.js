@@ -287,7 +287,7 @@ export default function MapaPage() {
                 {laneNodes.length === 0 && (
                   <button
                     onClick={() => addNode("meta", { h: MAPA_HORIZONS[0].id, lane: lane.id })}
-                    className="lg:hidden w-full py-4 rounded-xl border-2 border-dashed border-outline-variant/25 text-outline-variant hover:border-primary/40 hover:text-primary transition-colors flex items-center justify-center gap-2"
+                    className="lg:hidden w-full py-4 rounded-xl border-2 border-dashed border-outline-variant/25 text-outline hover:border-primary/40 hover:text-primary transition-colors flex items-center justify-center gap-2"
                   >
                     <MI name="add_circle" className="text-lg" />
                     <Caps className="text-[10px]">NOVO OBJETIVO EM {lane.label.toUpperCase()}</Caps>
@@ -376,7 +376,7 @@ function Cell({ horizon, lane, nodes, state, focusId, degreeOf, onOpen, onAdd })
       {empty ? (
         <button
           onClick={onAdd}
-          className="w-full h-32 rounded-xl border-2 border-dashed border-outline-variant/25 hover:border-primary/40 text-outline-variant hover:text-primary transition-colors flex flex-col items-center justify-center gap-1.5"
+          className="w-full h-32 rounded-xl border-2 border-dashed border-outline-variant/25 hover:border-primary/40 text-outline hover:text-primary transition-colors flex flex-col items-center justify-center gap-1.5"
         >
           <MI name="add_circle" className="text-xl" />
           <Caps className="text-[10px]">NOVO OBJETIVO</Caps>
@@ -396,7 +396,7 @@ function Cell({ horizon, lane, nodes, state, focusId, degreeOf, onOpen, onAdd })
               />
             ))}
           </SortableContext>
-          <button onClick={onAdd} aria-label="Adicionar nesta célula" className="w-full py-2 rounded-lg text-outline-variant hover:text-primary hover:bg-surface-variant/30 transition flex items-center justify-center gap-1.5">
+          <button onClick={onAdd} aria-label="Adicionar nesta célula" className="w-full py-2 rounded-lg text-outline hover:text-primary hover:bg-surface-variant/30 transition flex items-center justify-center gap-1.5">
             <MI name="add" className="text-base" />
             <Caps className="text-[10px]">ADICIONAR</Caps>
           </button>

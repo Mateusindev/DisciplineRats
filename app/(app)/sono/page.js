@@ -98,7 +98,7 @@ export default function SonoPage() {
     <>
       {/* Header */}
       <div className="mb-10">
-        <h1 className="font-headline-lg text-headline-lg text-primary-fixed-dim mb-1">SONO</h1>
+        <h1 className="font-headline-lg text-headline-lg text-primary mb-1">SONO</h1>
         <p className="font-body-md text-on-surface-variant">Registre e acompanhe seu descanso para otimizar sua recuperação neural e muscular.</p>
       </div>
 
@@ -237,7 +237,7 @@ export default function SonoPage() {
           <button
             onClick={save}
             disabled={needsReason}
-            className="w-full bg-primary py-4 rounded-lg text-on-primary font-headline-md text-headline-md tracking-widest hover:bg-primary-fixed hover:scale-[0.99] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
+            className="w-full bg-primary-container py-4 rounded-lg text-on-primary-container font-headline-md text-headline-md tracking-widest hover:brightness-110 hover:scale-[0.99] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
           >
             SALVAR REGISTRO
           </button>
