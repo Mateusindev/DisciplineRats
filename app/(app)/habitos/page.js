@@ -6,6 +6,7 @@ import { MI, Caps, PageHeader, inputCls } from "@/components/ui";
 import {
   getDateStr,
   habitStreak,
+  bestHabitStreak,
   habitWeekdays,
   habitIsScheduled,
   habitScheduleLabel,
@@ -404,7 +405,10 @@ function CardHeader({ h, i, ctx }) {
           />
         </>
       ) : (
-        <h4 className="font-headline-md text-headline-md mb-2">{h.name}</h4>
+        <div className="flex items-baseline gap-2 flex-wrap mb-2">
+          <h4 className="font-headline-md text-headline-md">{h.name}</h4>
+          <PriorityLabel h={h} />
+        </div>
       )}
       {/* o porquê fica ACIMA de tudo que é métrica: é o que você lê antes de decidir marcar */}
       {!editing &&
@@ -429,18 +433,119 @@ function CardHeader({ h, i, ctx }) {
       {!editing && h.detail && (
         <p className="text-[12px] text-on-surface-variant whitespace-pre-wrap mb-2">{h.detail}</p>
       )}
-      <div className="mb-3">
-        <PriorityChips value={h.priority || 2} onChange={(v) => setPriority(h.id, v)} />
-      </div>
+      {/* prioridade só é editável no modo edição: fora dele é rótulo. Três botões
+          sempre clicáveis no card viviam trocando o XP do hábito sem querer. */}
+      {editing && (
+        <div className="mb-3">
+          <Caps className="text-outline text-[10px] mb-1.5 block">PRIORIDADE</Caps>
+          <PriorityChips value={h.priority || 2} onChange={(v) => setPriority(h.id, v)} />
+        </div>
+      )}
     </>
+  );
+}
+
+// Rótulo de prioridade ao lado do título: leitura, não controle. Três degraus
+// preenchidos até o nível, mesma linguagem do seletor do formulário de criação.
+// O tooltip diz o que a prioridade faz NAQUELE tipo de hábito: paga XP por
+// marcação (diário e semanal de mínimo), multiplica o XP dos marcos (vício) ou
+// multiplica o bônus semanal. Prometer "+25 XP" nos três seria mentira em dois.
+function PriorityLabel({ h }) {
+  const p = habitPriority(h);
+  const kind = h.kind || "build";
+  const paysPerCheck = kind === "build" || (kind === "weekly" && (h.direction || "min") === "min");
+  const tip = paysPerCheck
+    ? `Prioridade ${p.label} · +${p.xp} XP por marcação`
+    : kind === "quit"
+      ? `Prioridade ${p.label} · multiplica o XP dos marcos`
+      : `Prioridade ${p.label} · multiplica o bônus semanal`;
+  // cor por nível: alta acende, normal é neutra, baixa recua
+  const text = p.v === 3 ? "text-primary-container" : p.v === 2 ? "text-on-surface-variant" : "text-outline";
+  return (
+    <span title={tip} className="shrink-0 inline-flex items-end gap-1.5">
+      <span className="flex items-end gap-0.5">
+        {[6, 10, 15].map((px, idx) => (
+          <span
+            key={px}
+            className={`w-1 rounded-sm ${idx < p.v ? (p.v === 3 ? "bg-primary-container" : "bg-on-surface-variant") : "bg-outline/25"}`}
+            style={{ height: `${px}px` }}
+          />
+        ))}
+      </span>
+      <Caps className={`text-[9px] ${text}`}>{p.label}</Caps>
+    </span>
+  );
+}
+
+// ============================================================
+// Faixa de sequência do hábito diário: o número é o que motiva, então ele é o
+// maior elemento do card. Ao lado, o que o número não diz sozinho — se a
+// sequência está em risco hoje, qual o próximo marco e qual o seu recorde.
+const STREAK_MARKS = [3, 7, 14, 21, 30, 60, 100, 180, 365];
+const streakNext = (n) => STREAK_MARKS.find((m) => m > n) || null;
+
+function StreakBanner({ streak, sched, best, dueToday, done }) {
+  const on = streak > 0;
+  const next = streakNext(streak);
+  return (
+    <div
+      className={`mb-4 rounded-xl px-4 py-3 flex items-center gap-4 ${
+        on ? "bg-gradient-to-r from-primary-container/25 to-transparent border border-primary-container/30" : "bg-surface-container-high/50"
+      }`}
+    >
+      <div className="flex flex-col items-center shrink-0">
+        <span className={`font-display-timer text-[52px] leading-none tabular-nums ${on ? "text-primary" : "text-outline"}`}>{streak}</span>
+        <Caps className="text-on-surface-variant text-[9px] -mt-1">{sched ? "EM SEQUÊNCIA" : streak === 1 ? "DIA" : "DIAS"}</Caps>
+      </div>
+      <div className="w-px self-stretch bg-white/10" />
+      <div className="min-w-0 space-y-1">
+        <div className="flex items-center gap-1.5">
+          <MI name="local_fire_department" fill className={`text-lg ${on ? "flame-active" : "text-outline"}`} />
+          <Caps className={`text-[11px] ${on ? "text-on-surface" : "text-outline"}`}>
+            {!on ? "COMECE HOJE" : done ? "MANTIDA HOJE" : dueToday ? "EM RISCO — FALTA HOJE" : "DESCANSO HOJE"}
+          </Caps>
+        </div>
+        {next && <Caps className="text-outline text-[10px] block">PRÓXIMO MARCO: {next} DIAS</Caps>}
+        {best > streak && <Caps className="text-outline text-[10px] block">RECORDE: {best} DIAS</Caps>}
+      </div>
+    </div>
+  );
+}
+
+// Marcar/desmarcar o hábito do dia. Interruptor em vez de botão: o estado fica
+// escrito em palavras, então nunca resta a dúvida de "cliquei ou não?".
+// Marcar credita XP, desmarcar estorna o valor exato pago no dia.
+function DoneSwitch({ done, dueToday, xp, onToggle }) {
+  return (
+    <button
+      onClick={onToggle}
+      role="switch"
+      aria-checked={done}
+      className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg border transition ${
+        done ? "border-primary-container/50 bg-primary-container/10" : "border-white/10 hover:border-white/25"
+      }`}
+    >
+      <span className="text-left min-w-0">
+        <Caps className={`text-[11px] block ${done ? "text-primary-container" : "text-on-surface"}`}>
+          {done ? "FEITO HOJE" : dueToday ? "AINDA NÃO FEITO" : "NÃO AGENDADO HOJE"}
+        </Caps>
+        <Caps className="text-outline text-[9px] block">{done ? `+${xp} XP CREDITADOS` : `VALE +${xp} XP`}</Caps>
+      </span>
+      <span className={`w-12 h-7 rounded-full p-1 shrink-0 transition-colors ${done ? "bg-primary-container" : "bg-surface-variant"}`}>
+        <span
+          className={`block w-5 h-5 rounded-full bg-on-primary-container transition-transform ${done ? "translate-x-5" : ""}`}
+        />
+      </span>
+    </button>
   );
 }
 
 function BuildCard({ h, i, ctx }) {
   const { today, toggleHabit, setWeekdays } = ctx;
+  const prio = habitPriority(h);
   const done = h.doneDates.includes(today);
   const streak = habitStreak(h);
-  const prio = habitPriority(h);
+  const best = bestHabitStreak(h);
   const sched = habitScheduleLabel(h); // null = todo dia
   const dueToday = habitIsScheduled(h, today);
   const editing = ctx.edits[h.id] !== undefined;
@@ -461,28 +566,11 @@ function BuildCard({ h, i, ctx }) {
         )
       )}
 
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-1 text-outline font-label-caps text-[10px]">
-          <MI name="local_fire_department" className={`text-sm ${streak > 0 ? "text-primary-container" : ""}`} />
-          {streak} {sched ? "EM SEQUÊNCIA" : "DIAS"}
-        </div>
-        <Caps className={`text-[10px] ${dueToday ? "text-outline" : "text-primary-container"}`}>
-          {dueToday ? `+${prio.xp} XP/DIA` : "DESCANSO HOJE"}
-        </Caps>
-      </div>
+      {/* a faixa já diz o estado do dia e o rótulo do título já diz o XP —
+          a linha "+XP/DIA · DESCANSO HOJE" que morava aqui era repetição */}
+      <StreakBanner streak={streak} sched={sched} best={best} dueToday={dueToday} done={done} />
 
-      <button
-        onClick={() => toggleHabit(h.id)}
-        className={`w-full py-2 font-label-caps text-[10px] rounded transition-colors ${
-          done
-            ? "bg-primary-container text-on-primary-container"
-            : dueToday
-            ? "border border-primary text-primary hover:bg-primary/10"
-            : "border border-white/10 text-outline hover:border-white/25"
-        }`}
-      >
-        {done ? "CONCLUÍDO HOJE" : dueToday ? "MARCAR AGORA" : "MARCAR EXTRA"}
-      </button>
+      <DoneSwitch done={done} dueToday={dueToday} xp={prio.xp} onToggle={() => toggleHabit(h.id)} />
     </div>
   );
 }
