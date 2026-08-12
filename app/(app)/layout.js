@@ -11,10 +11,13 @@ import { hasSupabase } from "@/lib/persistence";
 import { DEFAULT_MODE } from "@/lib/themes";
 
 // bottom nav mobile: 4 destinos fixos + MAIS (bottom sheet com o resto)
-const MOBILE_PRIMARY = ["foco", "habitos", "exercicio", "sono"];
+// 4 slots + "Mais": mais que isso e o rótulo não cabe em tela de 360px.
+// Agenda entra na frente (é onde o dia começa) e Sono vai pro sheet — é o
+// registro de uma vez ao acordar, não algo que se abre o dia todo.
+const MOBILE_PRIMARY = ["calendario", "foco", "habitos", "exercicio"];
 
 // rotas desativadas: fora do menu, mas acessíveis por URL — bloqueadas aqui
-const DISABLED_ROUTES = ["/home", "/carteira", "/analise", "/grupos"];
+const DISABLED_ROUTES = ["/home", "/carteira", "/analise", "/grupos", "/mapa"];
 
 function DisabledScreen() {
   return (

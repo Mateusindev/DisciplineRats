@@ -3,26 +3,26 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, isSameDay, isSameMonth, isToday } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { format, addDays, startOfWeek } from "date-fns";
 import { useApp } from "../AppContext";
 import { MI, Caps, PageHeader, inputCls } from "@/components/ui";
+import WeekGrid from "@/components/WeekGrid";
+import NotifySettings from "@/components/NotifySettings";
 import {
   CALENDAR_CATS,
   calCat,
   eventTimeLabel,
   eventsForDate,
-  eventsInRange,
   dowIndex,
   DOW_SHORT,
   routineOccurrences,
   routineDayStats,
   toggleRoutineCheck,
   getDateStr,
+  XP,
 } from "@/lib/state";
 
 const ds = (d) => format(d, "yyyy-MM-dd");
-const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 // picker de dias da semana da recorrência (0=Seg..6=Dom)
 function WeekdayPicker({ value, onChange }) {
   const sel = new Set(value || []);
@@ -143,13 +143,67 @@ function RulesModal({ rules, onEdit, onRemove, onClearSkips, onClose }) {
   );
 }
 
-export default function CalendarioPage() {
-  const { state, setState } = useApp();
+// painel dos itens de rotina: mesma ideia do de repetições — a lista completa,
+// pra editar e excluir. O clique na grade marca; gerenciar é aqui.
+function RoutineModal({ items, habits, onEdit, onRemove, onClose }) {
+  return createPortal(
+    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 animate-[fadeIn_.1s_ease-out]" onClick={onClose} role="dialog" aria-label="Rotina">
+      <div className="bg-surface-container-lowest rounded-2xl p-6 w-full max-w-md shadow-2xl border border-white/10 max-h-[90vh] overflow-auto ff-scroll" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="font-headline-md text-headline-md text-primary">Rotina</h3>
+          <button onClick={onClose} aria-label="Fechar" className="text-outline hover:text-on-surface transition p-1"><MI name="close" /></button>
+        </div>
+        <p className="text-[12px] text-outline mb-4">
+          O esqueleto do dia. Cada item marcado vale {XP.routineItem} XP e fechar todos os do dia dá {XP.routineAll} de bônus — sem multa por errar um dia.
+        </p>
 
-  const [selected, setSelected] = useState(new Date());
-  const [month, setMonth] = useState(new Date());
-  const [form, setForm] = useState(null); // { id?, ruleId?, date, title, cat, allDay, start, end, note, repeat, weekdays }
+        {items.length === 0 ? (
+          <p className="text-[13px] text-outline text-center py-8">Nada na rotina ainda. Crie em NOVO e escolha o tipo Rotina.</p>
+        ) : (
+          <div className="space-y-2">
+            {items.map((it) => {
+              const dias = it.weekdays?.length ? it.weekdays.map((d) => DOW_SHORT[d]).join(" · ") : "todo dia";
+              const hab = it.habitId ? habits.find((h) => h.id === it.habitId) : null;
+              return (
+                <div key={it.id} className="rounded-lg bg-surface-container-high p-3 border-l-[3px] border-l-outline/40">
+                  <div className="flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] text-on-surface truncate">{it.name}</p>
+                      <Caps className="text-outline text-[10px]">
+                        {it.time || "sem hora"} · {dias}
+                      </Caps>
+                      {hab && (
+                        <Caps className="text-primary/70 text-[10px] flex items-center gap-1 mt-0.5">
+                          <MI name="link" className="text-[12px]" /> {hab.name}
+                        </Caps>
+                      )}
+                    </div>
+                    <button onClick={() => onEdit(it)} aria-label="Editar" className="text-outline hover:text-primary transition shrink-0"><MI name="edit" className="text-base" /></button>
+                    <button onClick={() => onRemove(it)} aria-label="Excluir item" className="text-outline hover:text-error transition shrink-0"><MI name="delete" className="text-base" /></button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+export default function CalendarioPage() {
+  const { state, setState, toast, setSetting, savePush } = useApp();
+
+  // Uma visão só: a semana. É ela que responde "quando eu tenho espaço?", com a
+  // hora à vista, e passar de semana em semana cobre o resto.
+  const [anchor, setAnchor] = useState(new Date()); // qualquer dia da semana mostrada
+  // form unificado: `kind` diz o que está sendo criado — evento único, repetição
+  // semanal ou item de rotina. As três coisas se descrevem quase igual (título,
+  // quando, hora), então um formulário só, com um seletor, em vez de três telas.
+  const [form, setForm] = useState(null);
   const [showRules, setShowRules] = useState(false);
+  const [showRoutine, setShowRoutine] = useState(false);
   const [workoutInfo, setWorkoutInfo] = useState(null); // ocorrência de treino clicada
 
   // Única leitura da agenda: junta eventos gravados + ocorrências de regra + treino do plano.
@@ -158,15 +212,54 @@ export default function CalendarioPage() {
   // inflaria a contagem do mês e afogaria a grade em chips repetidos todo dia.
   const routineOn = (d) => routineOccurrences(state, ds(d));
   const routineStats = (d) => routineDayStats(state, ds(d));
+  // vício fica de fora do vínculo: lá se registra a recaída, não o acerto
+  const linkableHabits = (state.habits || []).filter((h) => (h.kind || "build") !== "quit");
   // marcar direto da agenda: mesmo reducer da página de Rotina, sem futuro
   const toggleRoutine = (dateStr, itemId) => {
     if (dateStr > getDateStr(0)) return toast("Item de rotina não se marca no futuro", { type: "error" });
     setState((prev) => toggleRoutineCheck(prev, dateStr, itemId));
   };
 
+  // Sem dia selecionado, NOVO precisa de um padrão honesto: hoje quando hoje está
+  // na semana à vista, senão a segunda daquela semana — criar evento numa data que
+  // não está na tela seria criar às cegas.
+  const newDayForWeek = () => {
+    const start = startOfWeek(anchor, { weekStartsOn: 1 });
+    const today = new Date();
+    return today >= start && today <= addDays(start, 6) ? today : start;
+  };
+
   // ---- CRUD ----
-  const blank = (date, start, end) => ({ date, title: "", cat: "pessoal", allDay: false, start, end, note: "", repeat: false, weekdays: [dowIndex(date)] });
-  const openNew = (d) => setForm(blank(ds(d), "09:00", "10:00"));
+  const blank = (date, start, end) => ({
+    kind: "once",
+    date,
+    title: "",
+    cat: "pessoal",
+    allDay: false,
+    start,
+    end,
+    note: "",
+    weekdays: [dowIndex(date)],
+    habitId: null,
+  });
+  // clicar num vazio da grade já traz a hora daquele slot preenchida
+  const openNew = (d, start = "09:00") => {
+    const end = `${String(Math.min(23, Number(start.slice(0, 2)) + 1)).padStart(2, "0")}:${start.slice(3)}`;
+    setForm(blank(ds(d), start, end));
+  };
+
+  const openEditRoutine = (it) => {
+    setShowRoutine(false);
+    setForm({
+      ...blank(ds(new Date()), it.time || "", ""),
+      kind: "routine",
+      itemId: it.id,
+      title: it.name,
+      allDay: !it.time,
+      weekdays: it.weekdays || [],
+      habitId: it.habitId || null,
+    });
+  };
 
   function openEdit(dateStr, ev) {
     // treino vem do plano de exercício: a agenda não edita, só explica e aponta pra lá
@@ -175,6 +268,7 @@ export default function CalendarioPage() {
       const r = (state.agendaRules || []).find((x) => x.id === ev.ruleId);
       if (!r) return;
       return setForm({
+        kind: "weekly",
         ruleId: r.id,
         occurrence: dateStr, // qual ocorrência foi aberta (p/ "pular esta")
         date: dateStr,
@@ -184,15 +278,37 @@ export default function CalendarioPage() {
         start: r.start || "09:00",
         end: r.end || "10:00",
         note: r.note || "",
-        repeat: true,
         weekdays: r.weekdays || [],
+        habitId: null,
       });
     }
-    setForm({ ...ev, date: dateStr, start: ev.start || "09:00", end: ev.end || "10:00", note: ev.note || "", repeat: false, weekdays: [dowIndex(dateStr)] });
+    setForm({ ...ev, kind: "once", date: dateStr, start: ev.start || "09:00", end: ev.end || "10:00", note: ev.note || "", weekdays: [dowIndex(dateStr)], habitId: null });
   }
 
   function saveForm() {
     if (!form.title.trim()) return;
+
+    // ROTINA: outra lista, outras regras (marcável, dá XP, sem categoria e sem
+    // nota). O formulário é o mesmo porque, pra quem usa, é tudo "o que eu faço".
+    if (form.kind === "routine") {
+      const weekdays = [...new Set(form.weekdays || [])].sort((a, b) => a - b);
+      const patch = {
+        name: form.title.trim().slice(0, 80),
+        time: form.allDay ? "" : form.start || "",
+        weekdays,
+        habitId: form.habitId || null,
+      };
+      setState((prev) => {
+        const items = prev.routine?.items || [];
+        if (form.itemId) {
+          return { ...prev, routine: { ...(prev.routine || {}), items: items.map((i) => (i.id === form.itemId ? { ...i, ...patch } : i)) } };
+        }
+        if (items.length >= 60) return prev; // teto do normalizeRoutine
+        return { ...prev, routine: { ...(prev.routine || {}), items: [...items, { id: crypto.randomUUID(), ...patch }] } };
+      });
+      return setForm(null);
+    }
+
     const base = {
       title: form.title.trim().slice(0, 120),
       cat: form.cat,
@@ -202,8 +318,8 @@ export default function CalendarioPage() {
       note: (form.note || "").slice(0, 500),
     };
 
-    // repetição ligada → vira (ou atualiza) uma REGRA; nenhuma data é gravada
-    if (form.repeat) {
+    // repetição → vira (ou atualiza) uma REGRA; nenhuma data é gravada
+    if (form.kind === "weekly") {
       const weekdays = [...new Set(form.weekdays || [])].sort((a, b) => a - b);
       if (!weekdays.length) return;
       setState((prev) => {
@@ -237,6 +353,10 @@ export default function CalendarioPage() {
   }
 
   function deleteForm() {
+    if (form.kind === "routine") {
+      if (form.itemId) removeRoutineItem({ id: form.itemId, name: form.title });
+      return setForm(null);
+    }
     if (form.ruleId) {
       setState((prev) => ({ ...prev, agendaRules: (prev.agendaRules || []).filter((r) => r.id !== form.ruleId) }));
       return setForm(null);
@@ -266,61 +386,79 @@ export default function CalendarioPage() {
   }
 
   const removeRule = (id) => setState((prev) => ({ ...prev, agendaRules: (prev.agendaRules || []).filter((r) => r.id !== id) }));
+  const removeRoutineItem = (it) =>
+    setState((prev) => ({ ...prev, routine: { ...(prev.routine || {}), items: (prev.routine?.items || []).filter((i) => i.id !== it.id) } }));
   const clearSkips = (id) =>
     setState((prev) => ({ ...prev, agendaRules: (prev.agendaRules || []).map((r) => (r.id === id ? { ...r, skips: [] } : r)) }));
 
 
   return (
     <>
-      <PageHeader title="AGENDA" subtitle="O mês inteiro na tela, e abaixo o dia que você escolher. Sem XP, sem cobrança — só planejamento." />
+      <PageHeader title="AGENDA" subtitle="A semana com hora à vista, e abaixo o dia que você escolher. Sem XP, sem cobrança — só planejamento." />
 
-      {/* barra de ações (o app tem uma visão só: o mês) */}
-      <div className="glass-card p-3 rounded-xl mb-gutter flex items-center justify-end gap-3">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowRules(true)}
-            className="px-3 py-2 rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container-high flex items-center gap-1.5 transition font-label-caps text-[11px]"
-          >
-            <MI name="repeat" className="text-base" />
-            REPETIÇÕES
-            {(state.agendaRules || []).length > 0 && <span className="text-primary">({state.agendaRules.length})</span>}
-          </button>
-          <button
-            onClick={() => openNew(selected)}
-            className="px-3 py-2 rounded-lg border border-primary/40 text-primary hover:bg-primary/10 flex items-center gap-1.5 active:scale-95 transition font-label-caps text-[11px]"
-          >
-            <MI name="add" className="text-lg" /> NOVO
-          </button>
-        </div>
+      <div className="glass-card p-3 rounded-xl mb-gutter flex items-center justify-end gap-2 flex-wrap">
+        <button
+          onClick={() => setShowRoutine(true)}
+          className="px-3 py-2 rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container-high flex items-center gap-1.5 transition font-label-caps text-[11px]"
+        >
+          <MI name="checklist" className="text-base" />
+          ROTINA
+          {(state.routine?.items || []).length > 0 && <span className="text-primary">({state.routine.items.length})</span>}
+        </button>
+        <button
+          onClick={() => setShowRules(true)}
+          className="px-3 py-2 rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container-high flex items-center gap-1.5 transition font-label-caps text-[11px]"
+        >
+          <MI name="repeat" className="text-base" />
+          REPETIÇÕES
+          {(state.agendaRules || []).length > 0 && <span className="text-primary">({state.agendaRules.length})</span>}
+        </button>
+        <button
+          onClick={() => openNew(newDayForWeek())}
+          className="px-3 py-2 rounded-lg border border-primary/40 text-primary hover:bg-primary/10 flex items-center gap-1.5 active:scale-95 transition font-label-caps text-[11px]"
+        >
+          <MI name="add" className="text-lg" /> NOVO
+        </button>
       </div>
 
-      <MonthView
-        month={month}
-        setMonth={setMonth}
-        selected={selected}
-        setSelected={setSelected}
-        state={state}
-        eventsOn={eventsOn}
-        routineOn={routineOn}
-        routineStats={routineStats}
-        onToggleRoutine={toggleRoutine}
-        onAdd={openNew}
-        onEdit={openEdit}
-      />
+      <NotifySettings state={state} setSetting={setSetting} toast={toast} onSaveSubscription={savePush} />
 
+      <div className="flex flex-col gap-gutter mt-gutter">
+        <WeekGrid
+          anchor={anchor}
+          setAnchor={setAnchor}
+          eventsOn={eventsOn}
+          routineOn={routineOn}
+          routineStats={routineStats}
+          onToggleRoutine={toggleRoutine}
+          onAdd={openNew}
+          onEdit={openEdit}
+        />
+        <CatLegend />
+      </div>
 
       {form && (
-        <EventModal form={form} setForm={setForm} onSave={saveForm} onDelete={deleteForm} onSkip={skipOccurrence} onClose={() => setForm(null)} />
+        <EventModal form={form} setForm={setForm} habits={linkableHabits} onSave={saveForm} onDelete={deleteForm} onSkip={skipOccurrence} onClose={() => setForm(null)} />
       )}
 
       {workoutInfo && <WorkoutInfoModal ev={workoutInfo} onClose={() => setWorkoutInfo(null)} />}
+
+      {showRoutine && (
+        <RoutineModal
+          items={state.routine?.items || []}
+          habits={state.habits || []}
+          onEdit={openEditRoutine}
+          onRemove={(it) => removeRoutineItem(it)}
+          onClose={() => setShowRoutine(false)}
+        />
+      )}
 
       {showRules && (
         <RulesModal
           rules={state.agendaRules || []}
           onEdit={(r) => {
             setShowRules(false);
-            setForm({ ruleId: r.id, date: ds(new Date()), title: r.title, cat: r.cat, allDay: !!r.allDay, start: r.start || "09:00", end: r.end || "10:00", note: r.note || "", repeat: true, weekdays: r.weekdays || [] });
+            setForm({ kind: "weekly", ruleId: r.id, date: ds(new Date()), title: r.title, cat: r.cat, allDay: !!r.allDay, start: r.start || "09:00", end: r.end || "10:00", note: r.note || "", weekdays: r.weekdays || [], habitId: null });
           }}
           onRemove={removeRule}
           onClearSkips={clearSkips}
@@ -331,294 +469,32 @@ export default function CalendarioPage() {
   );
 }
 
-// ===== visão mensal: grade compacta + coluna do dia selecionado =====
-// Lista da agenda do dia no formato da coluna direita: coluna de hora, barra da
-// categoria e título. O que orienta a leitura aqui é a HORA — a pergunta é "o que
-// vem agora", e o quadradinho do mês só marca que existe algo.
-function DayList({ events, onEdit }) {
+function CatLegend() {
   return (
-    <div className="max-h-[360px] overflow-y-auto ff-scroll p-2 space-y-1">
-      {events.map((ev) => {
-        const cat = calCat(ev.cat);
-        return (
-          <button
-            key={ev.id}
-            onClick={() => onEdit(ev)}
-            className="w-full text-left flex gap-2 p-2 rounded-lg bg-surface-container-low hover:bg-surface-container-high transition group"
-          >
-            <span className="flex flex-col items-center min-w-[38px] shrink-0">
-              {ev.allDay ? (
-                <Caps className="text-outline text-[9px] leading-tight">DIA</Caps>
-              ) : (
-                <>
-                  <span className="text-[13px] text-on-surface tabular-nums leading-tight">{ev.start || "--:--"}</span>
-                  {ev.end && <span className="text-[10px] text-outline tabular-nums">{ev.end}</span>}
-                </>
-              )}
-            </span>
-            <span className="w-[2px] rounded-full shrink-0 transition" style={{ background: `${cat.color}55` }} />
-            <span className="flex-1 min-w-0 flex flex-col justify-center">
-              <span className="text-[13px] text-on-surface truncate leading-tight">{ev.title}</span>
-              <span className="text-[11px] truncate" style={{ color: cat.color }}>
-                {cat.label}
-              </span>
-            </span>
-            {ev.source === "workout" ? (
-              <MI name="fitness_center" className="text-outline text-base shrink-0 self-center" title="Do plano de treino" />
-            ) : ev.ruleId ? (
-              <MI name="repeat" className="text-outline text-base shrink-0 self-center" title="Repete toda semana" />
-            ) : null}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-// Faixa de rotina dentro da agenda: marcável ali mesmo. É o ponto da integração —
-// a rotina do dia se fecha de onde você já está olhando o dia.
-function RoutineStrip({ items, onToggle }) {
-  if (!items.length) return null;
-  const done = items.filter((i) => i.done).length;
-  const complete = done === items.length;
-  return (
-    <div className="px-3 py-2 border-b border-outline-variant/15 bg-surface-container-low">
-      <div className="flex items-center gap-2 mb-1.5">
-        <MI name={complete ? "task_alt" : "checklist"} className={`text-base ${complete ? "text-primary" : "text-outline"}`} />
-        <Caps className="text-outline text-[9px] flex-1">ROTINA · {done}/{items.length}</Caps>
-        <Link href="/rotina" className="font-label-caps text-[9px] text-primary hover:underline">EDITAR</Link>
-      </div>
-      <div className="flex flex-wrap gap-1">
-        {items.map((it) => (
-          <button
-            key={it.id}
-            onClick={() => onToggle(it.itemId)}
-            aria-pressed={it.done}
-            title={`${it.done ? "Desmarcar" : "Marcar"} ${it.title}${it.start ? ` (${it.start})` : ""}${it.habitId ? " · vinculado a um hábito" : ""}`}
-            className={`flex items-center gap-1 pl-1 pr-2 py-0.5 rounded-full border text-[10px] transition ${
-              it.done
-                ? "bg-primary-container/20 border-primary-container/40 text-primary line-through"
-                : "border-white/10 text-on-surface-variant hover:border-primary-container/50"
-            }`}
-          >
-            <MI name={it.done ? "check_circle" : "radio_button_unchecked"} className="text-[13px]" />
-            {it.start && <span className="tabular-nums text-outline">{it.start}</span>}
-            <span className="truncate max-w-[120px]">{it.title}</span>
-            {it.habitId && <MI name="link" className="text-[12px] text-outline" title="Vinculado a um hábito — marcar aqui marca ele" />}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function MonthView({ month, setMonth, selected, setSelected, state, eventsOn, routineOn, routineStats, onToggleRoutine, onAdd, onEdit }) {
-  // Grade de semanas começando no domingo. Só as semanas que o mês realmente ocupa —
-  // fixar 6 linhas obriga uma faixa inteira de dias de fora quando o mês fecha em 5.
-  const gridStart = startOfWeek(startOfMonth(month), { weekStartsOn: 0 });
-  const weeks = Math.ceil((startOfMonth(month).getDay() + endOfMonth(month).getDate()) / 7);
-  const cells = Array.from({ length: weeks * 7 }, (_, i) => addDays(gridStart, i));
-
-  // stats do mês — por range, não varrendo o mapa: ocorrência de regra não está gravada
-  const monthEvents = eventsInRange(state, ds(startOfMonth(month)), ds(endOfMonth(month)));
-  const byCat = {};
-  for (const e of monthEvents) byCat[e.cat] = (byCat[e.cat] || 0) + 1;
-  const topCatId = Object.entries(byCat).sort((a, b) => b[1] - a[1])[0]?.[0];
-  const topCat = topCatId ? calCat(topCatId) : null;
-
-  const today = new Date();
-  const todayEvents = eventsOn(today);
-  const next7 = eventsInRange(state, ds(today), ds(addDays(today, 6)));
-  const selEvents = eventsOn(selected);
-
-  const pick = (d) => {
-    setSelected(d);
-    if (!isSameMonth(d, month)) setMonth(startOfMonth(d));
-  };
-
-  return (
-    <div className="flex flex-col gap-gutter">
-      {/* ---------- o mês, em largura cheia ---------- */}
-      <div className="w-full flex flex-col bg-surface-container rounded-2xl border border-outline-variant/20 overflow-hidden">
-          <div className="flex items-center justify-between gap-3 p-3 bg-surface-container-high">
-            <div className="min-w-0">
-              <h1 className="font-headline-md text-headline-md text-on-surface capitalize leading-none truncate">
-                {format(month, "LLLL yyyy", { locale: ptBR })}
-              </h1>
-              <span className="text-[12px] text-on-surface-variant">
-                {endOfMonth(month).getDate()} dias
-                {monthEvents.length > 0 && (
-                  <>
-                    {" · "}
-                    {monthEvents.length} evento{monthEvents.length > 1 ? "s" : ""}
-                    {topCat && <> · mais em <span style={{ color: topCat.color }}>{topCat.label}</span></>}
-                  </>
-                )}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button onClick={() => setMonth(addMonths(month, -1))} aria-label="Mês anterior" className="w-8 h-8 rounded-full bg-surface-container hover:bg-surface-variant grid place-items-center text-on-surface transition">
-                <MI name="chevron_left" className="text-[20px]" />
-              </button>
-              <button onClick={() => { setMonth(new Date()); setSelected(new Date()); }} className="px-3 h-8 rounded-full bg-surface-container hover:bg-surface-variant text-on-surface font-label-caps text-[10px] transition">
-                HOJE
-              </button>
-              <button onClick={() => setMonth(addMonths(month, 1))} aria-label="Próximo mês" className="w-8 h-8 rounded-full bg-surface-container hover:bg-surface-variant grid place-items-center text-on-surface transition">
-                <MI name="chevron_right" className="text-[20px]" />
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-7 bg-surface-container-high text-center py-1 border-y border-outline-variant/15">
-            {WEEKDAYS.map((w) => (
-              <div key={w} className="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-widest">{w}</div>
-            ))}
-          </div>
-
-          {/* As linhas dividem a altura do cartão (fr), então a grade termina onde o
-              cartão termina em vez de esticar a página. No mobile a altura é livre. */}
-          <div
-            className="grid grid-cols-7 gap-px bg-outline-variant/15"
-            style={{ gridTemplateRows: `repeat(${weeks}, minmax(96px, 1fr))` }}
-          >
-            {cells.map((d) => {
-              const evs = eventsOn(d);
-              const outside = !isSameMonth(d, month);
-              const isNow = isToday(d);
-              const sel = isSameDay(d, selected);
-              const shown = evs.slice(0, 6); // bolinha ocupa pouco: cabe mais que chip
-              return (
-                <button
-                  key={ds(d)}
-                  onClick={() => pick(d)}
-                  onDoubleClick={() => onAdd(d)}
-                  title={evs.length ? evs.map((e) => `${eventTimeLabel(e)} ${e.title}`).join("\n") : undefined}
-                  className={`relative p-1 flex flex-col text-left transition ${
-                    outside ? "bg-surface-container" : "bg-surface-container-low hover:bg-surface-container-high"
-                  } ${sel ? "ring-2 ring-primary ring-inset z-10" : ""}`}
-                >
-                  {/* hoje: círculo contornado com o dígito no accent. Preenchido, o par
-                      accent/on-accent do tema claro fica em 4,4:1 — abaixo do mínimo. */}
-                  <span
-                    className={`self-end shrink-0 w-5 h-5 grid place-items-center rounded-full text-[12px] tabular-nums ${
-                      isNow ? "border border-primary-container text-primary font-bold" : outside ? "text-outline/40" : "text-on-surface"
-                    }`}
-                  >
-                    {format(d, "d")}
-                  </span>
-
-                  {/* Bolinhas por categoria, não títulos: no quadradinho o nome fica
-                      espremido em 9px e truncado, o que não informa e ainda polui.
-                      O que é o evento se lê no card do dia, ao lado. */}
-                  <span className="mt-1 flex-1 min-h-0 w-full flex flex-wrap content-start items-center gap-1 overflow-hidden">
-                    {shown.map((e) => (
-                      <span
-                        key={e.id}
-                        className="w-2 h-2 rounded-full shrink-0"
-                        style={{ background: calCat(e.cat).color }}
-                        title={`${eventTimeLabel(e)} ${e.title}`}
-                      />
-                    ))}
-                    {evs.length > shown.length && (
-                      <span className="text-[9px] leading-none text-outline tabular-nums">+{evs.length - shown.length}</span>
-                    )}
-                  </span>
-
-                  {/* rotina do dia como completude, não como lista: seis itens iguais
-                      todo dia viram ruído, e o que interessa no mês é se fechou */}
-                  {(() => {
-                    const rs = routineStats(d);
-                    if (!rs.total) return null;
-                    return (
-                      <span
-                        className={`self-start flex items-center gap-0.5 px-1 rounded-full text-[9px] leading-tight tabular-nums shrink-0 ${
-                          rs.complete ? "bg-primary-container/25 text-primary" : "text-outline"
-                        }`}
-                        title={`Rotina: ${rs.done} de ${rs.total}`}
-                      >
-                        <MI name={rs.complete ? "task_alt" : "checklist"} className="text-[11px]" />
-                        {rs.done}/{rs.total}
-                      </span>
-                    );
-                  })()}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-      {/* ---------- abaixo do mês: o dia escolhido, e os números do momento ---------- */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
-        <div className="lg:col-span-4 lg:order-2 bg-surface-container rounded-2xl border border-outline-variant/20 p-4 self-start">
-          <Caps className="text-outline text-[9px] block mb-2">NÚMEROS DO MOMENTO</Caps>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-surface-container-low rounded-xl p-3">
-              <Caps className="text-outline text-[9px] block">HOJE</Caps>
-              <div className="flex items-baseline gap-1.5">
-                <span className="font-headline-lg text-[26px] leading-none text-primary tabular-nums">{todayEvents.length}</span>
-                <span className="text-[11px] text-outline">evento(s)</span>
-              </div>
-            </div>
-            <div className="bg-surface-container-low rounded-xl p-3">
-              <Caps className="text-outline text-[9px] block">PRÓXIMOS 7 DIAS</Caps>
-              <div className="flex items-baseline gap-1.5">
-                <span className="font-headline-lg text-[26px] leading-none text-on-surface tabular-nums">{next7.length}</span>
-                <span className="text-[11px] text-outline">no total</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="lg:col-span-8 lg:order-1 bg-surface-container rounded-2xl border border-outline-variant/20 flex flex-col overflow-hidden">
-          <div className="p-3 bg-surface-container-high flex items-center justify-between gap-2 border-b border-outline-variant/15">
-            <div className="min-w-0">
-              <Caps className="text-primary text-[9px] block">DIA SELECIONADO</Caps>
-              <h2 className="font-headline-md text-[19px] text-on-surface capitalize truncate leading-tight">
-                {format(selected, "EEEE, d 'de' MMM", { locale: ptBR })}
-              </h2>
-            </div>
-            <button
-              onClick={() => onAdd(selected)}
-              aria-label="Adicionar evento"
-              className="w-8 h-8 rounded-full bg-primary-container text-on-primary-container grid place-items-center shrink-0 hover:brightness-110 active:scale-95 transition"
-            >
-              <MI name="add" className="text-[18px]" />
-            </button>
-          </div>
-
-          <RoutineStrip items={routineOn(selected)} onToggle={onToggleRoutine} />
-
-          {selEvents.length === 0 ? (
-            <div className="grid place-items-center text-center p-8">
-              <div className="space-y-2">
-                <MI name="event_available" className="text-4xl text-outline/50" />
-                <p className="text-[13px] text-outline">Nada marcado nesse dia.</p>
-                <button onClick={() => onAdd(selected)} className="text-primary text-[11px] font-label-caps hover:underline">+ ADICIONAR EVENTO</button>
-              </div>
-            </div>
-          ) : (
-            <DayList events={selEvents} onEdit={(ev) => onEdit(ds(selected), ev)} />
-          )}
-        </div>
-      </div>
-
-      {/* legenda */}
-      <div className="flex flex-wrap gap-x-4 gap-y-1">
-        {CALENDAR_CATS.map((c) => (
-          <span key={c.id} className="flex items-center gap-1.5 text-[10px] font-label-caps text-outline">
-            <span className="w-2 h-2 rounded-full" style={{ background: c.color }} /> {c.label}
-          </span>
-        ))}
-      </div>
+    <div className="flex flex-wrap gap-x-4 gap-y-1">
+      {CALENDAR_CATS.map((c) => (
+        <span key={c.id} className="flex items-center gap-1.5 text-[10px] font-label-caps text-outline">
+          <span className="w-2 h-2 rounded-full" style={{ background: c.color }} /> {c.label}
+        </span>
+      ))}
     </div>
   );
 }
 
 // modal de criar/editar evento
-function EventModal({ form, setForm, onSave, onDelete, onSkip, onClose }) {
+const FORM_KINDS = [
+  { id: "once", label: "UMA VEZ", icon: "event", hint: "Acontece numa data só." },
+  { id: "weekly", label: "TODA SEMANA", icon: "repeat", hint: "Vale pra sempre nos dias escolhidos. Editar muda todas as semanas." },
+  { id: "routine", label: "ROTINA", icon: "checklist", hint: "O esqueleto do dia: marcável, dá XP e não tem multa por errar um dia." },
+];
+
+function EventModal({ form, setForm, habits, onSave, onDelete, onSkip, onClose }) {
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
-  const isRule = !!form.ruleId;
-  const title = isRule ? "Editar repetição" : form.id ? "Editar evento" : "Novo evento";
+  const isRule = form.kind === "weekly" && !!form.ruleId;
+  const isRoutine = form.kind === "routine";
+  const existing = form.id || form.ruleId || form.itemId;
+  const title = existing ? (isRoutine ? "Editar item da rotina" : isRule ? "Editar repetição" : "Editar evento") : "Novo";
+  const kindInfo = FORM_KINDS.find((k) => k.id === form.kind) || FORM_KINDS[0];
   return createPortal(
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 animate-[fadeIn_.1s_ease-out]" onClick={onClose} role="dialog" aria-label="Evento">
       <div className="bg-surface-container-lowest rounded-2xl p-6 w-full max-w-md shadow-2xl border border-white/10 max-h-[90vh] overflow-auto ff-scroll" onClick={(e) => e.stopPropagation()}>
@@ -626,6 +502,36 @@ function EventModal({ form, setForm, onSave, onDelete, onSkip, onClose }) {
           <h3 className="font-headline-md text-headline-md text-primary">{title}</h3>
           <button onClick={onClose} aria-label="Fechar" className="text-outline hover:text-on-surface transition p-1"><MI name="close" /></button>
         </div>
+
+        {/* o tipo só se escolhe na criação: trocar depois teria que migrar o
+            registro de uma lista pra outra e decidir o que fazer com o histórico
+            de marcações. Editar mantém o que a coisa é. */}
+        {!existing && (
+          <div className="mb-4">
+            <div className="flex items-center gap-1 bg-surface-container-high rounded-lg p-1">
+              {FORM_KINDS.map((k) => (
+                <button
+                  key={k.id}
+                  onClick={() =>
+                    set({
+                      kind: k.id,
+                      // rotina não tem fim nem "dia inteiro": sem hora é "sem hora"
+                      allDay: k.id === "routine" ? !form.start : form.allDay,
+                      weekdays: (form.weekdays || []).length ? form.weekdays : [dowIndex(form.date)],
+                    })
+                  }
+                  aria-pressed={form.kind === k.id}
+                  className={`flex-1 px-2 py-1.5 rounded-md font-label-caps text-[10px] flex items-center justify-center gap-1.5 transition ${
+                    form.kind === k.id ? "bg-primary-container text-on-primary-container" : "text-on-surface-variant hover:text-on-surface"
+                  }`}
+                >
+                  <MI name={k.icon} className="text-[15px]" /> {k.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-outline mt-1.5">{kindInfo.hint}</p>
+          </div>
+        )}
 
         {isRule && (
           <div className="mb-4 flex items-start gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
@@ -643,12 +549,13 @@ function EventModal({ form, setForm, onSave, onDelete, onSkip, onClose }) {
             onChange={(e) => set({ title: e.target.value })}
             onKeyDown={(e) => e.key === "Enter" && onSave()}
             autoFocus
-            placeholder="Título do evento"
-            maxLength={120}
+            placeholder={isRoutine ? "O que se repete (ex.: tomar remédio, alongar)" : "Título do evento"}
+            maxLength={isRoutine ? 80 : 120}
             className={`${inputCls} w-full`}
           />
 
-          {/* categoria */}
+          {/* categoria: rotina não tem — ela não é compromisso, é ritmo */}
+          {!isRoutine && (
           <div>
             <Caps className="text-outline text-[10px] mb-1.5 block">CATEGORIA</Caps>
             <div className="flex flex-wrap gap-1.5">
@@ -667,9 +574,10 @@ function EventModal({ form, setForm, onSave, onDelete, onSkip, onClose }) {
               })}
             </div>
           </div>
+          )}
 
-          {/* data: regra não tem data única, tem dias da semana */}
-          {!form.repeat && (
+          {/* data: só o evento único tem data. Repetição e rotina têm dias da semana. */}
+          {form.kind === "once" && (
             <div className="flex items-center gap-2">
               <div className="flex-1">
                 <Caps className="text-outline text-[10px] mb-1.5 block">DATA</Caps>
@@ -678,55 +586,92 @@ function EventModal({ form, setForm, onSave, onDelete, onSkip, onClose }) {
             </div>
           )}
 
-          {/* repetição semanal */}
-          <div className="rounded-lg border border-white/10 p-3">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={!!form.repeat}
-                onChange={(e) => set({ repeat: e.target.checked, weekdays: e.target.checked && !(form.weekdays || []).length ? [dowIndex(form.date)] : form.weekdays })}
-                className="accent-[var(--color-primary-container)] w-4 h-4"
-              />
-              <MI name="repeat" className="text-base text-on-surface-variant" />
-              <span className="text-body-md text-on-surface">Repetir toda semana</span>
-            </label>
-            {form.repeat && (
-              <div className="mt-3">
-                <Caps className="text-outline text-[10px] mb-1.5 block">EM QUAIS DIAS</Caps>
-                <WeekdayPicker value={form.weekdays || []} onChange={(weekdays) => set({ weekdays })} />
-                <p className="text-[11px] text-outline mt-2">
-                  Vale pra sempre, sem precisar preencher semana por semana. Desmarcar a repetição encerra a série e deixa só este dia.
-                </p>
-              </div>
-            )}
-          </div>
-
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={form.allDay} onChange={(e) => set({ allDay: e.target.checked })} className="accent-[var(--color-primary-container)] w-4 h-4" />
-            <span className="text-body-md text-on-surface">Dia inteiro</span>
-          </label>
-
-          {!form.allDay && (
-            <div className="flex items-center gap-2">
-              <div className="flex-1">
-                <Caps className="text-outline text-[10px] mb-1.5 block">INÍCIO</Caps>
-                <input type="time" value={form.start} onChange={(e) => set({ start: e.target.value })} className={`${inputCls} w-full`} />
-              </div>
-              <div className="flex-1">
-                <Caps className="text-outline text-[10px] mb-1.5 block">FIM</Caps>
-                <input type="time" value={form.end} onChange={(e) => set({ end: e.target.value })} className={`${inputCls} w-full`} />
-              </div>
+          {/* dias da semana: repetição e rotina se descrevem igual aqui */}
+          {form.kind !== "once" && (
+            <div className="rounded-lg border border-white/10 p-3">
+              <Caps className="text-outline text-[10px] mb-1.5 block">{isRoutine ? "EM QUAIS DIAS (NENHUM = TODO DIA)" : "EM QUAIS DIAS"}</Caps>
+              <WeekdayPicker value={form.weekdays || []} onChange={(weekdays) => set({ weekdays })} />
+              <p className="text-[11px] text-outline mt-2">
+                {isRoutine
+                  ? "Sem nenhum dia marcado, o item vale todo dia."
+                  : "Vale pra sempre, sem precisar preencher semana por semana."}
+              </p>
             </div>
           )}
 
-          <div>
-            <Caps className="text-outline text-[10px] mb-1.5 block">NOTA</Caps>
-            <textarea value={form.note} onChange={(e) => set({ note: e.target.value })} placeholder="Detalhes (opcional)" maxLength={500} rows={3} className={`${inputCls} w-full resize-none`} />
-          </div>
+          {/* rotina não tem fim nem "dia inteiro": ou tem hora, ou é sem hora */}
+          {isRoutine ? (
+            <div>
+              <Caps className="text-outline text-[10px] mb-1.5 block">HORA (OPCIONAL)</Caps>
+              <div className="flex items-center gap-2">
+                <input
+                  type="time"
+                  value={form.allDay ? "" : form.start || ""}
+                  onChange={(e) => set({ start: e.target.value, allDay: !e.target.value })}
+                  className={`${inputCls} w-32`}
+                />
+                {!form.allDay && form.start && (
+                  <button onClick={() => set({ start: "", allDay: true })} className="font-label-caps text-[10px] text-outline hover:text-primary transition">
+                    TIRAR HORA
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-outline mt-1.5">Com hora, ele aparece no bloco certo do dia. Sem hora, fica na faixa de cima.</p>
+            </div>
+          ) : (
+            <>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.allDay} onChange={(e) => set({ allDay: e.target.checked })} className="accent-[var(--color-primary-container)] w-4 h-4" />
+                <span className="text-body-md text-on-surface">Dia inteiro</span>
+              </label>
+
+              {!form.allDay && (
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <Caps className="text-outline text-[10px] mb-1.5 block">INÍCIO</Caps>
+                    <input type="time" value={form.start} onChange={(e) => set({ start: e.target.value })} className={`${inputCls} w-full`} />
+                  </div>
+                  <div className="flex-1">
+                    <Caps className="text-outline text-[10px] mb-1.5 block">FIM</Caps>
+                    <input type="time" value={form.end} onChange={(e) => set({ end: e.target.value })} className={`${inputCls} w-full`} />
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* vínculo com hábito: só rotina tem. Marcar o item marca o hábito, e o
+              XP que entra é o dele — nunca os dois pelo mesmo ato. */}
+          {isRoutine && (
+            <div>
+              <Caps className="text-outline text-[10px] mb-1.5 block">VINCULAR A UM HÁBITO (OPCIONAL)</Caps>
+              <select
+                value={form.habitId || ""}
+                onChange={(e) => set({ habitId: e.target.value || null })}
+                aria-label="Hábito vinculado"
+                className={`${inputCls} w-full text-[13px]`}
+              >
+                <option value="">sem vínculo</option>
+                {habits.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {h.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-outline mt-1.5">Marcar aqui marca o hábito, e o XP que entra é o dele — não os dois.</p>
+            </div>
+          )}
+
+          {!isRoutine && (
+            <div>
+              <Caps className="text-outline text-[10px] mb-1.5 block">NOTA</Caps>
+              <textarea value={form.note} onChange={(e) => set({ note: e.target.value })} placeholder="Detalhes (opcional)" maxLength={500} rows={3} className={`${inputCls} w-full resize-none`} />
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2 mt-6">
-          {(form.id || isRule) && (
+          {existing && (
             <button onClick={onDelete} className="px-4 py-2.5 rounded-lg border border-error/40 text-error hover:bg-error/10 transition font-label-caps text-[11px]">
               {isRule ? "EXCLUIR SÉRIE" : "EXCLUIR"}
             </button>
@@ -738,7 +683,7 @@ function EventModal({ form, setForm, onSave, onDelete, onSkip, onClose }) {
           )}
           <button
             onClick={onSave}
-            disabled={!form.title.trim() || (form.repeat && !(form.weekdays || []).length)}
+            disabled={!form.title.trim() || (form.kind === "weekly" && !(form.weekdays || []).length)}
             className="flex-1 min-w-[120px] py-2.5 rounded-lg border border-primary/40 text-primary hover:bg-primary/10 font-label-caps text-[11px] active:scale-95 transition disabled:opacity-40"
           >
             SALVAR

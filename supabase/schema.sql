@@ -391,3 +391,51 @@ create policy "exercises readable" on public.exercises for select to authenticat
 -- Não semeamos itens name-only aqui: entradas sem vídeo poluem o picker e o modal
 -- de detalhes não mostra demonstração. Se sobrou algum de setups antigos, limpe com:
 --   delete from exercises where video_id is null;
+
+-- ---------- Push de notificação (lembrete de agenda com o app fechado) ----------
+-- Uma linha por APARELHO: o mesmo usuário no celular e no desktop tem duas
+-- subscriptions, e as duas devem receber. `endpoint` é a chave natural — o
+-- navegador o troca quando expira, e a linha velha morre no primeiro 410.
+create table if not exists public.push_subscriptions (
+  endpoint   text primary key,
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  p256dh     text not null,             -- chave pública do aparelho (criptografia do payload)
+  auth       text not null,             -- segredo do aparelho
+  ua         text,                      -- só pra você reconhecer o aparelho na lista
+  created_at timestamptz not null default now()
+);
+create index if not exists push_subs_user on public.push_subscriptions (user_id);
+alter table public.push_subscriptions enable row level security;
+
+-- Lembretes já materializados pelo cliente. O servidor não recalcula recorrência:
+-- a lógica disso vive em lib/state.js, e duplicá-la aqui criaria duas verdades
+-- que envelhecem separadas. O cliente escreve os próximos 30 dias; a função só
+-- pergunta "o que já venceu e ainda não foi enviado?".
+create table if not exists public.agenda_reminders (
+  user_id  uuid not null references auth.users (id) on delete cascade,
+  key      text not null,               -- "YYYY-MM-DD:<id do evento ou da regra>"
+  fire_at  timestamptz not null,
+  title    text not null,
+  body     text not null,
+  url      text not null default '/calendario',
+  sent_at  timestamptz,
+  primary key (user_id, key)
+);
+create index if not exists agenda_reminders_due on public.agenda_reminders (fire_at) where sent_at is null;
+alter table public.agenda_reminders enable row level security;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['push_subscriptions','agenda_reminders']
+  loop
+    execute format('drop policy if exists "own rows select" on public.%I', t);
+    execute format('create policy "own rows select" on public.%I for select using (auth.uid() = user_id)', t);
+    execute format('drop policy if exists "own rows insert" on public.%I', t);
+    execute format('create policy "own rows insert" on public.%I for insert with check (auth.uid() = user_id)', t);
+    execute format('drop policy if exists "own rows update" on public.%I', t);
+    execute format('create policy "own rows update" on public.%I for update using (auth.uid() = user_id) with check (auth.uid() = user_id)', t);
+    execute format('drop policy if exists "own rows delete" on public.%I', t);
+    execute format('create policy "own rows delete" on public.%I for delete using (auth.uid() = user_id)', t);
+  end loop;
+end $$;

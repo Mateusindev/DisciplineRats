@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { getSession, loadUserState, syncUserState, updateUsername, fetchLeaderboard, signOut, hasSupabase } from "@/lib/persistence";
+import { getSession, loadUserState, syncUserState, updateUsername, fetchLeaderboard, signOut, hasSupabase, savePushSubscription, deletePushSubscription, syncAgendaReminders } from "@/lib/persistence";
 import {
   defaultState,
   mergeWithDefaults,
@@ -17,6 +17,7 @@ import {
   computeExercisePenalty,
   computeHabitDailyPenalty,
   computeActivityStreak,
+  agendaReminders,
 } from "@/lib/state";
 import { applyMode } from "@/lib/themes";
 import { registerServiceWorker, ensureNotifyPermission, notify } from "@/lib/notify";
@@ -191,6 +192,77 @@ export function AppProvider({ children }) {
   // service worker: habilita notificação de sistema (mobile exige SW)
   useEffect(() => {
     registerServiceWorker();
+  }, []);
+
+  // ---- lembrete de agenda com o app ABERTO ----
+  // Isto cobre só o app em primeiro plano: navegador congela a página em segundo
+  // plano (no iOS, mata). Lembrete com o app fechado é o push do servidor —
+  // supabase/functions/agenda-reminders. Os dois usam a mesma lista de lembretes,
+  // e a chave por ocorrência evita aviso repetido quando os dois chegam.
+  const notifiedRef = useRef(new Set());
+  useEffect(() => {
+    if (!loaded || !state.settings?.notifyAgenda) return;
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+
+    // o que já foi avisado sobrevive ao reload (senão reabrir o app re-notifica)
+    const K = "dr_notified_v1";
+    if (!notifiedRef.current.size) {
+      try {
+        const raw = JSON.parse(localStorage.getItem(K) || "[]");
+        if (Array.isArray(raw)) notifiedRef.current = new Set(raw);
+      } catch (e) {}
+    }
+
+    const tick = () => {
+      const lead = stateRef.current.settings?.notifyLeadMin ?? 15;
+      const now = Date.now();
+      for (const r of agendaReminders(stateRef.current, { leadMin: lead, horizonDays: 2, from: new Date(now - 60 * 60_000) })) {
+        // janela: já passou da hora de avisar, e o evento ainda não começou há
+        // mais de 5 min (aviso de evento velho é ruído, não lembrete)
+        const due = r.fireAt.getTime() <= now && r.eventAt.getTime() > now - 5 * 60_000;
+        if (!due || notifiedRef.current.has(r.key)) continue;
+        notifiedRef.current.add(r.key);
+        notify(r.title, r.body, { tag: `agenda-${r.key}`, url: "/calendario" });
+      }
+      try {
+        // guarda só as chaves recentes: a lista não pode crescer pra sempre
+        localStorage.setItem(K, JSON.stringify([...notifiedRef.current].slice(-200)));
+      } catch (e) {}
+    };
+
+    tick();
+    const id = setInterval(tick, 30_000);
+    const onVisible = () => document.visibilityState === "visible" && tick();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, state.settings?.notifyAgenda, state.settings?.notifyLeadMin, state.calendar, state.agendaRules, state.workoutPlan]);
+
+  // Fila de lembretes no servidor: é dela que a função de push se alimenta. O
+  // cliente materializa porque a lógica de recorrência vive aqui — reimplementá-la
+  // no servidor criaria duas verdades que envelhecem separadas.
+  useEffect(() => {
+    if (!loaded || !userIdRef.current || !hasSupabase()) return;
+    const id = setTimeout(() => {
+      const s = stateRef.current;
+      const list = s.settings?.notifyAgenda ? agendaReminders(s, { leadMin: s.settings?.notifyLeadMin ?? 15 }) : [];
+      syncAgendaReminders(userIdRef.current, list).catch(() => {}); // silencioso: lembrete não pode derrubar a tela
+    }, 1500);
+    return () => clearTimeout(id);
+  }, [loaded, state.settings?.notifyAgenda, state.settings?.notifyLeadMin, state.calendar, state.agendaRules, state.workoutPlan]);
+
+  const savePush = useCallback(async (sub) => {
+    if (!userIdRef.current) return;
+    try {
+      if (sub) await savePushSubscription(userIdRef.current, sub);
+      else {
+        const cur = await (await import("@/lib/notify")).getPushSubscription();
+        if (cur?.endpoint) await deletePushSubscription(cur.endpoint);
+      }
+    } catch (e) {}
   }, []);
 
   // aplica o modo claro/escuro escolhido (classe no <html>)
@@ -556,6 +628,7 @@ export function AppProvider({ children }) {
     confirmState,
     resolveConfirm,
     timer,
+    savePush,
   };
 
   return (
