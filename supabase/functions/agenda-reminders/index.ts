@@ -12,7 +12,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import * as webpush from "jsr:@negrel/webpush";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
-const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
 const VAPID_PUBLIC = Deno.env.get("VAPID_PUBLIC_KEY")!;
 const VAPID_PRIVATE = Deno.env.get("VAPID_PRIVATE_KEY")!;
 const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") ?? "mailto:admin@example.com";
@@ -22,9 +23,31 @@ const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") ?? "mailto:admin@example.com
 const MAX_LATE_MIN = 30;
 
 Deno.serve(async (req) => {
-  // só aceita chamada autenticada (o cron manda o service role no header)
-  const auth = req.headers.get("Authorization") ?? "";
-  if (!auth.includes(SB_KEY)) return new Response("unauthorized", { status: 401 });
+  // Quem pode disparar. O caminho preferido é o CRON_SECRET: um segredo só pra
+  // isto, que não depende do formato de chave do projeto (o Supabase migrou de
+  // service_role JWT pra sb_secret_*, e comparar com a chave do projeto quebra
+  // conforme a versão). A chave de serviço segue aceita pra não travar quem já
+  // configurou assim.
+  //
+  // A chave ANÔNIMA não serve de propósito: ela vive no bundle do site, então
+  // qualquer um poderia disparar suas notificações.
+  const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  const given = req.headers.get("x-cron-secret") ?? bearer;
+  const ok = (CRON_SECRET && given === CRON_SECRET) || (SB_KEY && bearer === SB_KEY);
+  if (!ok) {
+    // diagnóstico sem vazar segredo: só diz o que está configurado e o que chegou
+    return Response.json(
+      {
+        error: "unauthorized",
+        temCronSecretConfigurado: !!CRON_SECRET,
+        temServiceRoleNoAmbiente: !!SB_KEY,
+        recebeuAlgumToken: !!given,
+        tamanhoDoTokenRecebido: given.length,
+        tamanhoDoServiceRole: SB_KEY.length,
+      },
+      { status: 401 },
+    );
+  }
 
   const db = createClient(SB_URL, SB_KEY);
   const now = new Date();

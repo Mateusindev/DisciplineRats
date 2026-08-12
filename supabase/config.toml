@@ -1,0 +1,13 @@
+# Config do projeto Supabase (usada pelo CLI).
+
+project_id = "fodpuqffafluqcrglgzy"
+
+# Esta função é chamada por CRON, não por usuário logado. Com verify_jwt ligado, o
+# gateway exige um JWT no Authorization e recusa antes de chegar no código — e o
+# formato novo de chave do Supabase (sb_publishable_*/sb_secret_*) não é JWT, então
+# nem a chave certa passaria.
+#
+# Desligar aqui não deixa a função aberta: ela exige o header x-cron-secret
+# (CRON_SECRET), que é o que de fato autoriza. Sem ele, responde 401.
+[functions.agenda-reminders]
+verify_jwt = false

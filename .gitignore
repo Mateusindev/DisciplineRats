@@ -36,3 +36,6 @@ next-env.d.ts
 # editor
 .idea
 .vscode
+
+# chaves VAPID do push (a privada nunca vai pro git)
+vapid.json
