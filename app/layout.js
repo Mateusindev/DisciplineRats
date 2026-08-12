@@ -4,7 +4,12 @@ export const metadata = {
   title: "Discipline Rats",
   description: "Seu painel diário de disciplina",
   manifest: "/manifest.json",
-  icons: { icon: "/icon.svg" },
+  // Sem `icons` aqui de propósito: o Next pega app/favicon.ico pela convenção de
+  // arquivo. Declarar o ícone à mão sobrescreveria isso.
+  //
+  // O ícone do app INSTALADO (tela de início) e o das notificações continuam sendo
+  // public/icon.svg, via manifest.json — são outra coisa, e trocá-los junto
+  // apagaria a identidade do app no celular.
 };
 
 export const viewport = {
