@@ -12,15 +12,25 @@
 import sharp from "sharp";
 import { writeFileSync } from "node:fs";
 
-// Triângulo branco sobre preto. Fundo sólido, não transparente: na aba do tema
-// claro um triângulo preto vazado sumiria contra o fundo branco do navegador.
-//
-// O triângulo é equilátero e mais largo que alto, então centralizar pela caixa
-// deixaria folga desigual. Aqui a altura (272→883) é centrada de fato: 272 em
-// cima e 272 embaixo, com a base larga o bastante pra ler bem em 16px.
+// Path oficial do triângulo da Vercel, verbatim — o viewBox dele é 1155x1000 e o
+// desenho encosta nas quatro bordas.
+const VERCEL_PATH = "m577.3 0 577.4 1000H0z";
+
+// Favicon precisa de duas coisas que o SVG solto não tem:
+//   · fundo sólido — triângulo branco em cima de transparente sumiria na aba do
+//     tema claro, e preto vazado sumiria no escuro;
+//   · folga e canvas quadrado — encostando na borda o desenho fica apertado, e
+//     1155x1000 esticaria pra caber num ícone quadrado.
+// Daí o translate/scale: o path não é tocado, só posicionado.
+const S = 0.78; // escala (folga de ~11% de cada lado)
+const TX = (1155 - 1155 * S) / 2;
+const TY = (1155 - 1000 * S) / 2;
+
 const SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1155 1155">
   <rect width="1155" height="1155" fill="#000000"/>
-  <path d="M577.5 272 L1000 883 H155 Z" fill="#ffffff"/>
+  <g transform="translate(${TX} ${TY}) scale(${S})">
+    <path d="${VERCEL_PATH}" fill="#ffffff"/>
+  </g>
 </svg>`;
 
 const SIZES = [16, 32, 48];
