@@ -22,12 +22,16 @@ const VERCEL_PATH = "m577.3 0 577.4 1000H0z";
 //   · folga e canvas quadrado — encostando na borda o desenho fica apertado, e
 //     1155x1000 esticaria pra caber num ícone quadrado.
 // Daí o translate/scale: o path não é tocado, só posicionado.
-const S = 0.78; // escala (folga de ~11% de cada lado)
+//
+// O fundo é um CÍRCULO, e por isso o triângulo encolhe mais que num quadrado: a
+// diagonal do canvas é maior que o diâmetro, então uma base que caberia no
+// quadrado atravessaria a borda do círculo.
+const S = 0.62; // escala (a base fica dentro do círculo com folga)
 const TX = (1155 - 1155 * S) / 2;
 const TY = (1155 - 1000 * S) / 2;
 
 const SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1155 1155">
-  <rect width="1155" height="1155" fill="#000000"/>
+  <circle cx="577.5" cy="577.5" r="577.5" fill="#000000"/>
   <g transform="translate(${TX} ${TY}) scale(${S})">
     <path d="${VERCEL_PATH}" fill="#ffffff"/>
   </g>
