@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useApp } from "../AppContext";
 import { MI, inputCls } from "@/components/ui";
-import { getDateStr, toggleBoardCardState } from "@/lib/state";
+import { getDateStr, toggleBoardCardState, MISSOES_VIEWS, missoesView } from "@/lib/state";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCorners, DragOverlay, useDroppable } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -18,11 +18,43 @@ const uid = () => crypto.randomUUID();
 const stop = (e) => e.stopPropagation();
 const ddmm = (d) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 
-function CardBody({ card, onToggleDone, dragging }) {
+// Mesmo card, dois formatos. `compact` é a linha da visão em lista: uma altura de
+// linha, título em uma linha e os metadados à direita — o cartão de 3 linhas do
+// kanban empilhado na vertical desperdiça a tela toda em espaço vazio.
+function CardBody({ card, onToggleDone, dragging, compact = false }) {
   const p = PRI[card.priority] || PRI[2];
   const today = getDateStr(0);
   const overdue = card.due && !card.done && card.due < today;
   const labels = card.labels || [];
+
+  if (compact) {
+    return (
+      <div
+        className={`flex items-center gap-2.5 bg-surface-container-lowest rounded-lg px-3 py-2 border transition ${card.done ? "border-primary-container/40 opacity-70" : "border-outline-variant/30"} ${dragging ? "opacity-40" : "hover:bg-surface-container-high"}`}
+      >
+        <button onPointerDown={stop} onClick={(e) => { e.stopPropagation(); onToggleDone(); }} aria-label={card.done ? "Reabrir" : "Concluir"} className="shrink-0">
+          <MI name={card.done ? "check_circle" : "radio_button_unchecked"} fill={card.done} className={`text-lg ${card.done ? "text-primary-container" : "text-outline"}`} />
+        </button>
+        {/* etiqueta em linha vira bolinha: o texto dela roubaria a largura do título */}
+        {labels.length > 0 && (
+          <span className="flex gap-1 shrink-0">
+            {labels.map((l) => (
+              <span key={l.id} title={l.text || ""} className="w-2 h-2 rounded-full" style={{ background: l.color }} />
+            ))}
+          </span>
+        )}
+        <p className={`flex-1 min-w-0 truncate font-body-sm text-[13px] font-semibold ${card.done ? "line-through text-on-surface-variant" : "text-on-surface"}`}>{card.text}</p>
+        {card.desc && <MI name="notes" className="text-outline text-[14px] shrink-0" title="Tem detalhes" />}
+        {card.due && (
+          <span className={`flex items-center gap-1 text-[10px] font-label-caps px-1.5 py-0.5 rounded shrink-0 ${overdue ? "bg-error-container/40 text-error" : "text-on-surface-variant"}`}>
+            <MI name="event" className="text-[13px]" /> {ddmm(card.due)}
+          </span>
+        )}
+        <span className={`font-label-caps text-[8px] px-1.5 py-0.5 rounded uppercase shrink-0 ${p.chip}`}>{p.label}</span>
+      </div>
+    );
+  }
+
   return (
     <div className={`bg-surface-container-lowest rounded-xl p-3.5 border shadow-sm transition ${card.done ? "border-primary-container/40 opacity-70" : "border-outline-variant/30"} ${dragging ? "opacity-40" : "hover:shadow-md"}`}>
       {labels.length > 0 && (
@@ -53,12 +85,12 @@ function CardBody({ card, onToggleDone, dragging }) {
   );
 }
 
-function SortableCard({ card, onToggleDone, onOpen }) {
+function SortableCard({ card, onToggleDone, onOpen, compact = false }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={onOpen} className="mb-3 cursor-grab active:cursor-grabbing">
-      <CardBody card={card} onToggleDone={onToggleDone} dragging={isDragging} />
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={onOpen} className={`cursor-grab active:cursor-grabbing ${compact ? "mb-1.5" : "mb-3"}`}>
+      <CardBody card={card} onToggleDone={onToggleDone} dragging={isDragging} compact={compact} />
     </div>
   );
 }
@@ -71,6 +103,13 @@ export default function MissoesPage() {
   const [activeCard, setActiveCard] = useState(null);
   const [editing, setEditing] = useState(null); // { colId, cardId }
   const [showArchived, setShowArchived] = useState(false); // arquivo é uma visão do mesmo quadro
+
+  // Formato escolhido pelo usuário. Fica em settings (não em useState) porque a
+  // escolha é preferência, não estado de tela: tem que sobreviver ao reload e
+  // seguir a pessoa entre aparelhos.
+  const view = missoesView(state.settings?.missoesView);
+  const isList = view === "lista";
+  const setView = (id) => setState((prev) => ({ ...prev, settings: { ...prev.settings, missoesView: id } }));
 
   const setCols = (fn) => setState((prev) => ({ ...prev, board: { ...prev.board, columns: fn(prev.board?.columns || []) } }));
 
@@ -166,7 +205,8 @@ export default function MissoesPage() {
   const viewCols = columns.map((c) => ({ ...c, cards: c.cards.filter((k) => (showArchived ? k.archived : !k.archived)) }));
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)]">
+    // lista rola com a página; kanban precisa de altura fixa pra rolar as colunas por dentro
+    <div className={`flex flex-col ${isList ? "" : "h-[calc(100vh-8rem)]"}`}>
       <section className="mb-4">
         <h1 className="font-headline-lg text-headline-lg text-primary flex items-center gap-2">
           Missões
@@ -176,6 +216,21 @@ export default function MissoesPage() {
       </section>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-0.5 rounded-lg border border-outline-variant p-0.5" role="group" aria-label="Formato do quadro">
+          {MISSOES_VIEWS.map((v) => (
+            <button
+              key={v.id}
+              onClick={() => setView(v.id)}
+              aria-pressed={view === v.id}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-label-caps text-[10px] transition ${
+                view === v.id ? "bg-primary/15 text-primary" : "text-on-surface-variant hover:bg-surface-container-high"
+              }`}
+            >
+              <MI name={v.icon} className="text-base" /> {v.label}
+            </button>
+          ))}
+        </div>
+
         {doneOpen > 0 && !showArchived && (
           <button
             onClick={archiveDone}
@@ -207,13 +262,14 @@ export default function MissoesPage() {
       )}
 
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => setActiveCard(null)}>
-        <div className="flex gap-4 overflow-x-auto ff-scroll pb-4 flex-1 items-start">
+        <div className={isList ? "flex flex-col gap-3 pb-4" : "flex gap-4 overflow-x-auto ff-scroll pb-4 flex-1 items-start"}>
           {viewCols.map((col, i) => (
             <Column
               key={col.id}
               col={col}
               totalCount={columns[i].cards.length}
               canAdd={!showArchived}
+              compact={isList}
               renameColumn={renameColumn}
               removeColumn={removeColumn}
               toggleDone={toggleDone}
@@ -224,7 +280,7 @@ export default function MissoesPage() {
             />
           ))}
 
-          <div className="w-[260px] shrink-0 self-start flex items-center gap-1 rounded-2xl p-2 border-2 border-dashed border-outline-variant/40 hover:border-primary/40 focus-within:border-primary/40 transition">
+          <div className={`flex items-center gap-1 rounded-2xl p-2 border-2 border-dashed border-outline-variant/40 hover:border-primary/40 focus-within:border-primary/40 transition ${isList ? "w-full" : "w-[260px] shrink-0 self-start"}`}>
             <input value={newCol} onChange={(e) => setNewCol(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addColumn()} placeholder="Nova coluna" className="flex-1 min-w-0 bg-transparent px-3 py-2 text-[13px] text-on-surface placeholder:text-outline outline-none" />
             <button onClick={addColumn} aria-label="Adicionar coluna" className="h-8 w-8 grid place-items-center rounded-md text-primary hover:bg-primary/10 active:scale-95 transition shrink-0">
               <MI name="add" className="text-lg" />
@@ -232,7 +288,13 @@ export default function MissoesPage() {
           </div>
         </div>
 
-        <DragOverlay>{activeCard ? <div className="rotate-2 w-[268px]"><CardBody card={activeCard} onToggleDone={() => {}} /></div> : null}</DragOverlay>
+        <DragOverlay>
+          {activeCard ? (
+            <div className={isList ? "opacity-95" : "rotate-2 w-[268px]"}>
+              <CardBody card={activeCard} onToggleDone={() => {}} compact={isList} />
+            </div>
+          ) : null}
+        </DragOverlay>
       </DndContext>
 
       {editCard && (
@@ -251,11 +313,16 @@ export default function MissoesPage() {
   );
 }
 
-function Column({ col, totalCount, canAdd = true, renameColumn, removeColumn, toggleDone, openCard, cardInput, setCardInput, addCard }) {
+function Column({ col, totalCount, canAdd = true, compact = false, renameColumn, removeColumn, toggleDone, openCard, cardInput, setCardInput, addCard }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.id });
   return (
-    <div className={`glass-card rounded-2xl p-4 w-[300px] shrink-0 flex flex-col max-h-full transition ${isOver ? "ring-2 ring-primary/40" : ""}`}>
-      <div className="flex items-center justify-between mb-4 px-1">
+    // Em lista a coluna é uma seção de largura cheia empilhada; no kanban é uma
+    // faixa de 300px que rola por dentro. Mesmo componente: o dnd-kit não liga
+    // pro layout, então arrastar entre colunas continua funcionando nos dois.
+    <div
+      className={`glass-card rounded-2xl transition ${compact ? "w-full p-3" : "p-4 w-[300px] shrink-0 flex flex-col max-h-full"} ${isOver ? "ring-2 ring-primary/40" : ""}`}
+    >
+      <div className={`flex items-center justify-between px-1 ${compact ? "mb-2" : "mb-4"}`}>
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <input value={col.name} onChange={(e) => renameColumn(col.id, e.target.value)} aria-label="Nome da coluna" className="flex-1 min-w-0 bg-transparent font-label-caps text-label-caps uppercase tracking-widest text-on-surface-variant outline-none border-b border-transparent focus:border-primary-container/40 transition" />
           <span className="bg-surface-container-highest text-on-surface-variant px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0">{col.cards.length}</span>
@@ -265,20 +332,20 @@ function Column({ col, totalCount, canAdd = true, renameColumn, removeColumn, to
         </button>
       </div>
 
-      <div ref={setNodeRef} className="flex flex-col overflow-y-auto ff-scroll pr-1 flex-1 min-h-[40px]">
+      <div ref={setNodeRef} className={`flex flex-col min-h-[40px] ${compact ? "" : "overflow-y-auto ff-scroll pr-1 flex-1"}`}>
         <SortableContext items={col.cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
           {col.cards.map((card) => (
-            <SortableCard key={card.id} card={card} onToggleDone={() => toggleDone(col.id, card.id)} onOpen={() => openCard(card.id)} />
+            <SortableCard key={card.id} card={card} onToggleDone={() => toggleDone(col.id, card.id)} onOpen={() => openCard(card.id)} compact={compact} />
           ))}
         </SortableContext>
         {col.cards.length === 0 && (
-          <div className="rounded-lg border border-dashed border-outline-variant/30 p-4 text-center text-[11px] text-outline">
+          <div className={`rounded-lg border border-dashed border-outline-variant/30 text-center text-[11px] text-outline ${compact ? "p-2.5" : "p-4"}`}>
             {canAdd ? "Solte aqui" : "Nada arquivado aqui"}
           </div>
         )}
       </div>
 
-      <div className={`items-center gap-1 mt-3 border-2 border-dashed border-outline-variant/40 rounded-lg focus-within:border-primary/40 transition ${canAdd ? "flex" : "hidden"}`}>
+      <div className={`items-center gap-1 mt-2 border-2 border-dashed border-outline-variant/40 rounded-lg focus-within:border-primary/40 transition ${canAdd ? "flex" : "hidden"}`}>
         <input value={cardInput[col.id] || ""} onChange={(e) => setCardInput((s) => ({ ...s, [col.id]: e.target.value }))} onKeyDown={(e) => e.key === "Enter" && addCard(col.id)} placeholder="Adicionar card" className="flex-1 min-w-0 bg-transparent px-3 py-2 text-[13px] text-on-surface placeholder:text-outline outline-none" />
         <button onClick={() => addCard(col.id)} aria-label="Adicionar card" className="mr-1 h-8 w-8 grid place-items-center rounded-md text-primary hover:bg-primary/10 active:scale-95 transition shrink-0">
           <MI name="add" className="text-lg" />
