@@ -18,6 +18,7 @@ import {
   computeHabitDailyPenalty,
   computeActivityStreak,
   agendaReminders,
+  HOME_ROUTE,
 } from "@/lib/state";
 import { applyMode } from "@/lib/themes";
 import { registerServiceWorker, ensureNotifyPermission, notify } from "@/lib/notify";
@@ -605,7 +606,7 @@ export function AppProvider({ children }) {
     });
     if (!ok) return;
     setState(defaultState());
-    router.push("/foco");
+    router.push(HOME_ROUTE);
   }
 
   const value = {

@@ -31,7 +31,9 @@ self.addEventListener("push", (e) => {
 
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
-  const url = e.notification.data?.url || "/foco";
+  // Fallback quando o payload não trouxe url. Service worker não importa do bundle,
+  // então isto é a única cópia de HOME_ROUTE (lib/state.js) que precisa ser mudada à mão.
+  const url = e.notification.data?.url || "/calendario";
   e.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
       for (const c of list) {
