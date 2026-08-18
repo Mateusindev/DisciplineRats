@@ -107,10 +107,11 @@ function Chrome({ children }) {
 
       {/* Side nav (desktop) — clássica */}
       {/* Recolhida ela sai da tela, mas continuaria no tab order: `inert` tira do foco
-          junto. Spread condicional porque inert="false" ainda conta como presente. */}
+          junto. React 19 trata inert como booleano de verdade — só emite o atributo
+          quando true, então `inert={collapsed}` basta (string vazia virava false). */}
       <aside
         aria-hidden={collapsed}
-        {...(collapsed ? { inert: "" } : {})}
+        inert={collapsed}
         className={`hidden md:flex flex-col bg-surface-container border-r border-outline-variant w-64 fixed left-0 top-0 bottom-0 pt-6 pb-6 z-40 transition-transform duration-200 ${
           collapsed ? "-translate-x-full" : "translate-x-0"
         }`}
