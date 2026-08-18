@@ -31,6 +31,9 @@ import NutriProfile from "@/components/NutriProfile";
 const EMPTY_ITEM = { name: "", qty: "1", unit: "un", grams: "", portionGrams: "", kcal: "", protein: "", carbs: "", fat: "", foodId: null };
 const EMPTY_FOOD = { name: "", unit: "un", portionGrams: "", kcal: "", protein: "", carbs: "", fat: "" };
 
+// Teto do dropdown. Alto porque a lista rola; serve só pra não montar 300 linhas de DOM.
+const PICKER_LIMIT = 30;
+
 const qtyFmt = (n) => String(Math.round(n * 100) / 100).replace(".", ",");
 const gFmt = (n) => `${Math.round(n)} g`;
 
@@ -114,7 +117,10 @@ const TABS_DIETA = [
 function FoodPicker({ value, onChange, onPick, onEnter, state, placeholder }) {
   const [open, setOpen] = useState(false);
   const [act, setAct] = useState(0);
-  const hits = searchFoods(state, value);
+  // Campo em foco e ainda vazio mostra a despensa inteira: o valor da lista é lembrar
+  // o que existe, e exigir uma letra antes de mostrar qualquer coisa obrigava a pessoa
+  // a já saber o nome — que é justamente o que ela vem aqui pra não precisar decorar.
+  const hits = value.trim() ? searchFoods(state, value, PICKER_LIMIT) : foodList(state).slice(0, PICKER_LIMIT);
   const show = open && hits.length > 0;
   return (
     <div className="relative flex-1 min-w-[170px]">
@@ -153,6 +159,9 @@ function FoodPicker({ value, onChange, onPick, onEnter, state, placeholder }) {
               </button>
             </li>
           ))}
+          {hits.length === PICKER_LIMIT && (
+            <li className="px-3 py-1.5 text-[10px] text-outline">Mostrando {PICKER_LIMIT}. Digite pra filtrar.</li>
+          )}
         </ul>
       )}
     </div>
