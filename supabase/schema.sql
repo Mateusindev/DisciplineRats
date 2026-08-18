@@ -122,6 +122,8 @@ create table if not exists public.habits (
   penalty_date date,                                        -- build: último dia fechado já avaliado p/ penalidade
   why        text,                                          -- o porquê do hábito: motivo que o usuário lê antes de marcar
   detail     text,                                          -- anotações livres do usuário sobre o hábito
+  steps      jsonb not null default '[]'::jsonb,            -- microatividades: [{ id, text }] — todas feitas = hábito liberado
+  step_checks jsonb not null default '{}'::jsonb,           -- { "YYYY-MM-DD": [stepId] }; podado pra ~1 semana no cliente
   created_at timestamptz not null default now()
 );
 alter table public.habits add column if not exists icon text;
@@ -134,6 +136,8 @@ alter table public.habits add column if not exists penalty_date date;
 alter table public.habits add column if not exists detail text;
 alter table public.habits add column if not exists why text;
 alter table public.habits add column if not exists weekdays jsonb not null default '[]'::jsonb;  -- build: dias da semana agendados (0=Seg..6=Dom); [] = todo dia
+alter table public.habits add column if not exists steps jsonb not null default '[]'::jsonb;
+alter table public.habits add column if not exists step_checks jsonb not null default '{}'::jsonb;
 create index if not exists habits_user on public.habits (user_id);
 
 create table if not exists public.habit_checks (

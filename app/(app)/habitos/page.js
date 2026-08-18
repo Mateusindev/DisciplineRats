@@ -26,6 +26,13 @@ import {
   weekCount,
   shiftDate,
   toggleHabitState,
+  toggleHabitStep,
+  habitSteps,
+  habitStepDone,
+  habitStepProgress,
+  habitStepsBlock,
+  HABIT_STEPS_MAX,
+  HABIT_STEP_LEN,
 } from "@/lib/state";
 
 // Limite do porquê. Curto de propósito: motivo que não cabe numa linha não é lido
@@ -512,30 +519,150 @@ function StreakBanner({ streak, sched, best, dueToday, done }) {
   );
 }
 
+// ---- microatividades ----
+// Editor (modo edição do card). Aplica na hora, igual a dias da semana, ícone e
+// prioridade: o botão de salvar do card é só pros campos de texto.
+function StepEditor({ h, ctx }) {
+  const { stepDrafts, setStepDrafts, addStep, removeStep, moveStep } = ctx;
+  const steps = habitSteps(h);
+  const draft = stepDrafts[h.id] || "";
+  const full = steps.length >= HABIT_STEPS_MAX;
+  return (
+    <div className="mb-3">
+      <Caps className="text-outline text-[10px] mb-1.5 block">
+        MICROATIVIDADES ({steps.length}/{HABIT_STEPS_MAX})
+      </Caps>
+      {steps.length > 0 && (
+        <ul className="space-y-1 mb-2">
+          {steps.map((st, idx) => (
+            <li key={st.id} className="flex items-center gap-1">
+              <span className="w-4 shrink-0 text-center font-label-caps text-[10px] text-outline tabular-nums">{idx + 1}</span>
+              <span className="flex-1 min-w-0 truncate text-[12px] text-on-surface">{st.text}</span>
+              <button
+                onClick={() => moveStep(h.id, st.id, -1)}
+                disabled={idx === 0}
+                aria-label="Subir"
+                className="p-0.5 text-outline hover:text-on-surface disabled:opacity-25 disabled:hover:text-outline transition"
+              >
+                <MI name="arrow_upward" className="text-sm" />
+              </button>
+              <button
+                onClick={() => moveStep(h.id, st.id, 1)}
+                disabled={idx === steps.length - 1}
+                aria-label="Descer"
+                className="p-0.5 text-outline hover:text-on-surface disabled:opacity-25 disabled:hover:text-outline transition"
+              >
+                <MI name="arrow_downward" className="text-sm" />
+              </button>
+              <button onClick={() => removeStep(h.id, st.id)} aria-label="Remover passo" className="p-0.5 text-outline hover:text-error transition">
+                <MI name="close" className="text-sm" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex items-center gap-1">
+        <input
+          value={draft}
+          onChange={(e) => setStepDrafts((d) => ({ ...d, [h.id]: e.target.value }))}
+          onKeyDown={(e) => e.key === "Enter" && addStep(h.id)}
+          disabled={full}
+          maxLength={HABIT_STEP_LEN}
+          placeholder={full ? "Limite de passos atingido" : "Novo passo"}
+          aria-label="Nova microatividade"
+          className={`${inputCls} flex-1 min-w-0 text-[12px] py-1.5 disabled:opacity-50`}
+        />
+        <button
+          onClick={() => addStep(h.id)}
+          disabled={full}
+          aria-label="Adicionar passo"
+          className="h-8 w-8 grid place-items-center rounded-md text-primary hover:bg-primary/10 active:scale-95 disabled:opacity-30 transition shrink-0"
+        >
+          <MI name="add" className="text-lg" />
+        </button>
+      </div>
+      <p className="text-[10px] text-outline mt-1">
+        {steps.length > 0 ? "Com passos, o hábito só é marcado depois que todos estiverem feitos." : "Sem passos, o hábito é marcado direto."}
+      </p>
+    </div>
+  );
+}
+
+// Checklist do dia (modo leitura). Fechar o último passo conclui o hábito sozinho.
+function StepChecklist({ h, ctx }) {
+  const { today, toggleStep } = ctx;
+  const steps = habitSteps(h);
+  if (!steps.length) return null;
+  const p = habitStepProgress(h, today);
+  return (
+    <div className={`mb-4 rounded-xl border p-3 ${p.complete ? "border-primary-container/40 bg-primary-container/5" : "border-white/10"}`}>
+      <div className="flex items-center justify-between mb-2">
+        <Caps className="text-outline text-[10px] flex items-center gap-1">
+          <MI name="checklist" className="text-sm" /> MICROATIVIDADES
+        </Caps>
+        <Caps className={`text-[10px] tabular-nums ${p.complete ? "text-primary-container" : "text-outline"}`}>
+          {p.done}/{p.total}
+        </Caps>
+      </div>
+      <div className="w-full h-1 bg-surface-variant rounded-full overflow-hidden mb-2">
+        <div className="h-full bg-primary-container rounded-full transition-all" style={{ width: `${Math.round((p.done / p.total) * 100)}%` }} />
+      </div>
+      <ul>
+        {steps.map((st) => {
+          const on = habitStepDone(h, today, st.id);
+          return (
+            <li key={st.id}>
+              <button
+                onClick={() => toggleStep(h.id, st.id)}
+                role="checkbox"
+                aria-checked={on}
+                className="w-full flex items-center gap-2 py-1 text-left group"
+              >
+                <MI
+                  name={on ? "check_box" : "check_box_outline_blank"}
+                  className={`text-lg shrink-0 ${on ? "text-primary-container" : "text-outline group-hover:text-on-surface-variant"}`}
+                />
+                <span className={`text-[12px] leading-snug ${on ? "line-through text-on-surface-variant" : "text-on-surface"}`}>{st.text}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 // Marcar/desmarcar o hábito do dia. Interruptor em vez de botão: o estado fica
 // escrito em palavras, então nunca resta a dúvida de "cliquei ou não?".
 // Marcar credita XP, desmarcar estorna o valor exato pago no dia.
-function DoneSwitch({ done, dueToday, xp, onToggle }) {
+// Travado (passo em aberto) segue CLICÁVEL de propósito: o clique é o que dispara o
+// aviso dizendo quantos passos faltam. Botão morto não explica nada.
+function DoneSwitch({ done, dueToday, xp, blocked = false, pending = 0, onToggle }) {
   return (
     <button
       onClick={onToggle}
       role="switch"
       aria-checked={done}
+      aria-disabled={blocked}
       className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg border transition ${
-        done ? "border-primary-container/50 bg-primary-container/10" : "border-white/10 hover:border-white/25"
+        done ? "border-primary-container/50 bg-primary-container/10" : blocked ? "border-white/10 opacity-60" : "border-white/10 hover:border-white/25"
       }`}
     >
       <span className="text-left min-w-0">
         <Caps className={`text-[11px] block ${done ? "text-primary-container" : "text-on-surface"}`}>
           {done ? "FEITO HOJE" : dueToday ? "AINDA NÃO FEITO" : "NÃO AGENDADO HOJE"}
         </Caps>
-        <Caps className="text-outline text-[9px] block">{done ? `+${xp} XP CREDITADOS` : `VALE +${xp} XP`}</Caps>
+        <Caps className="text-outline text-[9px] block">
+          {blocked ? `FALTAM ${pending} MICROATIVIDADE${pending > 1 ? "S" : ""}` : done ? `+${xp} XP CREDITADOS` : `VALE +${xp} XP`}
+        </Caps>
       </span>
-      <span className={`w-12 h-7 rounded-full p-1 shrink-0 transition-colors ${done ? "bg-primary-container" : "bg-surface-variant"}`}>
-        <span
-          className={`block w-5 h-5 rounded-full bg-on-primary-container transition-transform ${done ? "translate-x-5" : ""}`}
-        />
-      </span>
+      {blocked ? (
+        <MI name="lock" className="text-outline text-xl shrink-0" />
+      ) : (
+        <span className={`w-12 h-7 rounded-full p-1 shrink-0 transition-colors ${done ? "bg-primary-container" : "bg-surface-variant"}`}>
+          <span className={`block w-5 h-5 rounded-full bg-on-primary-container transition-transform ${done ? "translate-x-5" : ""}`} />
+        </span>
+      )}
     </button>
   );
 }
@@ -549,6 +676,8 @@ function BuildCard({ h, i, ctx }) {
   const sched = habitScheduleLabel(h); // null = todo dia
   const dueToday = habitIsScheduled(h, today);
   const editing = ctx.edits[h.id] !== undefined;
+  const prog = habitStepProgress(h, today);
+  const blocked = habitStepsBlock(h, today);
   return (
     <div className="glass-card p-6 rounded-xl relative">
       <CardHeader h={h} i={i} ctx={ctx} />
@@ -557,6 +686,9 @@ function BuildCard({ h, i, ctx }) {
         <div className="mb-3">
           <Caps className="text-outline text-[10px] mb-1.5 block">DIAS DA SEMANA</Caps>
           <DowPicker value={habitWeekdays(h)} onChange={(wd) => setWeekdays(h.id, wd)} />
+          <div className="mt-3">
+            <StepEditor h={h} ctx={ctx} />
+          </div>
         </div>
       ) : (
         sched && (
@@ -570,7 +702,16 @@ function BuildCard({ h, i, ctx }) {
           a linha "+XP/DIA · DESCANSO HOJE" que morava aqui era repetição */}
       <StreakBanner streak={streak} sched={sched} best={best} dueToday={dueToday} done={done} />
 
-      <DoneSwitch done={done} dueToday={dueToday} xp={prio.xp} onToggle={() => toggleHabit(h.id)} />
+      {!editing && <StepChecklist h={h} ctx={ctx} />}
+
+      <DoneSwitch
+        done={done}
+        dueToday={dueToday}
+        xp={prio.xp}
+        blocked={blocked}
+        pending={prog?.pending || 0}
+        onToggle={() => toggleHabit(h.id)}
+      />
     </div>
   );
 }
@@ -586,9 +727,13 @@ function WeeklyCard({ h, i, ctx }) {
   const pct = Math.min(100, Math.round((count / Math.max(1, target)) * 100));
   const over = dir === "max" && count > target;
   const hit = dir === "min" && count >= target;
+  const editing = ctx.edits[h.id] !== undefined;
+  const prog = habitStepProgress(h, today);
+  const blocked = habitStepsBlock(h, today);
   return (
     <div className="glass-card p-6 rounded-xl relative border-l-4 border-l-primary-container/40">
       <CardHeader h={h} i={i} ctx={ctx} />
+      {editing && <StepEditor h={h} ctx={ctx} />}
       <div className="flex items-end justify-between mb-1">
         <Caps className="text-outline text-[10px]">
           {dir === "min" ? "PELO MENOS" : "NO MÁXIMO"} {target}×/SEMANA
@@ -606,10 +751,14 @@ function WeeklyCard({ h, i, ctx }) {
         </Caps>
         <Caps className="text-outline text-[10px]">+{bonus} XP/SEMANA NA META</Caps>
       </div>
+      {!editing && <StepChecklist h={h} ctx={ctx} />}
       <button
         onClick={() => toggleHabit(h.id)}
+        aria-disabled={blocked}
         className={`w-full py-2 font-label-caps text-[10px] rounded transition-colors ${
-          dir === "min"
+          blocked
+            ? "border border-white/10 text-outline"
+            : dir === "min"
             ? done
               ? "bg-primary-container text-on-primary-container"
               : "border border-primary text-primary hover:bg-primary/10"
@@ -618,7 +767,15 @@ function WeeklyCard({ h, i, ctx }) {
               : "border border-error/40 text-error hover:bg-error/10"
         }`}
       >
-        {dir === "min" ? (done ? "PRATICADO HOJE ✓" : "PRATIQUEI HOJE") : done ? "CONSUMIDO HOJE · DESFAZER" : "CONSUMI HOJE"}
+        {blocked
+          ? `FALTAM ${prog.pending} MICROATIVIDADE${prog.pending > 1 ? "S" : ""}`
+          : dir === "min"
+            ? done
+              ? "PRATICADO HOJE ✓"
+              : "PRATIQUEI HOJE"
+            : done
+              ? "CONSUMIDO HOJE · DESFAZER"
+              : "CONSUMI HOJE"}
       </button>
     </div>
   );
@@ -692,6 +849,7 @@ export default function HabitosPage() {
   const [editWhys, setEditWhys] = useState({}); // { [id]: porquê em edição }
   const [editDetails, setEditDetails] = useState({}); // { [id]: detalhe em edição }
   const [pickingIcon, setPickingIcon] = useState(null); // id do hábito com picker aberto
+  const [stepDrafts, setStepDrafts] = useState({}); // { [id]: texto do passo sendo digitado }
   const today = getDateStr(0);
 
   // ===== recompensas pendentes: marcos de dias limpos (quit) + bônus de semana na meta (weekly) =====
@@ -780,7 +938,75 @@ export default function HabitosPage() {
 
   // ===== build/weekly: check concede XP por prioridade (weekly-max não premia — marcar = consumir) =====
   function toggleHabit(id) {
+    const h = state.habits.find((x) => x.id === id);
+    // o reducer também recusa; aqui é só pra dizer POR QUE nada aconteceu
+    if (h && !h.doneDates.includes(today) && habitStepsBlock(h, today)) {
+      const p = habitStepProgress(h, today);
+      return toast(`Faltam ${p.pending} microatividade(s) em "${h.name}"`, { type: "error" });
+    }
     setState((prev) => toggleHabitState(prev, id, today));
+  }
+
+  // ===== microatividades =====
+  // Fechar o último passo conclui o hábito (e reabrir um passo desmarca) — a regra
+  // mora em toggleHabitStep, pra Home e a Agenda herdarem o mesmo comportamento.
+  function toggleStep(id, stepId) {
+    const h = state.habits.find((x) => x.id === id);
+    const before = habitStepProgress(h, today);
+    setState((prev) => toggleHabitStep(prev, id, stepId, today));
+    if (before && before.pending === 1 && !habitStepDone(h, today, stepId)) toast(`"${h.name}" concluído hoje`, { type: "success" });
+  }
+
+  function addStep(id) {
+    const text = (stepDrafts[id] || "").trim().slice(0, HABIT_STEP_LEN);
+    if (!text) return;
+    setState((prev) => ({
+      ...prev,
+      habits: prev.habits.map((h) => {
+        if (h.id !== id) return h;
+        const steps = habitSteps(h);
+        if (steps.length >= HABIT_STEPS_MAX) return h;
+        const step = { id: crypto.randomUUID(), text };
+        // Passo criado num dia que o hábito JÁ foi marcado nasce feito: o ato do dia
+        // já aconteceu, e deixá-lo aberto criaria hábito feito com passo pendente —
+        // exatamente o estado que a trava existe pra impedir. Vale a partir de amanhã.
+        if (!(h.doneDates || []).includes(today)) return { ...h, steps: [...steps, step] };
+        const day = [...(h.stepChecks?.[today] || []), step.id];
+        return { ...h, steps: [...steps, step], stepChecks: { ...(h.stepChecks || {}), [today]: day } };
+      }),
+    }));
+    setStepDrafts((d) => ({ ...d, [id]: "" }));
+  }
+
+  function removeStep(id, stepId) {
+    setState((prev) => ({
+      ...prev,
+      habits: prev.habits.map((h) => {
+        if (h.id !== id) return h;
+        // limpa o id dos checks também: passo apagado não pode continuar contando em dia nenhum
+        const checks = {};
+        for (const [d, ids] of Object.entries(h.stepChecks || {})) {
+          const keep = ids.filter((x) => x !== stepId);
+          if (keep.length) checks[d] = keep;
+        }
+        return { ...h, steps: habitSteps(h).filter((st) => st.id !== stepId), stepChecks: checks };
+      }),
+    }));
+  }
+
+  function moveStep(id, stepId, dir) {
+    setState((prev) => ({
+      ...prev,
+      habits: prev.habits.map((h) => {
+        if (h.id !== id) return h;
+        const steps = [...habitSteps(h)];
+        const i = steps.findIndex((st) => st.id === stepId);
+        const j = i + dir;
+        if (i < 0 || j < 0 || j >= steps.length) return h;
+        [steps[i], steps[j]] = [steps[j], steps[i]];
+        return { ...h, steps };
+      }),
+    }));
   }
 
   // ===== quit: registrar/desfazer recaída =====
@@ -827,6 +1053,7 @@ export default function HabitosPage() {
     setEdits(drop);
     setEditWhys(drop);
     setEditDetails(drop);
+    setStepDrafts(drop);
   };
   function saveEdit(id) {
     const name = (edits[id] || "").trim();
@@ -858,6 +1085,12 @@ export default function HabitosPage() {
     toggleHabit,
     logRelapse,
     undoRelapse,
+    stepDrafts,
+    setStepDrafts,
+    addStep,
+    removeStep,
+    moveStep,
+    toggleStep,
   };
 
   // props do form de criação num objeto só

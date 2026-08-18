@@ -18,6 +18,9 @@ import {
   routineOccurrences,
   routineDayStats,
   toggleRoutineCheck,
+  routineHabit,
+  habitStepsBlock,
+  habitStepProgress,
   getDateStr,
   XP,
 } from "@/lib/state";
@@ -217,6 +220,14 @@ export default function CalendarioPage() {
   // marcar direto da agenda: mesmo reducer da página de Rotina, sem futuro
   const toggleRoutine = (dateStr, itemId) => {
     if (dateStr > getDateStr(0)) return toast("Item de rotina não se marca no futuro", { type: "error" });
+    // Item vinculado a hábito com microatividades: quem manda é o hábito, e ele trava
+    // enquanto sobrar passo. O reducer já recusa — isto só evita o clique mudo.
+    const item = (state.routine?.items || []).find((i) => i.id === itemId);
+    const habit = item ? routineHabit(state, item) : null;
+    if (habit && !(habit.doneDates || []).includes(dateStr) && habitStepsBlock(habit, dateStr)) {
+      const p = habitStepProgress(habit, dateStr);
+      return toast(`Faltam ${p.pending} microatividade(s) em "${habit.name}"`, { type: "error", sub: "Marque em Hábitos" });
+    }
     setState((prev) => toggleRoutineCheck(prev, dateStr, itemId));
   };
 
