@@ -408,6 +408,11 @@ export default function CalendarioPage() {
       <PageHeader title="AGENDA" subtitle="A semana com hora à vista, e abaixo o dia que você escolher. Sem XP, sem cobrança — só planejamento." />
 
       <div className="glass-card p-3 rounded-xl mb-gutter flex items-center justify-end gap-2 flex-wrap">
+        {/* lembrete entra aqui, na ponta esquerda: um botão a mais numa barra que já
+            existe custa nada, e o card que ele era comia uma faixa da tela */}
+        <div className="mr-auto flex items-center gap-2">
+          <NotifySettings state={state} setSetting={setSetting} toast={toast} onSaveSubscription={savePush} />
+        </div>
         <button
           onClick={() => setShowRoutine(true)}
           className="px-3 py-2 rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container-high flex items-center gap-1.5 transition font-label-caps text-[11px]"
@@ -431,8 +436,6 @@ export default function CalendarioPage() {
           <MI name="add" className="text-lg" /> NOVO
         </button>
       </div>
-
-      <NotifySettings state={state} setSetting={setSetting} toast={toast} onSaveSubscription={savePush} />
 
       <div className="flex flex-col gap-gutter mt-gutter">
         <WeekGrid
