@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AppProvider, useApp } from "./AppContext";
@@ -43,6 +43,27 @@ function Chrome({ children }) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
 
+  // Recolher a sidebar é preferência, não estado de tela: mora em settings pra
+  // sobreviver ao reload e seguir a pessoa entre aparelhos. Só afeta o desktop —
+  // no mobile a navegação é a pill de baixo, que não tem o que recolher.
+  const collapsed = !!state?.settings?.sidebarCollapsed;
+  const toggleSidebar = () => setSetting("sidebarCollapsed", !collapsed);
+
+  // Ctrl/Cmd+B: mesma tecla que todo editor usa pra esconder painel lateral.
+  // Ignora quando o foco está num campo de texto — lá a tecla é do usuário.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "b" || e.altKey) return;
+      const t = e.target;
+      const tag = t?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t?.isContentEditable) return;
+      e.preventDefault();
+      setSetting("sidebarCollapsed", !collapsed);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [collapsed, setSetting]);
+
   if (!loaded) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background text-outline">
@@ -57,6 +78,20 @@ function Chrome({ children }) {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Reabrir a sidebar recolhida. Vive fora do aside de propósito: o aside sai da
+          tela inteiro, então o botão que o traz de volta não pode morar dentro dele. */}
+      {collapsed && (
+        <button
+          onClick={toggleSidebar}
+          aria-label="Mostrar menu"
+          aria-expanded={false}
+          title="Mostrar menu (Ctrl+B)"
+          className="hidden md:grid fixed top-3 left-3 z-[60] w-9 h-9 place-items-center rounded-lg bg-surface-container/90 backdrop-blur border border-outline-variant text-on-surface-variant hover:text-on-surface hover:border-white/30 transition"
+        >
+          <MI name="left_panel_open" className="text-[20px]" />
+        </button>
+      )}
+
       {/* ações de canto: ajuda da página atual + toggle de tema */}
       <div className="fixed top-3 right-3 z-[60] flex items-center gap-1">
         <HelpButton pathname={pathname} />
@@ -71,7 +106,15 @@ function Chrome({ children }) {
       </div>
 
       {/* Side nav (desktop) — clássica */}
-      <aside className="hidden md:flex flex-col bg-surface-container border-r border-outline-variant w-64 fixed left-0 top-0 bottom-0 pt-6 pb-6 z-40">
+      {/* Recolhida ela sai da tela, mas continuaria no tab order: `inert` tira do foco
+          junto. Spread condicional porque inert="false" ainda conta como presente. */}
+      <aside
+        aria-hidden={collapsed}
+        {...(collapsed ? { inert: "" } : {})}
+        className={`hidden md:flex flex-col bg-surface-container border-r border-outline-variant w-64 fixed left-0 top-0 bottom-0 pt-6 pb-6 z-40 transition-transform duration-200 ${
+          collapsed ? "-translate-x-full" : "translate-x-0"
+        }`}
+      >
         <div className="px-6 mb-6 flex items-center justify-between shrink-0">
           <div className="font-headline-md text-headline-md font-black text-primary tracking-tighter flex items-center gap-2 leading-none">
             <MI name="fitness_center" className="text-primary-container" /> DISCIPLINE<br />RATS
@@ -84,6 +127,15 @@ function Chrome({ children }) {
             >
               <MI name="account_circle" fill={pathname === "/perfil"} />
             </Link>
+            <button
+              onClick={toggleSidebar}
+              aria-label="Recolher menu"
+              aria-expanded
+              title="Recolher menu (Ctrl+B)"
+              className="p-1 text-outline hover:text-on-surface transition active:opacity-80"
+            >
+              <MI name="left_panel_close" />
+            </button>
           </div>
         </div>
         {/* XP em uma linha: o tier e a barra completa já estão na Home e no Perfil */}
@@ -141,7 +193,8 @@ function Chrome({ children }) {
       </aside>
 
       {/* Main */}
-      <main className="md:pl-64 pt-8 pb-32 md:pb-12 min-h-screen">
+      {/* o padding acompanha o aside: recolhido, o conteúdo usa a largura inteira */}
+      <main className={`pt-8 pb-32 md:pb-12 min-h-screen transition-[padding] duration-200 ${collapsed ? "md:pl-0" : "md:pl-64"}`}>
         <div className="max-w-6xl mx-auto px-4 sm:px-container-padding py-8">
           {DISABLED_ROUTES.includes(pathname) ? <DisabledScreen /> : children}
         </div>
