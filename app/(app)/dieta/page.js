@@ -12,13 +12,24 @@ import {
   dietQtyFromGrams,
   isMassUnit,
   DIET_UNITS,
+  foodList,
+  searchFoods,
+  findFoodByName,
+  foodFromItem,
+  upsertFood,
+  removeFood,
+  applyFoodToPlan,
+  planItemsUsingFood,
+  FOODS_MAX,
+  FOOD_NAME_LEN,
 } from "@/lib/state";
 import MetasEditor from "@/components/MetasEditor";
 import NutriProfile from "@/components/NutriProfile";
 
 // Formulário de item: os macros são de UMA porção. `qty` multiplica na hora de somar,
 // então corrigir "1 ovo" pra 2 é mexer num número, não redigitar a tabela nutricional.
-const EMPTY_ITEM = { name: "", qty: "1", unit: "un", grams: "", portionGrams: "", kcal: "", protein: "", carbs: "", fat: "" };
+const EMPTY_ITEM = { name: "", qty: "1", unit: "un", grams: "", portionGrams: "", kcal: "", protein: "", carbs: "", fat: "", foodId: null };
+const EMPTY_FOOD = { name: "", unit: "un", portionGrams: "", kcal: "", protein: "", carbs: "", fat: "" };
 
 const qtyFmt = (n) => String(Math.round(n * 100) / 100).replace(".", ",");
 const gFmt = (n) => `${Math.round(n)} g`;
@@ -92,8 +103,257 @@ function QtyStepper({ value, unit, onChange, size = "sm" }) {
 
 const TABS_DIETA = [
   { id: "plano", label: "PLANO", short: "PLANO", icon: "restaurant_menu" },
+  { id: "despensa", label: "DESPENSA", short: "DESPENSA", icon: "kitchen" },
   { id: "perfil", label: "CÁLCULO", short: "CÁLCULO", icon: "calculate" },
 ];
+
+// Campo de alimento com busca na despensa. É o ponto da feature: escolher da lista
+// preenche a tabela nutricional inteira, então o mesmo alimento nunca é redigitado.
+// Enter escolhe o item em foco quando a lista está aberta e só adiciona o item da
+// refeição quando não está — senão a lista roubaria o Enter de quem digita algo novo.
+function FoodPicker({ value, onChange, onPick, onEnter, state, placeholder }) {
+  const [open, setOpen] = useState(false);
+  const [act, setAct] = useState(0);
+  const hits = searchFoods(state, value);
+  const show = open && hits.length > 0;
+  return (
+    <div className="relative flex-1 min-w-[170px]">
+      <input
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); setAct(0); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onKeyDown={(e) => {
+          if (show && e.key === "ArrowDown") { e.preventDefault(); setAct((i) => (i + 1) % hits.length); }
+          else if (show && e.key === "ArrowUp") { e.preventDefault(); setAct((i) => (i - 1 + hits.length) % hits.length); }
+          else if (e.key === "Escape") setOpen(false);
+          else if (e.key === "Enter") {
+            if (show) { e.preventDefault(); onPick(hits[act]); setOpen(false); }
+            else onEnter?.();
+          }
+        }}
+        role="combobox"
+        aria-expanded={show}
+        aria-autocomplete="list"
+        placeholder={placeholder}
+        className={`${inputCls} w-full text-[13px]`}
+      />
+      {show && (
+        <ul className="absolute left-0 right-0 top-full mt-1 z-40 max-h-56 overflow-y-auto ff-scroll rounded-lg border border-outline-variant bg-surface-container-highest shadow-2xl shadow-black/50">
+          {hits.map((f, i) => (
+            <li key={f.id}>
+              <button
+                onMouseDown={(e) => { e.preventDefault(); onPick(f); setOpen(false); }}
+                className={`w-full px-3 py-2 text-left transition ${i === act ? "bg-primary/15" : "hover:bg-surface-variant/50"}`}
+              >
+                <span className="block text-[13px] text-on-surface">{f.name}</span>
+                <span className="block text-[11px] text-on-surface-variant tabular-nums">
+                  {f.kcal} kcal · P {f.protein} · C {f.carbs} · G {f.fat} · {isMassUnit(f.unit) ? `por ${f.portionGrams || 100} g` : `por ${f.unit}`}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// Campos da tabela nutricional. Um componente porque a mesma linha aparece em três
+// lugares (criar item, editar item, despensa) e três cópias divergem.
+// Em escopo de módulo, não aninhado: componente redefinido a cada render tem
+// identidade nova, e o React remonta o input — o foco pularia a cada tecla digitada.
+const MacroField = ({ v, on, k, ph }) => (
+  <input value={v[k]} onChange={on(k)} type="number" min="0" placeholder={ph} aria-label={ph} className={`${inputCls} w-20 text-[13px]`} />
+);
+
+function MacroInputs({ v, on, label }) {
+  return (
+    <>
+      <Caps className="text-outline text-[9px]">{label}</Caps>
+      <MacroField v={v} on={on} k="kcal" ph="kcal" />
+      <MacroField v={v} on={on} k="protein" ph="P (g)" />
+      <MacroField v={v} on={on} k="carbs" ph="C (g)" />
+      <MacroField v={v} on={on} k="fat" ph="G (g)" />
+    </>
+  );
+}
+
+// Formulário da despensa. A tabela é sempre de UMA porção: em grama/ml a referência é
+// "por N g" (100 por padrão, como vem no rótulo); nas outras é a porção inteira.
+function FoodForm({ v, set, onSubmit, onCancel, submitLabel }) {
+  const on = (k) => (e) => set({ ...v, [k]: e.target.value });
+  const mass = isMassUnit(v.unit);
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={v.name}
+          onChange={on("name")}
+          onKeyDown={(e) => e.key === "Enter" && onSubmit()}
+          maxLength={FOOD_NAME_LEN}
+          placeholder="Alimento (ex.: Ovo cozido)"
+          aria-label="Nome do alimento"
+          className={`${inputCls} flex-1 min-w-[170px] text-[13px]`}
+        />
+        <select value={v.unit} onChange={on("unit")} aria-label="Unidade da porção" className={`${inputCls} w-24 text-[13px]`}>
+          {DIET_UNITS.map((u) => (
+            <option key={u} value={u}>{u}</option>
+          ))}
+        </select>
+        <label className="flex items-center gap-1.5">
+          <Caps className="text-outline text-[9px]">{mass ? "TABELA POR" : "G/PORÇÃO"}</Caps>
+          <input value={v.portionGrams} onChange={on("portionGrams")} type="number" min="0" placeholder={mass ? "100" : "opcional"} aria-label="Gramas da porção" className={`${inputCls} w-20 text-[13px]`} />
+          <Caps className="text-outline text-[9px]">G</Caps>
+        </label>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <MacroInputs v={v} on={on} label={mass ? `POR ${Math.round(num(v.portionGrams)) || 100} G` : "POR PORÇÃO"} />
+        <span className="flex-1" />
+        <button onClick={onSubmit} className="px-4 py-2 rounded-lg bg-primary-container text-on-primary-container font-label-caps text-[11px] flex items-center gap-1 active:scale-95 transition">
+          <MI name="check" className="text-lg" /> {submitLabel}
+        </button>
+        {onCancel && (
+          <button onClick={onCancel} aria-label="Cancelar" className="px-3 py-2 rounded-lg bg-surface-variant text-on-surface-variant active:scale-95 transition">
+            <MI name="close" className="text-lg" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Aba DESPENSA: cadastro, correção e exclusão. Corrigir um alimento oferece empurrar a
+// correção pros itens do plano que vieram dele — é o único jeito de consertar uma
+// tabela errada sem revisitar refeição por refeição.
+function Despensa({ state, setState, toast, confirm }) {
+  const foods = foodList(state);
+  const [q, setQ] = useState("");
+  const [form, setForm] = useState(EMPTY_FOOD);
+  const [edit, setEdit] = useState(null); // { id, ...campos }
+
+  const fields = (v) => ({
+    name: (v.name || "").trim().slice(0, FOOD_NAME_LEN),
+    unit: DIET_UNITS.includes(v.unit) ? v.unit : "un",
+    portionGrams: isMassUnit(v.unit) ? Math.round(num(v.portionGrams)) || 100 : Math.round(num(v.portionGrams)),
+    kcal: Math.round(num(v.kcal)),
+    protein: Math.round(num(v.protein) * 10) / 10,
+    carbs: Math.round(num(v.carbs) * 10) / 10,
+    fat: Math.round(num(v.fat) * 10) / 10,
+  });
+
+  function create() {
+    const f = fields(form);
+    if (!f.name) return toast("Informe o alimento", { type: "error" });
+    if (foods.length >= FOODS_MAX) return toast(`Limite de ${FOODS_MAX} alimentos`, { type: "error" });
+    const existing = findFoodByName(state, f.name);
+    setState((prev) => upsertFood(prev, { id: existing?.id || crypto.randomUUID(), ...f }));
+    toast(existing ? `"${f.name}" atualizado` : `"${f.name}" na despensa`);
+    setForm(EMPTY_FOOD);
+  }
+
+  async function save() {
+    const f = fields(edit);
+    if (!f.name) return toast("Informe o alimento", { type: "error" });
+    const used = planItemsUsingFood(state, edit.id);
+    let spread = false;
+    if (used > 0) {
+      spread = await confirm({
+        title: `Atualizar ${used} item(ns) do plano?`,
+        body: `Os itens que saíram de "${f.name}" recebem a tabela nova. A quantidade de cada um é preservada. Recusando, só o cadastro muda.`,
+        confirmLabel: "ATUALIZAR TAMBÉM",
+        cancelLabel: "SÓ O CADASTRO",
+      });
+    }
+    setState((prev) => {
+      const next = upsertFood(prev, { id: edit.id, ...f });
+      return spread ? applyFoodToPlan(next, { id: edit.id, ...f }) : next;
+    });
+    setEdit(null);
+  }
+
+  async function drop(food) {
+    const used = planItemsUsingFood(state, food.id);
+    const ok = await confirm({
+      title: "Excluir da despensa?",
+      body: used > 0
+        ? `"${food.name}" sai da despensa. Os ${used} item(ns) já no plano continuam lá, com os valores que têm hoje.`
+        : `"${food.name}" sai da despensa.`,
+      confirmLabel: "EXCLUIR",
+    });
+    if (!ok) return;
+    setState((prev) => removeFood(prev, food.id));
+  }
+
+  const shown = q.trim() ? searchFoods(state, q, FOODS_MAX) : foods;
+
+  return (
+    <div className="space-y-8">
+      <section className="glass-card p-6 rounded-xl">
+        <Caps className="text-outline text-[10px] block mb-3">CADASTRAR ALIMENTO</Caps>
+        <FoodForm v={form} set={setForm} onSubmit={create} submitLabel="SALVAR NA DESPENSA" />
+      </section>
+
+      <section className="glass-card p-6 rounded-xl">
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <h3 className="font-headline-md text-headline-md text-primary">DESPENSA</h3>
+          <Caps className="text-outline">{foods.length} DE {FOODS_MAX}</Caps>
+          <span className="flex-1" />
+          <div className="flex items-center gap-1.5 rounded-lg border border-white/10 px-2 py-1 focus-within:border-primary-container/60 transition">
+            <MI name="search" className="text-outline text-base" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar alimento"
+              aria-label="Buscar alimento"
+              className="w-40 bg-transparent text-[13px] text-on-surface placeholder:text-outline outline-none"
+            />
+          </div>
+        </div>
+
+        {foods.length === 0 ? (
+          <p className="text-[13px] text-on-surface-variant">
+            Vazia. Cadastre acima, ou monte um item numa refeição — ele entra aqui sozinho e fica disponível pra sempre.
+          </p>
+        ) : shown.length === 0 ? (
+          <p className="text-[13px] text-on-surface-variant">Nenhum alimento com esse nome.</p>
+        ) : (
+          <ul className="space-y-2">
+            {shown.map((f) => {
+              if (edit?.id === f.id)
+                return (
+                  <li key={f.id} className="p-3 bg-surface-container-high rounded-lg border border-primary-container/30">
+                    <FoodForm v={edit} set={setEdit} onSubmit={save} onCancel={() => setEdit(null)} submitLabel="SALVAR" />
+                  </li>
+                );
+              const used = planItemsUsingFood(state, f.id);
+              return (
+                <li key={f.id} className="flex items-center gap-3 p-3 bg-surface-container-high rounded-lg border border-white/5">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-bold text-on-surface truncate">
+                      {f.name}
+                      <span className="text-outline font-normal"> · {isMassUnit(f.unit) ? `por ${f.portionGrams || 100} g` : `por ${f.unit}${f.portionGrams ? ` (${f.portionGrams} g)` : ""}`}</span>
+                    </div>
+                    <div className="text-[11px] text-on-surface-variant tabular-nums">
+                      {f.kcal} kcal · P {f.protein}g · C {f.carbs}g · G {f.fat}g
+                    </div>
+                    {used > 0 && <div className="text-[10px] text-outline">em {used} item(ns) do plano</div>}
+                  </div>
+                  <button onClick={() => setEdit({ id: f.id, ...f, portionGrams: f.portionGrams || "" })} aria-label={`Editar ${f.name}`} className="p-1 text-outline hover:text-primary-container transition">
+                    <MI name="edit" className="text-lg" />
+                  </button>
+                  <button onClick={() => drop(f)} aria-label={`Excluir ${f.name}`} className="p-1 text-outline hover:text-error transition">
+                    <MI name="delete" className="text-lg" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
 
 function num(v) {
   const n = parseFloat(v);
@@ -128,6 +388,7 @@ export default function DietaPage() {
   const [gStep, setGStep] = useState(10); // passo do ajuste em gramas (10 / 50 / 100)
 
   const plan = state.dietPlan || [];
+  const saveNewFoods = state.settings?.dietSaveNewFoods !== false;
   const allItems = plan.flatMap((m) => m.items || []);
   const totals = dietTotals(allItems);
   const goals = {
@@ -179,6 +440,44 @@ export default function DietaPage() {
   const setField = (mealId, key) => (e) =>
     setForms((f) => ({ ...f, [mealId]: { ...(f[mealId] || EMPTY_ITEM), [key]: e.target.value } }));
 
+  // Escolher da despensa preenche a tabela inteira; só a quantidade fica pro usuário.
+  // Em grama/ml o total começa numa tabela cheia (100 g, ou o que o alimento definir),
+  // que é o palpite honesto — zero exigiria digitar antes de ver qualquer número.
+  const pickFood = (mealId, f) =>
+    setForms((fs) => ({
+      ...fs,
+      [mealId]: {
+        ...EMPTY_ITEM,
+        foodId: f.id,
+        name: f.name,
+        unit: f.unit,
+        portionGrams: f.portionGrams || "",
+        grams: isMassUnit(f.unit) ? f.portionGrams || 100 : "",
+        kcal: f.kcal,
+        protein: f.protein,
+        carbs: f.carbs,
+        fat: f.fat,
+      },
+    }));
+
+  // Guarda um item do plano na despensa (ou atualiza o cadastro de mesmo nome) e deixa
+  // o item vinculado, pra uma correção futura no cadastro poder descer até ele.
+  function bankItem(item) {
+    const existing = findFoodByName(state, item.name);
+    const id = existing?.id || crypto.randomUUID();
+    setState((prev) => {
+      const next = upsertFood(prev, { id, ...foodFromItem(item) });
+      return {
+        ...next,
+        dietPlan: (next.dietPlan || []).map((m) => ({
+          ...m,
+          items: (m.items || []).map((i) => (i.id === item.id ? { ...i, foodId: id } : i)),
+        })),
+      };
+    });
+    toast(existing ? `"${item.name}" atualizado na despensa` : `"${item.name}" salvo na despensa`);
+  }
+
   function addItem(mealId) {
     const f = getForm(mealId);
     const name = (f.name || "").trim();
@@ -186,19 +485,28 @@ export default function DietaPage() {
       toast("Informe o alimento", { type: "error" });
       return;
     }
+    // Nome que já existe na despensa reaproveita o cadastro em vez de criar um gêmeo.
+    const existing = f.foodId ? null : findFoodByName(state, name);
+    const autoSave = state.settings?.dietSaveNewFoods !== false;
+    const bank = !f.foodId && !existing && autoSave && foodList(state).length < FOODS_MAX;
+    const foodId = f.foodId || existing?.id || (bank ? crypto.randomUUID() : null);
     const item = {
       id: Date.now(),
       name: name.slice(0, 60),
+      foodId,
       ...itemQtyFields(f),
       kcal: Math.round(num(f.kcal)),
       protein: Math.round(num(f.protein) * 10) / 10,
       carbs: Math.round(num(f.carbs) * 10) / 10,
       fat: Math.round(num(f.fat) * 10) / 10,
     };
-    setState((prev) => ({
-      ...prev,
-      dietPlan: (prev.dietPlan || []).map((m) => (m.id === mealId ? { ...m, items: [...(m.items || []), item] } : m)),
-    }));
+    setState((prev) => {
+      const next = {
+        ...prev,
+        dietPlan: (prev.dietPlan || []).map((m) => (m.id === mealId ? { ...m, items: [...(m.items || []), item] } : m)),
+      };
+      return bank ? upsertFood(next, { id: foodId, ...foodFromItem(item) }) : next;
+    });
     setForms((fs) => ({ ...fs, [mealId]: EMPTY_ITEM }));
   }
   // patch direto no item — usado pela quantidade, que é ajuste de um clique
@@ -274,7 +582,9 @@ export default function DietaPage() {
         <p className="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">
           {tab === "plano"
             ? "Monte sua dieta fixa. Adicione quantas refeições precisar — o índice geral soma kcal e macros do plano."
-            : "Estimativa de gasto e macros a partir do seu corpo, e a evolução do peso que diz se a estimativa acertou."}
+            : tab === "despensa"
+              ? "Alimento cadastrado uma vez, reusado em qualquer refeição. Escolher da despensa preenche a tabela nutricional inteira."
+              : "Estimativa de gasto e macros a partir do seu corpo, e a evolução do peso que diz se a estimativa acertou."}
         </p>
       </section>
 
@@ -372,7 +682,29 @@ export default function DietaPage() {
                       <div key={e.id} className="p-3 bg-surface-container-high rounded-lg border border-primary-container/30">
                         <div className="space-y-2">
                           <div className="flex flex-wrap items-center gap-2">
-                            <input value={ed.name} onChange={editField(e.id, "name")} onKeyDown={(k) => k.key === "Enter" && saveEdit(m.id, e.id)} placeholder="Alimento" className={`${inputCls} flex-1 min-w-[140px] text-[13px]`} />
+                            <FoodPicker
+                              state={state}
+                              value={ed.name}
+                              onChange={(v) => setEdits((es) => ({ ...es, [e.id]: { ...es[e.id], name: v } }))}
+                              onPick={(food) =>
+                                setEdits((es) => ({
+                                  ...es,
+                                  [e.id]: {
+                                    ...es[e.id],
+                                    name: food.name,
+                                    unit: food.unit,
+                                    portionGrams: food.portionGrams || "",
+                                    grams: isMassUnit(food.unit) ? food.portionGrams || 100 : es[e.id].grams,
+                                    kcal: food.kcal,
+                                    protein: food.protein,
+                                    carbs: food.carbs,
+                                    fat: food.fat,
+                                  },
+                                }))
+                              }
+                              onEnter={() => saveEdit(m.id, e.id)}
+                              placeholder="Alimento (busca na despensa)"
+                            />
                             <select value={ed.unit} onChange={editField(e.id, "unit")} aria-label="Unidade da porção" className={`${inputCls} w-24 text-[13px]`}>
                               {DIET_UNITS.map((u) => (
                                 <option key={u} value={u}>{u}</option>
@@ -451,6 +783,19 @@ export default function DietaPage() {
                           </div>
                         )}
                       </div>
+                      {(() => {
+                        const known = findFoodByName(state, e.name);
+                        return (
+                          <button
+                            onClick={() => bankItem(e)}
+                            aria-label={known ? `Atualizar ${e.name} na despensa` : `Salvar ${e.name} na despensa`}
+                            title={known ? "Já está na despensa · atualizar com estes valores" : "Salvar na despensa pra reusar"}
+                            className={`p-1 transition ${known ? "text-primary-container/60 hover:text-primary-container" : "text-outline hover:text-primary-container"}`}
+                          >
+                            <MI name={known ? "bookmark_added" : "bookmark_add"} className="text-lg" />
+                          </button>
+                        );
+                      })()}
                       <button onClick={() => startEdit(e)} aria-label="Editar item" className="text-outline hover:text-primary-container transition p-1">
                         <MI name="edit" className="text-lg" />
                       </button>
@@ -466,7 +811,14 @@ export default function DietaPage() {
             {/* add item inline */}
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                <input value={f.name} onChange={setField(m.id, "name")} onKeyDown={(e) => e.key === "Enter" && addItem(m.id)} placeholder="Alimento (ex.: Ovo cozido)" className={`${inputCls} flex-1 min-w-[160px] text-[13px]`} />
+                <FoodPicker
+                  state={state}
+                  value={f.name}
+                  onChange={(v) => setForms((fs) => ({ ...fs, [m.id]: { ...getForm(m.id), name: v, foodId: null } }))}
+                  onPick={(food) => pickFood(m.id, food)}
+                  onEnter={() => addItem(m.id)}
+                  placeholder="Alimento (busca na despensa)"
+                />
                 <select value={f.unit} onChange={setField(m.id, "unit")} aria-label="Unidade da porção" className={`${inputCls} w-24 text-[13px]`}>
                   {DIET_UNITS.map((u) => (
                     <option key={u} value={u}>{u}</option>
@@ -508,6 +860,21 @@ export default function DietaPage() {
                   ) : null;
                 })()}
                 <span className="flex-1" />
+                {f.foodId ? (
+                  <Caps className="text-primary-container text-[9px] flex items-center gap-1">
+                    <MI name="kitchen" className="text-sm" /> DA DESPENSA
+                  </Caps>
+                ) : (
+                  <button
+                    onClick={() => setSetting("dietSaveNewFoods", !saveNewFoods)}
+                    role="switch"
+                    aria-checked={saveNewFoods}
+                    title="Alimento novo também é cadastrado na despensa"
+                    className={`flex items-center gap-1 font-label-caps text-[9px] transition ${saveNewFoods ? "text-primary-container" : "text-outline hover:text-on-surface-variant"}`}
+                  >
+                    <MI name={saveNewFoods ? "check_box" : "check_box_outline_blank"} className="text-base" /> SALVAR NA DESPENSA
+                  </button>
+                )}
                 <button onClick={() => addItem(m.id)} aria-label="Adicionar item" className="px-4 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center gap-1 py-2 active:scale-95 transition font-label-caps text-[11px]">
                   <MI name="add" className="text-lg" /> ADD
                 </button>
@@ -532,6 +899,8 @@ export default function DietaPage() {
       </section>
 
       </>)}
+
+      {tab === "despensa" && <Despensa state={state} setState={setState} toast={toast} confirm={confirm} />}
 
       {tab === "perfil" && <NutriProfile state={state} setState={setState} toast={toast} />}
 

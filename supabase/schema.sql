@@ -17,7 +17,7 @@ create table if not exists public.profiles (
   workout_plan  jsonb   not null default '[]'::jsonb,
   tasks         jsonb   not null default '{}'::jsonb,  -- { tasks:[], tasksDate, tasksBonusDate }
   routine       jsonb   not null default '{}'::jsonb,  -- rotina fixa: { items:[{id,name,time}], bonusDate }
-  pantry        jsonb   not null default '[]'::jsonb,  -- despensa: [{id,name,qty,status}]
+  pantry        jsonb   not null default '[]'::jsonb,  -- LEGADO, sem uso: lista de compras que nunca foi implementada. A despensa de alimentos é `foods`.
   journal       jsonb   not null default '{}'::jsonb,  -- diário: { date: {gratitude,win,dump,intention,xpAwarded} }
   updated_at    timestamptz not null default now()
 );
@@ -26,6 +26,7 @@ create table if not exists public.profiles (
 alter table public.profiles add column if not exists settings     jsonb not null default '{}'::jsonb;
 alter table public.profiles add column if not exists stats        jsonb not null default '{}'::jsonb;
 alter table public.profiles add column if not exists diet_plan    jsonb not null default '[]'::jsonb;
+alter table public.profiles add column if not exists foods        jsonb not null default '[]'::jsonb;  -- despensa: alimentos reusáveis [{id,name,unit,portionGrams,kcal,protein,carbs,fat}]
 alter table public.profiles add column if not exists workout_plan jsonb not null default '[]'::jsonb;
 alter table public.profiles add column if not exists tasks        jsonb not null default '{}'::jsonb;
 alter table public.profiles add column if not exists routine      jsonb not null default '{}'::jsonb;
