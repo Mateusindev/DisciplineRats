@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps, PageHeader, inputCls } from "@/components/ui";
 import {
@@ -667,7 +667,7 @@ function DoneSwitch({ done, dueToday, xp, blocked = false, pending = 0, onToggle
   );
 }
 
-function BuildCard({ h, i, ctx }) {
+function BuildCard({ h, i, ctx, bare = false }) {
   const { today, toggleHabit, setWeekdays } = ctx;
   const prio = habitPriority(h);
   const done = h.doneDates.includes(today);
@@ -679,7 +679,7 @@ function BuildCard({ h, i, ctx }) {
   const prog = habitStepProgress(h, today);
   const blocked = habitStepsBlock(h, today);
   return (
-    <div className="glass-card p-6 rounded-xl relative">
+    <div className={bare ? "p-4" : "glass-card p-6 rounded-xl relative"}>
       <CardHeader h={h} i={i} ctx={ctx} />
 
       {editing ? (
@@ -716,7 +716,7 @@ function BuildCard({ h, i, ctx }) {
   );
 }
 
-function WeeklyCard({ h, i, ctx }) {
+function WeeklyCard({ h, i, ctx, bare = false }) {
   const { today, toggleHabit } = ctx;
   const target = h.weeklyTarget || 3;
   const dir = h.direction || "min";
@@ -731,7 +731,7 @@ function WeeklyCard({ h, i, ctx }) {
   const prog = habitStepProgress(h, today);
   const blocked = habitStepsBlock(h, today);
   return (
-    <div className="glass-card p-6 rounded-xl relative border-l-4 border-l-primary-container/40">
+    <div className={bare ? "p-4 border-l-4 border-l-primary-container/40" : "glass-card p-6 rounded-xl relative border-l-4 border-l-primary-container/40"}>
       <CardHeader h={h} i={i} ctx={ctx} />
       {editing && <StepEditor h={h} ctx={ctx} />}
       <div className="flex items-end justify-between mb-1">
@@ -781,7 +781,7 @@ function WeeklyCard({ h, i, ctx }) {
   );
 }
 
-function QuitCard({ h, i, ctx }) {
+function QuitCard({ h, i, ctx, bare = false }) {
   const { today, logRelapse, undoRelapse } = ctx;
   const clean = cleanDays(h);
   const best = bestCleanRun(h);
@@ -792,7 +792,7 @@ function QuitCard({ h, i, ctx }) {
   const next = QUIT_MILESTONES.find((m) => m.days > clean);
   const prio = habitPriority(h);
   return (
-    <div className="glass-card p-6 rounded-xl relative border-l-4 border-l-error/40">
+    <div className={bare ? "p-4 border-l-4 border-l-error/40" : "glass-card p-6 rounded-xl relative border-l-4 border-l-error/40"}>
       <CardHeader h={h} i={i} ctx={ctx} />
       <div className="text-center my-3">
         <div className="font-display-timer text-[44px] leading-none text-primary tabular-nums">{clean}</div>
@@ -836,6 +836,198 @@ function QuitCard({ h, i, ctx }) {
   );
 }
 
+// ============================================================================
+// LISTA EM TABELA — hábito por linha, denso e escaneável. Clicar na linha
+// expande e mostra o card cheio original (BuildCard/WeeklyCard/QuitCard) por
+// baixo, então nenhuma funcionalidade (editar, ícone, passos, dias, recaída
+// etc.) fica de fora — só escondida até o usuário pedir detalhe.
+// ============================================================================
+
+// controle de "feito hoje" em botão redondo pequeno — mesma ação do DoneSwitch
+// (toggleHabit cobre build e weekly), só que pra caber numa célula estreita.
+function MiniDone({ h, ctx }) {
+  const done = h.doneDates.includes(ctx.today);
+  const blocked = habitStepsBlock(h, ctx.today);
+  return (
+    <button
+      onClick={() => ctx.toggleHabit(h.id)}
+      role="switch"
+      aria-checked={done}
+      aria-label={done ? "Feito hoje" : "Marcar feito hoje"}
+      title={done ? "Feito hoje" : blocked ? "Faltam microatividades" : "Marcar feito hoje"}
+      className={`w-9 h-9 rounded-full grid place-items-center border shrink-0 active:scale-95 transition ${
+        done
+          ? "bg-primary-container border-primary-container text-on-primary-container"
+          : blocked
+            ? "border-white/10 text-outline opacity-60"
+            : "border-white/15 text-outline hover:border-primary-container/50 hover:text-primary-container"
+      }`}
+    >
+      <MI name={blocked ? "lock" : done ? "check" : "radio_button_unchecked"} className="text-lg" />
+    </button>
+  );
+}
+
+// mesma ideia pro hábito de largar: recaiu/não recaiu hoje, versão compacta dos
+// botões do QuitCard (confirm e desfazer continuam vindo do ctx).
+function MiniQuit({ h, ctx }) {
+  const relapsedToday = h.doneDates.includes(ctx.today);
+  return relapsedToday ? (
+    <button
+      onClick={() => ctx.undoRelapse(h.id)}
+      title="Desfazer recaída de hoje"
+      aria-label="Desfazer recaída de hoje"
+      className="w-9 h-9 rounded-full grid place-items-center border border-error/40 bg-error/15 text-error shrink-0 active:scale-95 transition"
+    >
+      <MI name="undo" className="text-lg" />
+    </button>
+  ) : (
+    <button
+      onClick={() => ctx.logRelapse(h)}
+      title="Registrar recaída hoje"
+      aria-label="Registrar recaída hoje"
+      className="w-9 h-9 rounded-full grid place-items-center border border-white/15 text-outline hover:border-error/40 hover:text-error shrink-0 active:scale-95 transition"
+    >
+      <MI name="block" className="text-lg" />
+    </button>
+  );
+}
+
+// badge de tipo — a tabela mistura os 3 tipos numa lista só, então cada linha
+// precisa dizer o que é (diário/semanal/largar).
+function KindBadge({ kind }) {
+  const label = kind === "quit" ? "LARGAR" : kind === "weekly" ? "SEMANAL" : "DIÁRIO";
+  return <Caps className={`text-[9px] shrink-0 ${kind === "quit" ? "text-error" : "text-outline"}`}>{label}</Caps>;
+}
+
+// número/barra compacta por tipo — mesma matemática das telas cheias
+// (habitStreak/weekCount/cleanDays), só que formatada pra caber numa coluna.
+function RowMetric({ h, ctx }) {
+  const kind = h.kind || "build";
+  if (kind === "build") {
+    const streak = habitStreak(h);
+    return (
+      <div className="flex items-center gap-1 w-14 justify-end" title={`Sequência de ${streak} · recorde ${bestHabitStreak(h)}`}>
+        <MI name="local_fire_department" fill className={`text-base ${streak > 0 ? "flame-active" : "text-outline"}`} />
+        <span className={`tabular-nums font-label-caps text-[13px] ${streak > 0 ? "text-primary" : "text-outline"}`}>{streak}</span>
+      </div>
+    );
+  }
+  if (kind === "weekly") {
+    const target = h.weeklyTarget || 3;
+    const dir = h.direction || "min";
+    const count = weekCount(h);
+    const pct = Math.min(100, Math.round((count / Math.max(1, target)) * 100));
+    const over = dir === "max" && count > target;
+    const hit = dir === "min" && count >= target;
+    return (
+      <div className="w-20" title={`${count}/${target} essa semana`}>
+        <Caps className={`text-[10px] block text-right ${over ? "text-error" : hit ? "text-primary-container" : "text-outline"}`}>
+          {count}/{target}
+        </Caps>
+        <div className="w-full h-1 bg-surface-variant rounded-full overflow-hidden mt-0.5">
+          <div className={`h-full rounded-full ${over ? "bg-error" : "bg-primary-container"}`} style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+    );
+  }
+  const clean = cleanDays(h);
+  return (
+    <div className="text-right w-14 shrink-0" title={`Recorde: ${bestCleanRun(h)} dias`}>
+      <span className="tabular-nums font-label-caps text-[15px] text-primary block leading-none">{clean}</span>
+      <Caps className="text-outline text-[9px]">LIMPO</Caps>
+    </div>
+  );
+}
+
+// uma linha da tabela. Clique expande numa <tr colSpan> com o card cheio
+// original dentro (bare, sem o container glass-card duplicado).
+function TableRow({ h, i, ctx }) {
+  const kind = h.kind || "build";
+  const expanded = !!ctx.expanded[h.id] || ctx.edits[h.id] !== undefined;
+  return (
+    <Fragment>
+      <tr onClick={() => ctx.toggleExpanded(h.id)} className="border-t border-white/5 hover:bg-white/[0.03] cursor-pointer transition">
+        <td className="py-2.5 pl-4 pr-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <MI
+              name={h.icon || HABIT_ICONS[i % HABIT_ICONS.length]}
+              className={`text-xl shrink-0 ${kind === "quit" ? "text-error" : "text-primary-container"}`}
+            />
+            <span className="truncate text-on-surface text-[13px]">{h.name}</span>
+          </div>
+        </td>
+        <td className="py-2.5 pr-3"><KindBadge kind={kind} /></td>
+        <td className="py-2.5 pr-3"><PriorityLabel h={h} /></td>
+        <td className="py-2.5 pr-3 text-[11px] text-outline whitespace-nowrap">
+          {kind === "build"
+            ? habitScheduleLabel(h) || "TODO DIA"
+            : kind === "weekly"
+              ? `${(h.direction || "min") === "min" ? "MÍN" : "MÁX"} ${h.weeklyTarget || 3}×/SEM`
+              : "—"}
+        </td>
+        <td className="py-2.5 pr-3">
+          <RowMetric h={h} ctx={ctx} />
+        </td>
+        <td className="py-2.5 pr-3 text-center" onClick={(e) => e.stopPropagation()}>
+          {kind === "quit" ? <MiniQuit h={h} ctx={ctx} /> : <MiniDone h={h} ctx={ctx} />}
+        </td>
+        <td className="py-2.5 pl-1 pr-4 text-right">
+          <MI name={expanded ? "expand_less" : "expand_more"} className="text-outline" />
+        </td>
+      </tr>
+      {expanded && (
+        <tr>
+          <td colSpan={7} className="p-2 bg-black/10">
+            {kind === "build" && <BuildCard h={h} i={i} ctx={ctx} bare />}
+            {kind === "weekly" && <WeeklyCard h={h} i={i} ctx={ctx} bare />}
+            {kind === "quit" && <QuitCard h={h} i={i} ctx={ctx} bare />}
+          </td>
+        </tr>
+      )}
+    </Fragment>
+  );
+}
+
+const TABLE_COLS = ["HÁBITO", "TIPO", "PRIORIDADE", "PROGRAMAÇÃO", "MÉTRICA", "HOJE", ""];
+
+function TableLayout({ groups, ctx }) {
+  return (
+    <div className="glass-card rounded-xl overflow-x-auto">
+      <table className="w-full text-left border-collapse min-w-[720px]">
+        <thead>
+          <tr className="border-b border-white/10">
+            {TABLE_COLS.map((label) => (
+              <th key={label} className="font-label-caps text-[10px] text-outline px-3 py-2 first:pl-4">
+                {label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {groups.map(({ key, title, icon, habits, accent }) => (
+            <Fragment key={key}>
+              {groups.length > 1 && (
+                <tr>
+                  <td colSpan={TABLE_COLS.length} className="pt-4 pb-1 pl-4">
+                    <Caps className={`text-[11px] flex items-center gap-1.5 ${accent}`}>
+                      <MI name={icon} className="text-sm" />
+                      {title}
+                    </Caps>
+                  </td>
+                </tr>
+              )}
+              {habits.map((h, i) => (
+                <TableRow key={h.id} h={h} i={i} ctx={ctx} />
+              ))}
+            </Fragment>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function HabitosPage() {
   const { state, setState, confirm, toast } = useApp();
   const [newHabit, setNewHabit] = useState("");
@@ -850,7 +1042,10 @@ export default function HabitosPage() {
   const [editDetails, setEditDetails] = useState({}); // { [id]: detalhe em edição }
   const [pickingIcon, setPickingIcon] = useState(null); // id do hábito com picker aberto
   const [stepDrafts, setStepDrafts] = useState({}); // { [id]: texto do passo sendo digitado }
+  const [expanded, setExpanded] = useState({}); // { [id]: bool } — linha da tabela expandida mostrando o card cheio
   const today = getDateStr(0);
+
+  const toggleExpanded = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
 
   // ===== recompensas pendentes: marcos de dias limpos (quit) + bônus de semana na meta (weekly) =====
   useEffect(() => {
@@ -1091,6 +1286,8 @@ export default function HabitosPage() {
     removeStep,
     moveStep,
     toggleStep,
+    expanded,
+    toggleExpanded,
   };
 
   // props do form de criação num objeto só
@@ -1114,7 +1311,11 @@ export default function HabitosPage() {
   const buildHabits = state.habits.filter((h) => (h.kind || "build") === "build");
   const weeklyHabits = state.habits.filter((h) => (h.kind || "build") === "weekly");
   const quitHabits = state.habits.filter((h) => (h.kind || "build") === "quit");
-  const groupCount = [buildHabits, weeklyHabits, quitHabits].filter((g) => g.length > 0).length;
+  const groups = [
+    { key: "build", title: "Construindo", icon: "trending_up", accent: "text-primary-container", habits: buildHabits },
+    { key: "weekly", title: "Metas da Semana", icon: "event_repeat", accent: "text-primary-container", habits: weeklyHabits },
+    { key: "quit", title: "Largando", icon: "block", accent: "text-error", habits: quitHabits },
+  ].filter((g) => g.habits.length > 0);
 
   return (
     <>
@@ -1125,57 +1326,10 @@ export default function HabitosPage() {
         <HabitForm f={formProps} />
       </div>
 
-
       {state.habits.length === 0 ? (
         <div className="glass-card p-8 rounded-xl text-center text-on-surface-variant">Nenhum hábito cadastrado ainda.</div>
       ) : (
-        <div className="space-y-8">
-          {buildHabits.length > 0 && (
-            <section>
-              {groupCount > 1 && (
-                <div className="flex items-center gap-2 mb-4">
-                  <MI name="trending_up" className="text-primary-container" />
-                  <h3 className="font-headline-md text-headline-md text-primary uppercase">Construindo</h3>
-                </div>
-              )}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
-                {buildHabits.map((h, i) => (
-                  <BuildCard key={h.id} h={h} i={i} ctx={ctx} />
-                ))}
-              </div>
-            </section>
-          )}
-          {weeklyHabits.length > 0 && (
-            <section>
-              {groupCount > 1 && (
-                <div className="flex items-center gap-2 mb-4">
-                  <MI name="event_repeat" className="text-primary-container" />
-                  <h3 className="font-headline-md text-headline-md text-primary uppercase">Metas da Semana</h3>
-                </div>
-              )}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
-                {weeklyHabits.map((h, i) => (
-                  <WeeklyCard key={h.id} h={h} i={i} ctx={ctx} />
-                ))}
-              </div>
-            </section>
-          )}
-          {quitHabits.length > 0 && (
-            <section>
-              {groupCount > 1 && (
-                <div className="flex items-center gap-2 mb-4">
-                  <MI name="block" className="text-error" />
-                  <h3 className="font-headline-md text-headline-md text-primary uppercase">Largando</h3>
-                </div>
-              )}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
-                {quitHabits.map((h, i) => (
-                  <QuitCard key={h.id} h={h} i={i} ctx={ctx} />
-                ))}
-              </div>
-            </section>
-          )}
-        </div>
+        <TableLayout groups={groups} ctx={ctx} />
       )}
     </>
   );
