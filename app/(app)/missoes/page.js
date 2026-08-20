@@ -18,6 +18,7 @@ import {
   BOARD_LABELS_MAX,
   BOARD_LABEL_LEN,
 } from "@/lib/state";
+import Prancheta from "./Prancheta";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCorners, DragOverlay, useDroppable } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -558,6 +559,28 @@ function CardModal({ card, colId, colName, ctx }) {
   );
 }
 
+// Seletor de formato. Extraído porque a prancheta também precisa dele, e ela não
+// tem barra de busca/etiqueta/arquivo pra pendurar o seletor dentro.
+function ViewSwitch({ view, setView }) {
+  return (
+    <div className="flex items-center gap-0.5 rounded-lg border border-outline-variant p-0.5" role="group" aria-label="Formato do quadro">
+      {MISSOES_VIEWS.map((v) => (
+        <button
+          key={v.id}
+          onClick={() => setView(v.id)}
+          aria-pressed={view === v.id}
+          title={v.label}
+          className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 font-label-caps text-[10px] transition ${
+            view === v.id ? "bg-primary/15 text-primary" : "text-on-surface-variant hover:bg-surface-container-high"
+          }`}
+        >
+          <MI name={v.icon} className="text-base" /> {v.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- página
 
 export default function MissoesPage() {
@@ -575,6 +598,8 @@ export default function MissoesPage() {
   // escolha é preferência, não estado de tela: tem que sobreviver ao reload.
   const view = missoesView(state.settings?.missoesView);
   const isList = view === "lista";
+  const isCanvas = view === "prancheta";
+  const canvasPageCount = (state.canvasPages || []).length;
   const setView = (id) => setState((prev) => ({ ...prev, settings: { ...prev.settings, missoesView: id } }));
 
   const setCols = (fn) => setState((prev) => ({ ...prev, board: { ...prev.board, columns: fn(prev.board?.columns || []) } }));
@@ -705,18 +730,30 @@ export default function MissoesPage() {
   const chip = "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-label-caps text-[10px] transition";
 
   return (
-    // lista rola com a página; quadro precisa de altura fixa pra rolar as listas por dentro
-    <div className={`flex flex-col ${isList ? "" : "h-[calc(100vh-8rem)]"}`}>
+    // lista rola com a página; quadro e prancheta precisam de altura fixa pra rolar
+    // (ou desenhar) por dentro — min-h-0 pra folha da prancheta poder encolher
+    <div className={`flex flex-col ${isList ? "" : "h-[calc(100vh-8rem)] min-h-0"}`}>
       <section className="mb-3">
         <h1 className="font-headline-lg text-headline-lg text-primary flex items-center gap-2">
           Missões
           <MI name="verified" className="text-primary-container text-xl" fill />
         </h1>
         <p className="text-body-md text-on-surface-variant">
-          {activeCards} cartão(ões) no quadro{filterOn ? ` · ${shownTotal} no filtro` : ""} · toque pra abrir, segure pra arrastar
+          {isCanvas
+            ? `${canvasPageCount} página(s) de rascunho · desenhe o plano antes de virar cartão`
+            : `${activeCards} cartão(ões) no quadro${filterOn ? ` · ${shownTotal} no filtro` : ""} · toque pra abrir, segure pra arrastar`}
         </p>
       </section>
 
+      {isCanvas ? (
+        <>
+          <div className="mb-2 flex items-center justify-end">
+            <ViewSwitch view={view} setView={setView} />
+          </div>
+          <Prancheta />
+        </>
+      ) : (
+        <>
       {/* barra de controle: buscar, filtrar por etiqueta, formato, arquivo */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1.5 rounded-lg border border-outline-variant bg-surface-container px-2 py-1 focus-within:border-primary/50 transition">
@@ -779,21 +816,7 @@ export default function MissoesPage() {
               {showArchived ? "VOLTAR PRO QUADRO" : `ARQUIVADOS (${archivedCount})`}
             </button>
           )}
-          <div className="flex items-center gap-0.5 rounded-lg border border-outline-variant p-0.5" role="group" aria-label="Formato do quadro">
-            {MISSOES_VIEWS.map((v) => (
-              <button
-                key={v.id}
-                onClick={() => setView(v.id)}
-                aria-pressed={view === v.id}
-                title={v.label}
-                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 font-label-caps text-[10px] transition ${
-                  view === v.id ? "bg-primary/15 text-primary" : "text-on-surface-variant hover:bg-surface-container-high"
-                }`}
-              >
-                <MI name={v.icon} className="text-base" /> {v.label}
-              </button>
-            ))}
-          </div>
+          <ViewSwitch view={view} setView={setView} />
         </div>
       </div>
 
@@ -828,6 +851,8 @@ export default function MissoesPage() {
       </DndContext>
 
       {editCard && <CardModal card={editCard} colId={editing.colId} colName={editCol.name} ctx={ctx} />}
+        </>
+      )}
     </div>
   );
 }

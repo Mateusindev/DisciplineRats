@@ -186,8 +186,24 @@ create table if not exists public.transactions (
 );
 create index if not exists transactions_user_date on public.transactions (user_id, date desc);
 
+-- Prancheta das Missões: páginas de desenho livre (formas, pincel, texto).
+-- Tabela própria em vez de jsonb no profile porque desenho cresce sem teto: uma
+-- linha por página faz o traço novo reescrever SÓ aquela página, e mantém o
+-- profile (lido inteiro em todo login) do tamanho que é hoje.
+create table if not exists public.canvas_pages (
+  id         uuid primary key default gen_random_uuid(),   -- client manda crypto.randomUUID()
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  name       text not null default 'Página',
+  pos        integer not null default 0,                   -- ordem na lista lateral
+  elements   jsonb not null default '[]'::jsonb,           -- [{ id, type, ...geometria }] — ordem do array = ordem de empilhamento
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists canvas_pages_user on public.canvas_pages (user_id, pos);
+
 -- ---------- Row Level Security ----------
 alter table public.profiles     enable row level security;
+alter table public.canvas_pages enable row level security;
 alter table public.transactions enable row level security;
 alter table public.sleep_logs   enable row level security;
 alter table public.focus_days   enable row level security;
@@ -210,7 +226,7 @@ create policy "own profile update" on public.profiles for update using (auth.uid
 do $$
 declare t text;
 begin
-  foreach t in array array['sleep_logs','focus_days','exercise_logs','habits','habit_checks','gym_sets','routine_checks','transactions','weight_logs']
+  foreach t in array array['sleep_logs','focus_days','exercise_logs','habits','habit_checks','gym_sets','routine_checks','transactions','weight_logs','canvas_pages']
   loop
     execute format('drop policy if exists "own rows select" on public.%I', t);
     execute format('create policy "own rows select" on public.%I for select using (auth.uid() = user_id)', t);
