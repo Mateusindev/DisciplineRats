@@ -891,6 +891,43 @@ function dayVerdict(h, date, today) {
   return date === today ? null : "bg-error"; // hoje ainda dá tempo
 }
 
+// ============================================================================
+// MICROATIVIDADES NA LINHA — barra segmentada, um segmento por passo.
+//
+// Marcar custa UM clique e nenhuma navegação: antes a checklist só existia
+// dentro do card cheio, alcançável clicando no nome do hábito — e nome não
+// parece botão. Aqui a barra fica na própria linha do calendário, do lado do
+// nome, e cada segmento é o alvo do seu passo.
+//
+// Age sobre HOJE, porque passo é registro diário (stepChecks[data]) — mesma
+// regra da única célula clicável do calendário. Hábito sem microatividade não
+// mostra barra nenhuma. A lista com o texto de cada passo continua no card
+// cheio (StepChecklist); aqui o texto vive no title/aria de cada segmento.
+// ============================================================================
+function StepSegments({ h, ctx }) {
+  const steps = habitSteps(h);
+  return (
+    <div className="flex items-center gap-0.5 shrink-0 w-28">
+      {steps.map((st, idx) => {
+        const on = habitStepDone(h, ctx.today, st.id);
+        return (
+          <button
+            key={st.id}
+            onClick={() => ctx.toggleStep(h.id, st.id)}
+            role="checkbox"
+            aria-checked={on}
+            aria-label={st.text}
+            title={`${idx + 1}. ${st.text}`}
+            className={`h-2.5 flex-1 first:rounded-l-full last:rounded-r-full transition ${
+              on ? "bg-primary-container" : "bg-surface-variant hover:bg-outline/60"
+            }`}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 function MonthLayout({ habits, ctx }) {
   const [off, setOff] = useState(0);
   const today = ctx.today;
@@ -935,21 +972,25 @@ function MonthLayout({ habits, ctx }) {
           <tbody>
             {habits.map((h, i) => {
               const kind = h.kind || "build";
+              const hasSteps = habitSteps(h).length > 0;
               return (
                 <tr key={h.id} className="border-t border-white/5">
-                  <td className="sticky left-0 z-10 bg-surface-container px-3 py-1 max-w-[220px]">
-                    <button
-                      onClick={() => ctx.toggleExpanded(h.id)}
-                      aria-expanded={!!ctx.expanded[h.id]}
-                      aria-label={`Detalhes de ${h.name}`}
-                      className="flex items-center gap-1.5 min-w-0 text-left"
-                    >
-                      <MI
-                        name={h.icon || HABIT_ICONS[i % HABIT_ICONS.length]}
-                        className={`text-xl shrink-0 ${kind === "quit" ? "text-error" : "text-primary-container"}`}
-                      />
-                      <span className="truncate text-[14px] text-on-surface">{h.name}</span>
-                    </button>
+                  <td className="sticky left-0 z-10 bg-surface-container px-3 py-1 max-w-[260px]">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <button
+                        onClick={() => ctx.toggleExpanded(h.id)}
+                        aria-expanded={!!ctx.expanded[h.id]}
+                        aria-label={`Detalhes de ${h.name}`}
+                        className="flex items-center gap-1.5 min-w-0 text-left"
+                      >
+                        <MI
+                          name={h.icon || HABIT_ICONS[i % HABIT_ICONS.length]}
+                          className={`text-xl shrink-0 ${kind === "quit" ? "text-error" : "text-primary-container"}`}
+                        />
+                        <span className="truncate text-[14px] text-on-surface">{h.name}</span>
+                      </button>
+                      {hasSteps && <StepSegments h={h} ctx={ctx} />}
+                    </div>
                   </td>
                   {days.map((d) => {
                     const date = dstr(d);
