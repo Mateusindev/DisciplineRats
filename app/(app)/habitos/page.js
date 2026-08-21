@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, Fragment } from "react";
+import { useState, useEffect } from "react";
 import { useApp } from "../AppContext";
-import { MI, Caps, PageHeader, StatTile, inputCls } from "@/components/ui";
+import { MI, Caps, PageHeader, inputCls } from "@/components/ui";
 import {
   getDateStr,
   habitStreak,
@@ -837,71 +837,21 @@ function QuitCard({ h, i, ctx, bare = false }) {
 }
 
 // ============================================================================
-// PREVIEW DE LAYOUTS — 10 arquiteturas de informação pra mesma lista, atrás de
-// um switch em state local (não entra no state salvo/Supabase).
+// CALENDÁRIO MENSAL — a visão de hábitos. Matriz hábito × dia do mês.
 //
-// Regra que todas seguem: nenhuma funcionalidade existe só num layout. Os
-// formatos compactos escondem o card cheio original (BuildCard/WeeklyCard/
-// QuitCard) atrás de um "expandir", então editar, ícone, microatividades, dias
-// da semana, recaída e prioridade continuam alcançáveis em todos.
+// Duas cores, e só duas: AZUL cumpriu, VERMELHO falhou ou recaiu. Vêm dos tokens
+// (`primary-container` / `error`), que já carregam o ajuste de contraste de cada
+// tema — azul e vermelho não trocam de lado entre claro e escuro.
 //
-// Depois de escolher um, os outros 9 (e este comentário) somem.
+// O que NÃO ganha cor é tão importante quanto: dia de folga, dia de hábito sem
+// meta diária e o dia de hoje ainda em aberto ficam neutros. Pintar de vermelho
+// um dia que ainda dá tempo de cumprir seria acusar falha que não aconteceu.
+//
+// Clicar no nome do hábito abre o card cheio embaixo da matriz, com tudo que ele
+// sempre teve: editar, ícone, microatividades, dias da semana, prioridade, recaída.
 // ============================================================================
 
-const LAYOUTS = [
-  { id: "table", label: "TABELA", icon: "table_chart", hint: "Atual: linha densa com colunas" },
-  { id: "row", label: "LINHA", icon: "view_agenda", hint: "Um card horizontal por hábito" },
-  { id: "week", label: "SEMANA", icon: "calendar_view_week", hint: "Linha + últimos 7 dias" },
-  { id: "today", label: "HOJE", icon: "task_alt", hint: "Agrupado pelo que falta fazer hoje" },
-  { id: "minimal", label: "MÍNIMO", icon: "checklist", hint: "Só caixa e nome, sem métrica" },
-  { id: "rings", label: "ANÉIS", icon: "data_usage", hint: "Medidor radial em grade densa" },
-  { id: "panel", label: "PAINEL", icon: "dashboard", hint: "Métricas no topo + lista ranqueada" },
-  { id: "month", label: "MÊS", icon: "calendar_month", hint: "Matriz hábito × dia do mês" },
-  { id: "focus", label: "FOCO", icon: "center_focus_strong", hint: "Um hábito por vez" },
-  { id: "kanban", label: "QUADRO", icon: "view_column", hint: "Colunas por tipo, cards cheios" },
-];
-
-function LayoutSwitcher({ value, onChange }) {
-  const active = LAYOUTS.find((l) => l.id === value);
-  return (
-    <div className="glass-card px-4 py-3 rounded-xl mb-gutter">
-      <div className="flex items-center gap-2 mb-2">
-        <Caps className="text-outline text-[10px] flex items-center gap-1.5">
-          <MI name="science" className="text-sm" /> PREVIEW DE LAYOUT
-        </Caps>
-        {active && <span className="text-[11px] text-on-surface-variant truncate">{active.hint}</span>}
-      </div>
-      <div className="flex items-center gap-1 flex-wrap">
-        {LAYOUTS.map((l) => {
-          const on = value === l.id;
-          return (
-            <button
-              key={l.id}
-              onClick={() => onChange(l.id)}
-              aria-pressed={on}
-              title={l.hint}
-              className={`flex items-center gap-1.5 px-2.5 h-8 rounded-full font-label-caps text-[10px] border transition ${
-                on
-                  ? "bg-primary-container text-on-primary-container border-primary-container"
-                  : "border-white/10 text-outline hover:border-white/25 hover:text-on-surface-variant"
-              }`}
-            >
-              <MI name={l.icon} className="text-sm" />
-              {l.label}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// PEÇAS COMPARTILHADAS
-// ============================================================================
-
-// Card cheio do tipo certo. Existe pra não repetir o ternário de 3 pontas em
-// cada um dos 10 layouts.
+// Card cheio do tipo certo — o detalhe que abre embaixo da matriz.
 function FullCard({ h, i, ctx, bare = false }) {
   const kind = h.kind || "build";
   if (kind === "weekly") return <WeeklyCard h={h} i={i} ctx={ctx} bare={bare} />;
@@ -909,605 +859,37 @@ function FullCard({ h, i, ctx, bare = false }) {
   return <BuildCard h={h} i={i} ctx={ctx} bare={bare} />;
 }
 
-// Estado do dia, sem olhar o tipo. É o que o layout HOJE usa pra agrupar: na
-// hora de agir o que importa é "falta ou não falta", não "é diário ou semanal".
-//
-// Os dois casos que exigem cuidado: hábito semanal de LIMITE não é tarefa —
-// marcar ele é consumir, então cobrá-lo como pendente inverteria o sentido; e
-// semanal de mínimo com a meta da semana já batida está em dia, mesmo sem
-// marcação hoje.
-function dayState(h, today) {
-  const kind = h.kind || "build";
-  if (kind === "quit") return h.doneDates.includes(today) ? "relapsed" : "quit";
-  if (kind === "weekly") {
-    if ((h.direction || "min") === "max") return "limit";
-    if (h.doneDates.includes(today)) return "done";
-    return weekCount(h) >= (h.weeklyTarget || 3) ? "done" : "due";
-  }
-  if (h.doneDates.includes(today)) return "done";
-  if (!habitIsScheduled(h, today)) return "rest";
-  return "due";
-}
-
-// ============================================================================
-// LISTA EM TABELA — hábito por linha, denso e escaneável. Clicar na linha
-// expande e mostra o card cheio original (BuildCard/WeeklyCard/QuitCard) por
-// baixo, então nenhuma funcionalidade (editar, ícone, passos, dias, recaída
-// etc.) fica de fora — só escondida até o usuário pedir detalhe.
-// ============================================================================
-
-// controle de "feito hoje" em botão redondo pequeno — mesma ação do DoneSwitch
-// (toggleHabit cobre build e weekly), só que pra caber numa célula estreita.
-function MiniDone({ h, ctx }) {
-  const done = h.doneDates.includes(ctx.today);
-  const blocked = habitStepsBlock(h, ctx.today);
-  return (
-    <button
-      onClick={() => ctx.toggleHabit(h.id)}
-      role="switch"
-      aria-checked={done}
-      aria-label={done ? "Feito hoje" : "Marcar feito hoje"}
-      title={done ? "Feito hoje" : blocked ? "Faltam microatividades" : "Marcar feito hoje"}
-      className={`w-9 h-9 rounded-full grid place-items-center border shrink-0 active:scale-95 transition ${
-        done
-          ? "bg-primary-container border-primary-container text-on-primary-container"
-          : blocked
-            ? "border-white/10 text-outline opacity-60"
-            : "border-white/15 text-outline hover:border-primary-container/50 hover:text-primary-container"
-      }`}
-    >
-      <MI name={blocked ? "lock" : done ? "check" : "radio_button_unchecked"} className="text-lg" />
-    </button>
-  );
-}
-
-// mesma ideia pro hábito de largar: recaiu/não recaiu hoje, versão compacta dos
-// botões do QuitCard (confirm e desfazer continuam vindo do ctx).
-function MiniQuit({ h, ctx }) {
-  const relapsedToday = h.doneDates.includes(ctx.today);
-  return relapsedToday ? (
-    <button
-      onClick={() => ctx.undoRelapse(h.id)}
-      title="Desfazer recaída de hoje"
-      aria-label="Desfazer recaída de hoje"
-      className="w-9 h-9 rounded-full grid place-items-center border border-error/40 bg-error/15 text-error shrink-0 active:scale-95 transition"
-    >
-      <MI name="undo" className="text-lg" />
-    </button>
-  ) : (
-    <button
-      onClick={() => ctx.logRelapse(h)}
-      title="Registrar recaída hoje"
-      aria-label="Registrar recaída hoje"
-      className="w-9 h-9 rounded-full grid place-items-center border border-white/15 text-outline hover:border-error/40 hover:text-error shrink-0 active:scale-95 transition"
-    >
-      <MI name="block" className="text-lg" />
-    </button>
-  );
-}
-
-// badge de tipo — a tabela mistura os 3 tipos numa lista só, então cada linha
-// precisa dizer o que é (diário/semanal/largar).
-function KindBadge({ kind }) {
-  const label = kind === "quit" ? "LARGAR" : kind === "weekly" ? "SEMANAL" : "DIÁRIO";
-  return <Caps className={`text-[9px] shrink-0 ${kind === "quit" ? "text-error" : "text-outline"}`}>{label}</Caps>;
-}
-
-// número/barra compacta por tipo — mesma matemática das telas cheias
-// (habitStreak/weekCount/cleanDays), só que formatada pra caber numa coluna.
-function RowMetric({ h, ctx }) {
-  const kind = h.kind || "build";
-  if (kind === "build") {
-    const streak = habitStreak(h);
-    return (
-      <div className="flex items-center gap-1 w-14 justify-end" title={`Sequência de ${streak} · recorde ${bestHabitStreak(h)}`}>
-        <MI name="local_fire_department" fill className={`text-base ${streak > 0 ? "flame-active" : "text-outline"}`} />
-        <span className={`tabular-nums font-label-caps text-[13px] ${streak > 0 ? "text-primary" : "text-outline"}`}>{streak}</span>
-      </div>
-    );
-  }
-  if (kind === "weekly") {
-    const target = h.weeklyTarget || 3;
-    const dir = h.direction || "min";
-    const count = weekCount(h);
-    const pct = Math.min(100, Math.round((count / Math.max(1, target)) * 100));
-    const over = dir === "max" && count > target;
-    const hit = dir === "min" && count >= target;
-    return (
-      <div className="w-20" title={`${count}/${target} essa semana`}>
-        <Caps className={`text-[10px] block text-right ${over ? "text-error" : hit ? "text-primary-container" : "text-outline"}`}>
-          {count}/{target}
-        </Caps>
-        <div className="w-full h-1 bg-surface-variant rounded-full overflow-hidden mt-0.5">
-          <div className={`h-full rounded-full ${over ? "bg-error" : "bg-primary-container"}`} style={{ width: `${pct}%` }} />
-        </div>
-      </div>
-    );
-  }
-  const clean = cleanDays(h);
-  return (
-    <div className="text-right w-14 shrink-0" title={`Recorde: ${bestCleanRun(h)} dias`}>
-      <span className="tabular-nums font-label-caps text-[15px] text-primary block leading-none">{clean}</span>
-      <Caps className="text-outline text-[9px]">LIMPO</Caps>
-    </div>
-  );
-}
-
-// uma linha da tabela. Clique expande numa <tr colSpan> com o card cheio
-// original dentro (bare, sem o container glass-card duplicado).
-function TableRow({ h, i, ctx }) {
-  const kind = h.kind || "build";
-  const expanded = !!ctx.expanded[h.id] || ctx.edits[h.id] !== undefined;
-  return (
-    <Fragment>
-      <tr onClick={() => ctx.toggleExpanded(h.id)} className="border-t border-white/5 hover:bg-white/[0.03] cursor-pointer transition">
-        <td className="py-2.5 pl-4 pr-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <MI
-              name={h.icon || HABIT_ICONS[i % HABIT_ICONS.length]}
-              className={`text-xl shrink-0 ${kind === "quit" ? "text-error" : "text-primary-container"}`}
-            />
-            <span className="truncate text-on-surface text-[13px]">{h.name}</span>
-          </div>
-        </td>
-        <td className="py-2.5 pr-3"><KindBadge kind={kind} /></td>
-        <td className="py-2.5 pr-3"><PriorityLabel h={h} /></td>
-        <td className="py-2.5 pr-3 text-[11px] text-outline whitespace-nowrap">
-          {kind === "build"
-            ? habitScheduleLabel(h) || "TODO DIA"
-            : kind === "weekly"
-              ? `${(h.direction || "min") === "min" ? "MÍN" : "MÁX"} ${h.weeklyTarget || 3}×/SEM`
-              : "—"}
-        </td>
-        <td className="py-2.5 pr-3">
-          <RowMetric h={h} ctx={ctx} />
-        </td>
-        <td className="py-2.5 pr-3 text-center" onClick={(e) => e.stopPropagation()}>
-          {kind === "quit" ? <MiniQuit h={h} ctx={ctx} /> : <MiniDone h={h} ctx={ctx} />}
-        </td>
-        <td className="py-2.5 pl-1 pr-4 text-right">
-          <MI name={expanded ? "expand_less" : "expand_more"} className="text-outline" />
-        </td>
-      </tr>
-      {expanded && (
-        <tr>
-          <td colSpan={7} className="p-2 bg-black/10">
-            {kind === "build" && <BuildCard h={h} i={i} ctx={ctx} bare />}
-            {kind === "weekly" && <WeeklyCard h={h} i={i} ctx={ctx} bare />}
-            {kind === "quit" && <QuitCard h={h} i={i} ctx={ctx} bare />}
-          </td>
-        </tr>
-      )}
-    </Fragment>
-  );
-}
-
-const TABLE_COLS = ["HÁBITO", "TIPO", "PRIORIDADE", "PROGRAMAÇÃO", "MÉTRICA", "HOJE", ""];
-
-function TableLayout({ groups, ctx }) {
-  return (
-    <div className="glass-card rounded-xl overflow-x-auto">
-      <table className="w-full text-left border-collapse min-w-[720px]">
-        <thead>
-          <tr className="border-b border-white/10">
-            {TABLE_COLS.map((label) => (
-              <th key={label} className="font-label-caps text-[10px] text-outline px-3 py-2 first:pl-4">
-                {label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {groups.map(({ key, title, icon, habits, accent }) => (
-            <Fragment key={key}>
-              {groups.length > 1 && (
-                <tr>
-                  <td colSpan={TABLE_COLS.length} className="pt-4 pb-1 pl-4">
-                    <Caps className={`text-[11px] flex items-center gap-1.5 ${accent}`}>
-                      <MI name={icon} className="text-sm" />
-                      {title}
-                    </Caps>
-                  </td>
-                </tr>
-              )}
-              {habits.map((h, i) => (
-                <TableRow key={h.id} h={h} i={i} ctx={ctx} />
-              ))}
-            </Fragment>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-// ============================================================================
-// 2/3. LINHA e SEMANA — um card horizontal por hábito. `heat` liga os 7 pontos.
-// ============================================================================
-
-// Ação do dia no tipo certo (marcar feito / registrar recaída).
-const MiniAction = ({ h, ctx }) => ((h.kind || "build") === "quit" ? <MiniQuit h={h} ctx={ctx} /> : <MiniDone h={h} ctx={ctx} />);
-
-// 7 pontinhos = últimos 7 dias. Build: aceso = feito, apagado = não-agendado.
-// Weekly: aceso = marcado no dia. Quit: aceso = recaída (aqui apagado é o bom).
-function WeekDots({ h, today }) {
-  const kind = h.kind || "build";
-  const days = Array.from({ length: 7 }, (_, idx) => shiftDate(today, idx - 6));
-  return (
-    <div className="flex items-center gap-1" title="Últimos 7 dias">
-      {days.map((d) => {
-        const marked = h.doneDates.includes(d);
-        let cls;
-        if (kind === "quit") cls = marked ? "bg-error" : "bg-primary-container/70";
-        else {
-          const scheduled = kind === "build" ? habitIsScheduled(h, d) : true;
-          cls = marked ? "bg-primary-container" : scheduled ? "bg-white/15" : "bg-white/5";
-        }
-        return (
-          <span
-            key={d}
-            className={`w-2.5 h-2.5 rounded-full shrink-0 ${cls} ${
-              d === today ? "ring-1 ring-offset-1 ring-offset-surface-container ring-primary" : ""
-            }`}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-function CompactRow({ h, i, ctx, heat = false }) {
-  const kind = h.kind || "build";
-  const expanded = !!ctx.expanded[h.id] || ctx.edits[h.id] !== undefined;
-  return (
-    <div className="glass-card rounded-xl overflow-hidden">
-      <div onClick={() => ctx.toggleExpanded(h.id)} className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/[0.03] transition">
-        <MI
-          name={h.icon || HABIT_ICONS[i % HABIT_ICONS.length]}
-          className={`text-2xl shrink-0 ${kind === "quit" ? "text-error" : "text-primary-container"}`}
-        />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-on-surface text-[14px] truncate">{h.name}</span>
-            <KindBadge kind={kind} />
-            <PriorityLabel h={h} />
-          </div>
-        </div>
-        {heat && (
-          <div onClick={(e) => e.stopPropagation()} className="shrink-0 hidden sm:flex">
-            <WeekDots h={h} today={ctx.today} />
-          </div>
-        )}
-        <div onClick={(e) => e.stopPropagation()} className="shrink-0">
-          <RowMetric h={h} ctx={ctx} />
-        </div>
-        <div onClick={(e) => e.stopPropagation()} className="shrink-0">
-          <MiniAction h={h} ctx={ctx} />
-        </div>
-        {/* O controle de verdade é este botão: teclado e leitor de tela chegam nele.
-            O clique na linha inteira fica como atalho de ponteiro — não dá pra
-            transformar a linha num <button> porque ela já contém botões dentro,
-            e interativo dentro de interativo é HTML inválido. */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            ctx.toggleExpanded(h.id);
-          }}
-          aria-expanded={expanded}
-          aria-label={expanded ? `Recolher ${h.name}` : `Detalhes de ${h.name}`}
-          className="shrink-0 text-outline hover:text-on-surface transition"
-        >
-          <MI name={expanded ? "expand_less" : "expand_more"} />
-        </button>
-      </div>
-      {expanded && (
-        <div className="border-t border-white/10">
-          <FullCard h={h} i={i} ctx={ctx} bare />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function GroupedRows({ groups, ctx, heat = false }) {
-  return (
-    <div className="space-y-8">
-      {groups.map(({ key, title, icon, habits, accent }) => (
-        <section key={key}>
-          {groups.length > 1 && (
-            <div className="flex items-center gap-2 mb-3">
-              <MI name={icon} className={accent} />
-              <h3 className="font-headline-md text-headline-md text-primary uppercase">{title}</h3>
-            </div>
-          )}
-          <div className="space-y-2">
-            {habits.map((h, i) => (
-              <CompactRow key={h.id} h={h} i={i} ctx={ctx} heat={heat} />
-            ))}
-          </div>
-        </section>
-      ))}
-    </div>
-  );
-}
-
-// ============================================================================
-// 4. HOJE — agrupa pelo ESTADO DO DIA, não pelo tipo. Na hora de agir o que
-// importa é "falta ou não falta"; se é diário ou semanal é detalhe de regra.
-// Vem com a conta do dia no topo, que é a única pergunta real dessa tela.
-// ============================================================================
-const TODAY_BUCKETS = [
-  { id: "due", title: "FALTA HOJE", icon: "pending_actions", accent: "text-primary" },
-  { id: "limit", title: "LIMITES DA SEMANA", icon: "arrow_downward", accent: "text-error" },
-  { id: "done", title: "EM DIA", icon: "check_circle", accent: "text-primary-container" },
-  { id: "quit", title: "LARGANDO — SEM RECAÍDA", icon: "shield", accent: "text-primary-container" },
-  { id: "relapsed", title: "RECAÍDA HOJE", icon: "warning", accent: "text-error" },
-  { id: "rest", title: "DESCANSO HOJE", icon: "bedtime", accent: "text-outline" },
-];
-
-function TodayLayout({ habits, ctx }) {
-  const byState = {};
-  for (const h of habits) (byState[dayState(h, ctx.today)] ||= []).push(h);
-  // a barra conta só o que dá pra fechar hoje: descanso e "largar" não entram,
-  // senão a meta do dia nunca chega a 100% e o número perde sentido
-  const actionable = (byState.due || []).length + (byState.done || []).length;
-  const done = (byState.done || []).length;
-  const pct = actionable ? Math.round((done / actionable) * 100) : 100;
-
-  return (
-    <div className="space-y-6">
-      <section className="glass-card p-5 rounded-xl">
-        <div className="flex items-end justify-between gap-3 mb-2">
-          <div>
-            <Caps className="text-outline text-[10px] block">EM DIA</Caps>
-            <span className="font-display-timer text-[40px] leading-none text-primary tabular-nums">
-              {done}
-              <span className="text-outline text-[22px]">/{actionable}</span>
-            </span>
-          </div>
-          <Caps className={`text-[11px] ${pct === 100 ? "text-primary-container" : "text-outline"}`}>
-            {actionable === 0 ? "NADA AGENDADO" : pct === 100 ? "DIA LIMPO ✓" : `${pct}%`}
-          </Caps>
-        </div>
-        <div className="w-full h-2 bg-surface-variant rounded-full overflow-hidden">
-          <div className="h-full rounded-full bg-primary-container transition-all" style={{ width: `${pct}%` }} />
-        </div>
-      </section>
-
-      {TODAY_BUCKETS.map((b) => {
-        const list = byState[b.id] || [];
-        if (!list.length) return null;
-        return (
-          <section key={b.id}>
-            <div className="flex items-center gap-2 mb-2">
-              <MI name={b.icon} className={b.accent} />
-              <Caps className={`text-[11px] ${b.accent}`}>
-                {b.title} · {list.length}
-              </Caps>
-            </div>
-            <div className="space-y-2">
-              {list.map((h, i) => (
-                <CompactRow key={h.id} h={h} i={i} ctx={ctx} />
-              ))}
-            </div>
-          </section>
-        );
-      })}
-    </div>
-  );
-}
-
-// ============================================================================
-// 5. MÍNIMO — caixa e nome, nada mais. Sequência só aparece se existir, e como
-// dígito solto. Aposta oposta às outras: o que ajuda a marcar é não ter mais
-// nada na tela pra ler. Clicar no nome ainda abre o card cheio.
-// ============================================================================
-function MinimalLayout({ habits, ctx }) {
-  return (
-    <div className="glass-card rounded-xl divide-y divide-white/5">
-      {habits.map((h, i) => {
-        const kind = h.kind || "build";
-        const st = dayState(h, ctx.today);
-        const expanded = !!ctx.expanded[h.id] || ctx.edits[h.id] !== undefined;
-        const streak = kind === "quit" ? cleanDays(h) : kind === "build" ? habitStreak(h) : weekCount(h);
-        const muted = st === "rest" || st === "limit"; // nenhum dos dois é tarefa de hoje
-        return (
-          <div key={h.id}>
-            <div className="flex items-center gap-3 px-4 py-2">
-              <div className="shrink-0">
-                <MiniAction h={h} ctx={ctx} />
-              </div>
-              <button
-                onClick={() => ctx.toggleExpanded(h.id)}
-                aria-expanded={expanded}
-                aria-label={expanded ? `Recolher ${h.name}` : `Detalhes de ${h.name}`}
-                className="flex-1 min-w-0 text-left"
-              >
-                <span
-                  className={`text-[14px] truncate block ${
-                    st === "done" ? "text-on-surface-variant line-through" : muted ? "text-outline" : "text-on-surface"
-                  }`}
-                >
-                  {h.name}
-                </span>
-              </button>
-              {streak > 0 && (
-                <span className={`tabular-nums font-label-caps text-[12px] shrink-0 ${kind === "quit" ? "text-primary" : "text-primary-container"}`}>
-                  {streak}
-                </span>
-              )}
-              <MI name={expanded ? "expand_less" : "expand_more"} className="text-outline/50 text-base shrink-0" />
-            </div>
-            {expanded && (
-              <div className="border-t border-white/10">
-                <FullCard h={h} i={i} ctx={ctx} bare />
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ============================================================================
-// 6. ANÉIS — medidor radial por hábito, em grade densa. O anel mede o que faz
-// sentido pra cada tipo: diário anda até o próximo marco de sequência, semanal
-// até o alvo da semana, largar até o próximo marco de dias limpo.
-// ============================================================================
-function Ring({ pct, size = 76, width = 6, danger = false, children }) {
-  const r = (size - width) / 2;
-  const c = 2 * Math.PI * r;
-  return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={width} className="stroke-surface-variant" />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          strokeWidth={width}
-          strokeLinecap="round"
-          className={danger ? "stroke-error" : "stroke-primary-container"}
-          strokeDasharray={c}
-          strokeDashoffset={c * (1 - Math.min(1, Math.max(0, pct)))}
-          style={{ transition: "stroke-dashoffset .3s ease-out" }}
-        />
-      </svg>
-      <div className="absolute inset-0 grid place-items-center leading-none">{children}</div>
-    </div>
-  );
-}
-
-// Cada tipo tem uma régua diferente; devolver o alvo junto é o que deixa o anel
-// significar algo (anel sem alvo é enfeite).
-function ringOf(h) {
-  const kind = h.kind || "build";
-  if (kind === "weekly") {
-    const target = h.weeklyTarget || 3;
-    const count = weekCount(h);
-    const over = (h.direction || "min") === "max" && count > target;
-    // trava em 1 aqui, não só no desenho: limite estourado (5 de 3) daria pct 1.67,
-    // e quem ler esse número fora do anel leria progresso de 167%
-    return { value: count, pct: Math.min(1, count / Math.max(1, target)), sub: `/${target} NA SEMANA`, danger: over };
-  }
-  if (kind === "quit") {
-    const clean = cleanDays(h);
-    const next = QUIT_MILESTONES.find((m) => m.days > clean);
-    return { value: clean, pct: next ? clean / next.days : 1, sub: next ? `/${next.days}D LIMPO` : "DIAS LIMPO", danger: false };
-  }
-  const streak = habitStreak(h);
-  const next = streakNext(streak);
-  return { value: streak, pct: next ? streak / next : 1, sub: next ? `/${next} DIAS` : "DIAS", danger: false };
-}
-
-function RingsLayout({ habits, ctx }) {
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-gutter">
-      {habits.map((h, i) => {
-        const expanded = !!ctx.expanded[h.id] || ctx.edits[h.id] !== undefined;
-        const r = ringOf(h);
-        const st = dayState(h, ctx.today);
-        return (
-          <Fragment key={h.id}>
-            <div
-              className={`glass-card rounded-xl p-4 flex flex-col items-center gap-2 transition ${
-                st === "done" ? "border border-primary-container/40" : ""
-              }`}
-            >
-              {/* anel+nome são UM botão e a ação do dia fica FORA dele: botão dentro
-                  de botão é HTML inválido, então dividir em irmãos é o que mantém o
-                  card inteiro alcançável por teclado */}
-              <button
-                onClick={() => ctx.toggleExpanded(h.id)}
-                aria-expanded={expanded}
-                aria-label={expanded ? `Recolher ${h.name}` : `Detalhes de ${h.name}`}
-                className="flex flex-col items-center gap-2 w-full min-w-0 rounded-lg hover:bg-white/[0.03] transition"
-              >
-                <Ring pct={r.pct} danger={r.danger}>
-                  <span className="font-display-timer text-[24px] tabular-nums text-primary">{r.value}</span>
-                </Ring>
-                <Caps className="text-outline text-[9px]">{r.sub}</Caps>
-                <div className="flex items-center gap-1.5 min-w-0 w-full justify-center">
-                  <MI
-                    name={h.icon || HABIT_ICONS[i % HABIT_ICONS.length]}
-                    className={`text-base shrink-0 ${(h.kind || "build") === "quit" ? "text-error" : "text-primary-container"}`}
-                  />
-                  <span className="text-[13px] text-on-surface truncate">{h.name}</span>
-                </div>
-              </button>
-              <MiniAction h={h} ctx={ctx} />
-            </div>
-            {/* card cheio ocupa a linha inteira da grade: expandir dentro do
-                quadradinho apertaria tudo numa coluna */}
-            {expanded && (
-              <div className="col-span-full glass-card rounded-xl">
-                <FullCard h={h} i={i} ctx={ctx} bare />
-              </div>
-            )}
-          </Fragment>
-        );
-      })}
-    </div>
-  );
-}
-
-// ============================================================================
-// 7. PAINEL — números primeiro, lista depois, ordenada por sequência. Pra quem
-// abre a tela pra saber COMO ESTÁ, não pra marcar.
-// ============================================================================
-function PanelLayout({ habits, ctx }) {
-  const today = ctx.today;
-  const actionable = habits.filter((h) => ["due", "done"].includes(dayState(h, today)));
-  const done = actionable.filter((h) => dayState(h, today) === "done").length;
-  const atRisk = habits.filter((h) => dayState(h, today) === "due").length;
-  const builds = habits.filter((h) => (h.kind || "build") === "build");
-  const topStreak = Math.max(0, ...builds.map(habitStreak));
-  const record = Math.max(0, ...builds.map(bestHabitStreak));
-
-  // ordena por sequência desc — quem está indo bem sobe, e quem zerou aparece
-  // no fim, que é exatamente onde bate o olho de quem foi ver como está
-  const ranked = [...habits].sort((a, b) => {
-    const s = (h) => ((h.kind || "build") === "quit" ? cleanDays(h) : (h.kind || "build") === "build" ? habitStreak(h) : weekCount(h));
-    return s(b) - s(a);
-  });
-
-  return (
-    <div className="space-y-gutter">
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-card-gap">
-        <StatTile label="EM DIA" value={`${done}/${actionable.length}`} />
-        <StatTile label="FALTA HOJE" value={String(atRisk)}>
-          <MI name={atRisk ? "pending_actions" : "check_circle"} className={atRisk ? "text-error" : "text-primary-container"} />
-        </StatTile>
-        <StatTile label="MAIOR SEQUÊNCIA" value={String(topStreak)}>
-          <MI name="local_fire_department" fill className={topStreak > 0 ? "flame-active" : "text-outline"} />
-        </StatTile>
-        <StatTile label="RECORDE" value={String(record)} />
-      </section>
-
-      <section>
-        <Caps className="text-outline text-[10px] mb-2 block">POR SEQUÊNCIA</Caps>
-        <div className="space-y-2">
-          {ranked.map((h, i) => (
-            <CompactRow key={h.id} h={h} i={i} ctx={ctx} heat />
-          ))}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-// ============================================================================
-// 8. MÊS — matriz hábito × dia. É o formato clássico de habit tracker, e o
-// único que mostra o BURACO: dia agendado e não feito fica marcado em vermelho,
-// não some. Mês passado é só leitura.
-//
-// Só a célula de HOJE é clicável de propósito. Marcar dia passado é decisão de
-// produto (o XP daquele dia já foi contabilizado, e a sequência recalcularia
-// pra trás) — não é coisa pra um preview de layout inventar de sozinho.
-// ============================================================================
 const pad2 = (n) => String(n).padStart(2, "0");
+
+// Dia em que o hábito passou a existir, em data LOCAL. `createdAt` é ISO em UTC:
+// cortar o prefixo com slice erraria o dia de quem cria hábito de madrugada.
+const createdOn = (h) => {
+  if (!h.createdAt) return null; // hábito legado sem data: não restringe nada
+  const d = new Date(h.createdAt);
+  return Number.isNaN(d.getTime()) ? null : `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
+
+// Veredito de um dia. Devolve a classe de fundo ou null pra neutro.
+//
+// Cada tipo cobra de um jeito diferente, e é isso que decide a cor:
+//   diário  — só falha em dia AGENDADO que já passou (folga não é falha)
+//   semanal — a meta é da semana, então nenhum dia isolado é falha; só marcação
+//             pinta de azul
+//   largar  — todo dia sem recaída é dia cumprido; recaída pinta de vermelho
+function dayVerdict(h, date, today) {
+  const kind = h.kind || "build";
+  const marked = h.doneDates.includes(date);
+  if (date > today) return null; // futuro não tem veredito
+  // Antes de existir, o hábito não cobra nada. Sem isto, criar um hábito hoje
+  // pintaria todo o mês passado de vermelho — falha que nunca houve.
+  const born = createdOn(h);
+  if (born && date < born) return null;
+  if (kind === "quit") return marked ? "bg-error" : "bg-primary-container";
+  if (marked) return "bg-primary-container";
+  if (kind === "weekly") return null;
+  if (!habitIsScheduled(h, date)) return null; // folga
+  return date === today ? null : "bg-error"; // hoje ainda dá tempo
+}
 
 function MonthLayout({ habits, ctx }) {
   const [off, setOff] = useState(0);
@@ -1519,6 +901,7 @@ function MonthLayout({ habits, ctx }) {
   const days = Array.from({ length: dim }, (_, i) => i + 1);
   const dstr = (d) => `${y}-${pad2(m)}-${pad2(d)}`;
   const label = base.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  const opened = habits.filter((h) => ctx.expanded[h.id] || ctx.edits[h.id] !== undefined);
 
   return (
     <div className="space-y-3">
@@ -1543,7 +926,7 @@ function MonthLayout({ habits, ctx }) {
             <tr>
               <th className="sticky left-0 z-10 bg-surface-container px-3 py-2 text-left font-label-caps text-[11px] text-outline">HÁBITO</th>
               {days.map((d) => (
-                <th key={d} className={`px-[3px] pb-1 pt-2 font-label-caps text-[11px] tabular-nums ${dstr(d) === today ? "text-primary" : "text-outline"}`}>
+                <th key={d} className={`px-[3px] pb-1 pt-2 font-label-caps text-[11px] tabular-nums ${dstr(d) === today ? "text-on-surface" : "text-outline"}`}>
                   {d}
                 </th>
               ))}
@@ -1573,26 +956,25 @@ function MonthLayout({ habits, ctx }) {
                     const isToday = date === today;
                     const future = date > today;
                     const marked = h.doneDates.includes(date);
-                    const scheduled = kind === "build" ? habitIsScheduled(h, date) : true;
-                    let cls;
-                    if (future) cls = "bg-white/[0.03]";
-                    else if (kind === "quit") cls = marked ? "bg-error" : "bg-primary-container/40";
-                    else if (marked) cls = "bg-primary-container";
-                    else if (!scheduled) cls = "bg-white/5";
-                    else cls = "bg-error/25"; // agendado e não feito: o buraco tem que aparecer
+                    const verdict = dayVerdict(h, date, today);
                     const act = () => {
                       if (!isToday) return;
                       if (kind !== "quit") return ctx.toggleHabit(h.id);
                       return marked ? ctx.undoRelapse(h.id) : ctx.logRelapse(h);
                     };
+                    const what = verdict === "bg-error" ? (kind === "quit" ? "recaída" : "falhou") : verdict ? "cumpriu" : future ? "" : "sem cobrança";
                     return (
                       <td key={d} className="px-[3px] py-1">
                         <button
                           onClick={act}
                           disabled={!isToday}
-                          aria-label={`${h.name} em ${d}/${m}`}
-                          title={`${d}/${pad2(m)}${isToday ? " — hoje, clique pra marcar" : future ? "" : marked ? " — marcado" : scheduled ? " — não feito" : " — não agendado"}`}
-                          className={`block w-7 h-7 rounded-md ${cls} ${isToday ? "ring-2 ring-primary" : ""} ${isToday ? "cursor-pointer" : "cursor-default"}`}
+                          aria-label={`${h.name} em ${d}/${pad2(m)}${what ? `: ${what}` : ""}`}
+                          title={`${d}/${pad2(m)}${isToday ? " — hoje, clique pra marcar" : what ? ` — ${what}` : ""}`}
+                          // anel neutro (não colorido) pra marcar HOJE: um terceiro tom
+                          // aqui competiria com as duas cores que carregam o significado
+                          className={`block w-7 h-7 rounded-md ${verdict || (future ? "bg-surface-variant/30" : "bg-surface-variant")} ${
+                            isToday ? "ring-2 ring-on-surface" : ""
+                          } ${isToday ? "cursor-pointer" : "cursor-default"}`}
                         />
                       </td>
                     );
@@ -1604,114 +986,27 @@ function MonthLayout({ habits, ctx }) {
         </table>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
         {[
-          { c: "bg-primary-container", t: "FEITO" },
-          { c: "bg-error/25", t: "AGENDADO E NÃO FEITO" },
-          { c: "bg-white/5", t: "NÃO AGENDADO" },
-          { c: "bg-error", t: "RECAÍDA" },
+          { c: "bg-primary-container", t: "CUMPRIU" },
+          { c: "bg-error", t: "FALHOU / RECAÍDA" },
+          { c: "bg-surface-variant", t: "SEM COBRANÇA (FOLGA, META SEMANAL)" },
         ].map((l) => (
           <span key={l.t} className="flex items-center gap-1.5">
             <span className={`w-4 h-4 rounded-md ${l.c}`} />
             <Caps className="text-outline text-[10px]">{l.t}</Caps>
           </span>
         ))}
+        <span className="flex items-center gap-1.5">
+          <span className="w-4 h-4 rounded-md bg-surface-variant ring-2 ring-on-surface" />
+          <Caps className="text-outline text-[10px]">HOJE — CLIQUE PRA MARCAR</Caps>
+        </span>
       </div>
 
-      {/* o card cheio de quem foi expandido pelo nome, abaixo da matriz */}
-      {habits
-        .filter((h) => ctx.expanded[h.id] || ctx.edits[h.id] !== undefined)
-        .map((h) => (
-          <div key={h.id} className="glass-card rounded-xl">
-            <FullCard h={h} i={habits.indexOf(h)} ctx={ctx} bare />
-          </div>
-        ))}
-    </div>
-  );
-}
-
-// ============================================================================
-// 9. FOCO — um hábito por vez, card cheio, sem vizinho competindo. Serve pra
-// revisar/ajustar um por um; a tira de cima é o mapa de onde você está.
-// ============================================================================
-function FocusLayout({ habits, ctx }) {
-  const [cur, setCur] = useState(0);
-  // clamp na renderização: excluir um hábito encurta a lista e o índice velho
-  // apontaria pra fora
-  const idx = Math.min(cur, habits.length - 1);
-  const h = habits[idx];
-  if (!h) return null;
-  // clamp antes do módulo pra índice velho de lista encurtada não vazar; o `+ len`
-  // é o que faz voltar do primeiro pro último em vez de dar negativo
-  const go = (d) => setCur((c) => (habits.length ? (Math.min(Math.max(0, c), habits.length - 1) + d + habits.length) % habits.length : 0));
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <button onClick={() => go(-1)} aria-label="Anterior" className="w-9 h-9 shrink-0 rounded-full bg-surface-container-high grid place-items-center active:scale-95 transition">
-          <MI name="chevron_left" />
-        </button>
-        <div className="flex-1 flex items-center gap-1 overflow-x-auto ff-scroll py-1">
-          {habits.map((x, i) => {
-            const on = i === idx;
-            const st = dayState(x, ctx.today);
-            return (
-              <button
-                key={x.id}
-                onClick={() => setCur(i)}
-                aria-label={x.name}
-                title={x.name}
-                aria-current={on}
-                className={`shrink-0 w-9 h-9 rounded-lg grid place-items-center border transition ${
-                  on
-                    ? "border-primary bg-primary/15 text-primary"
-                    : st === "done"
-                      ? "border-primary-container/40 text-primary-container/70"
-                      : "border-white/10 text-outline hover:border-white/25"
-                }`}
-              >
-                <MI name={x.icon || HABIT_ICONS[i % HABIT_ICONS.length]} className="text-lg" />
-              </button>
-            );
-          })}
-        </div>
-        <button onClick={() => go(1)} aria-label="Próximo" className="w-9 h-9 shrink-0 rounded-full bg-surface-container-high grid place-items-center active:scale-95 transition">
-          <MI name="chevron_right" />
-        </button>
-      </div>
-
-      <Caps className="text-outline text-[10px] block text-center">
-        {idx + 1} DE {habits.length}
-      </Caps>
-
-      <div className="max-w-xl mx-auto">
-        <FullCard h={h} i={idx} ctx={ctx} />
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// 10. QUADRO — colunas por tipo, cards cheios, rolagem horizontal. Coluna vazia
-// fica no lugar (com aviso) pra estrutura do quadro não mudar de forma quando
-// falta um tipo.
-// ============================================================================
-function KanbanLayout({ groups, ctx }) {
-  return (
-    <div className="flex gap-4 overflow-x-auto ff-scroll pb-2 -mx-1 px-1">
-      {groups.map(({ key, title, icon, habits, accent }) => (
-        <div key={key} className="w-[320px] shrink-0">
-          <div className="flex items-center gap-2 mb-3 px-1">
-            <MI name={icon} className={accent} />
-            <h3 className="font-headline-md text-headline-md text-primary uppercase">{title}</h3>
-            <Caps className="text-outline text-[10px] ml-auto">{habits.length}</Caps>
-          </div>
-          <div className="space-y-3">
-            {habits.length === 0 && <div className="glass-card rounded-xl p-4 text-center text-outline text-[11px]">Nenhum hábito aqui</div>}
-            {habits.map((h, i) => (
-              <FullCard key={h.id} h={h} i={i} ctx={ctx} />
-            ))}
-          </div>
+      {/* card cheio de quem foi aberto pelo nome */}
+      {opened.map((h) => (
+        <div key={h.id} className="glass-card rounded-xl">
+          <FullCard h={h} i={habits.indexOf(h)} ctx={ctx} bare />
         </div>
       ))}
     </div>
@@ -1733,19 +1028,9 @@ export default function HabitosPage() {
   const [pickingIcon, setPickingIcon] = useState(null); // id do hábito com picker aberto
   const [stepDrafts, setStepDrafts] = useState({}); // { [id]: texto do passo sendo digitado }
   const [expanded, setExpanded] = useState({}); // { [id]: bool } — item expandido mostrando o card cheio
-  const [layout, setLayout] = useState("table"); // preview: local, não vai pro state salvo
   const today = getDateStr(0);
 
   const toggleExpanded = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
-
-  // lembra o layout entre reloads só durante o teste — não é preferência de produto
-  useEffect(() => {
-    const saved = typeof window !== "undefined" && localStorage.getItem("habitLayoutPreview");
-    if (saved && LAYOUTS.some((l) => l.id === saved)) setLayout(saved);
-  }, []);
-  useEffect(() => {
-    if (typeof window !== "undefined") localStorage.setItem("habitLayoutPreview", layout);
-  }, [layout]);
 
   // ===== recompensas pendentes: marcos de dias limpos (quit) + bônus de semana na meta (weekly) =====
   useEffect(() => {
@@ -2008,31 +1293,6 @@ export default function HabitosPage() {
     setNewWeekdays,
     addHabit,
   };
-  const buildHabits = state.habits.filter((h) => (h.kind || "build") === "build");
-  const weeklyHabits = state.habits.filter((h) => (h.kind || "build") === "weekly");
-  const quitHabits = state.habits.filter((h) => (h.kind || "build") === "quit");
-  const allGroups = [
-    { key: "build", title: "Construindo", icon: "trending_up", accent: "text-primary-container", habits: buildHabits },
-    { key: "weekly", title: "Metas da Semana", icon: "event_repeat", accent: "text-primary-container", habits: weeklyHabits },
-    { key: "quit", title: "Largando", icon: "block", accent: "text-error", habits: quitHabits },
-  ];
-  // quadro mostra as 3 colunas sempre; os outros esconderiam um título vazio
-  const groups = allGroups.filter((g) => g.habits.length > 0);
-  const flat = state.habits;
-
-  const body = {
-    table: () => <TableLayout groups={groups} ctx={ctx} />,
-    row: () => <GroupedRows groups={groups} ctx={ctx} />,
-    week: () => <GroupedRows groups={groups} ctx={ctx} heat />,
-    today: () => <TodayLayout habits={flat} ctx={ctx} />,
-    minimal: () => <MinimalLayout habits={flat} ctx={ctx} />,
-    rings: () => <RingsLayout habits={flat} ctx={ctx} />,
-    panel: () => <PanelLayout habits={flat} ctx={ctx} />,
-    month: () => <MonthLayout habits={flat} ctx={ctx} />,
-    focus: () => <FocusLayout habits={flat} ctx={ctx} />,
-    kanban: () => <KanbanLayout groups={allGroups} ctx={ctx} />,
-  };
-
   return (
     <>
       <PageHeader title="HÁBITOS" subtitle="Construa os bons, largue os ruins. Prioridade alta vale mais XP. Hábito diário não feito tira metade." />
@@ -2042,13 +1302,10 @@ export default function HabitosPage() {
         <HabitForm f={formProps} />
       </div>
 
-      {/* ---- preview de layout (temporário — some quando escolher um) ---- */}
-      <LayoutSwitcher value={layout} onChange={setLayout} />
-
       {state.habits.length === 0 ? (
         <div className="glass-card p-8 rounded-xl text-center text-on-surface-variant">Nenhum hábito cadastrado ainda.</div>
       ) : (
-        (body[layout] || body.table)()
+        <MonthLayout habits={state.habits} ctx={ctx} />
       )}
     </>
   );
