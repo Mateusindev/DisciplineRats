@@ -1084,7 +1084,7 @@ function MonthLayout({ habits, ctx }) {
                           title={`${d}/${pad2(m)}${isToday ? " — hoje, clique pra marcar" : what ? ` — ${what}` : ""}`}
                           // anel neutro (não colorido) pra marcar HOJE: um terceiro tom
                           // aqui competiria com as duas cores que carregam o significado
-                          className={`block w-7 h-7 rounded-md ${verdict || (future ? "bg-surface-variant/30" : "bg-surface-variant")} ${
+                          className={`block w-[21px] h-[21px] rounded-full ${verdict || (future ? "bg-surface-variant/30" : "bg-surface-variant")} ${
                             isToday ? "ring-2 ring-on-surface" : ""
                           } ${isToday ? "cursor-pointer" : "cursor-default"}`}
                         />
@@ -1105,12 +1105,12 @@ function MonthLayout({ habits, ctx }) {
           { c: "bg-surface-variant", t: "SEM COBRANÇA (FOLGA, META SEMANAL)" },
         ].map((l) => (
           <span key={l.t} className="flex items-center gap-1.5">
-            <span className={`w-4 h-4 rounded-md ${l.c}`} />
+            <span className={`w-4 h-4 rounded-full ${l.c}`} />
             <Caps className="text-outline text-[10px]">{l.t}</Caps>
           </span>
         ))}
         <span className="flex items-center gap-1.5">
-          <span className="w-4 h-4 rounded-md bg-surface-variant ring-2 ring-on-surface" />
+          <span className="w-4 h-4 rounded-full bg-surface-variant ring-2 ring-on-surface" />
           <Caps className="text-outline text-[10px]">HOJE — CLIQUE PRA MARCAR</Caps>
         </span>
       </div>
