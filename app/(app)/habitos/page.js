@@ -1084,7 +1084,7 @@ function MonthLayout({ habits, ctx }) {
                           title={`${d}/${pad2(m)}${isToday ? " — hoje, clique pra marcar" : what ? ` — ${what}` : ""}`}
                           // anel neutro (não colorido) pra marcar HOJE: um terceiro tom
                           // aqui competiria com as duas cores que carregam o significado
-                          className={`block w-[21px] h-[21px] rounded-full ${verdict || (future ? "bg-surface-variant/30" : "bg-surface-variant")} ${
+                          className={`block w-5 h-5 rounded-full ${verdict || (future ? "bg-surface-variant/30" : "bg-surface-variant")} ${
                             isToday ? "ring-2 ring-on-surface" : ""
                           } ${isToday ? "cursor-pointer" : "cursor-default"}`}
                         />
