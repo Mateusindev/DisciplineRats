@@ -340,9 +340,9 @@ function CardHeader({ h, i, ctx }) {
         >
           <MI name={h.icon || HABIT_ICONS[i % HABIT_ICONS.length]} className="text-3xl" />
         </button>
-        {picking && <div className="fixed inset-0 z-20" onClick={() => setPickingIcon(null)} />}
+        {picking && <div className="fixed inset-0 z-[160]" onClick={() => setPickingIcon(null)} />}
         {picking && (
-          <div className="absolute left-4 top-20 z-30 bg-surface-container-highest rounded-xl border border-white/10 shadow-2xl shadow-black/60 p-3 grid grid-cols-6 gap-1 w-64 animate-[fadeIn_.1s_ease-out]">
+          <div className="absolute left-4 top-20 z-[170] bg-surface-container-highest rounded-xl border border-white/10 shadow-2xl shadow-black/60 p-3 grid grid-cols-6 gap-1 w-64 animate-[fadeIn_.1s_ease-out]">
             {HABIT_ICONS.map((ic) => (
               <button
                 key={ic}
@@ -619,7 +619,8 @@ function StepChecklist({ h, ctx }) {
                 className="w-full flex items-center gap-2 py-1 text-left group"
               >
                 <MI
-                  name={on ? "check_box" : "check_box_outline_blank"}
+                  name={on ? "check_circle" : "radio_button_unchecked"}
+                  fill={on}
                   className={`text-lg shrink-0 ${on ? "text-primary-container" : "text-outline group-hover:text-on-surface-variant"}`}
                 />
                 <span className={`text-[12px] leading-snug ${on ? "line-through text-on-surface-variant" : "text-on-surface"}`}>{st.text}</span>
@@ -928,6 +929,87 @@ function StepSegments({ h, ctx }) {
   );
 }
 
+// Nome do hábito dentro de uma moldura tracejada de input. É o que anuncia o
+// clique: nome solto não parece botão, e o tracejado empresta a linguagem que
+// todo mundo já reconhece de campo editável. Não depende de hover — no celular
+// hover não existe, então a moldura está sempre lá; o hover só reforça.
+//
+// Aberto, a moldura fecha em linha sólida com a cor do accent: vários cards podem
+// estar abertos abaixo da matriz ao mesmo tempo, e isso diz qual linha é qual.
+function HabitName({ h, i, ctx }) {
+  const kind = h.kind || "build";
+  const open = ctx.openId === h.id;
+  return (
+    <button
+      onClick={() => ctx.toggleOpen(h.id)}
+      // haspopup=dialog, não aria-expanded: o card não abre mais embutido na
+      // linha, abre em janela — e anunciar "expandido" mandaria o leitor de tela
+      // procurar conteúdo aqui dentro, que não existe
+      aria-haspopup="dialog"
+      aria-label={`Abrir e editar ${h.name}`}
+      className={`flex items-center gap-1.5 min-w-0 text-left rounded-md border px-2 py-1 transition ${
+        open
+          ? "border-solid border-primary-container/60 bg-primary-container/5"
+          : "border-dashed border-outline/50 hover:border-primary-container hover:bg-primary-container/5"
+      }`}
+    >
+      <MI
+        name={h.icon || HABIT_ICONS[i % HABIT_ICONS.length]}
+        className={`text-xl shrink-0 ${kind === "quit" ? "text-error" : "text-primary-container"}`}
+      />
+      <span className="truncate text-[14px] text-on-surface">{h.name}</span>
+    </button>
+  );
+}
+
+// Card do hábito numa janela central. Antes ele abria empilhado ABAIXO da matriz:
+// empurrava a legenda pra fora da tela, e com vários abertos ao mesmo tempo não
+// dava pra saber qual card era de qual linha. Modal resolve os dois — um por vez,
+// no meio da tela.
+//
+// Fechar no meio de uma edição NÃO descarta o texto: o rascunho vive em `edits`,
+// que sobrevive ao fechamento, então reabrir retoma de onde parou. Perder o que
+// foi digitado por um clique fora seria pior do que a janela ficar por perto.
+function HabitModal({ h, i, ctx, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div
+      className="fixed inset-0 z-[150] overflow-y-auto ff-scroll bg-black/60 animate-[fadeIn_.1s_ease-out]"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Hábito ${h.name}`}
+    >
+      {/* min-h-full + items-center: centraliza quando cabe e deixa rolar (sem
+          cortar o topo) quando o card é mais alto que a tela */}
+      <div className="flex min-h-full items-center justify-center p-4">
+        <div className="w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="flex justify-end mb-2">
+            <button
+              onClick={onClose}
+              aria-label="Fechar"
+              className="w-9 h-9 grid place-items-center rounded-full bg-surface-container-high text-on-surface-variant hover:text-on-surface active:scale-95 transition"
+            >
+              <MI name="close" />
+            </button>
+          </div>
+          {/* Fundo opaco por baixo do card. No tema escuro .glass-card já é sólido,
+              mas no claro o override troca o fundo por 2% de preto — vidro — e a
+              matriz aparecia atrás da janela. O card mantém seu próprio véu por
+              cima disto, então no escuro nada muda. */}
+          <div className="rounded-xl bg-surface-container-lowest shadow-2xl shadow-black/40">
+            <FullCard h={h} i={i} ctx={ctx} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MonthLayout({ habits, ctx }) {
   const [off, setOff] = useState(0);
   const today = ctx.today;
@@ -938,7 +1020,7 @@ function MonthLayout({ habits, ctx }) {
   const days = Array.from({ length: dim }, (_, i) => i + 1);
   const dstr = (d) => `${y}-${pad2(m)}-${pad2(d)}`;
   const label = base.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-  const opened = habits.filter((h) => ctx.expanded[h.id] || ctx.edits[h.id] !== undefined);
+  const openHabit = habits.find((h) => h.id === ctx.openId) || null;
 
   return (
     <div className="space-y-3">
@@ -977,18 +1059,7 @@ function MonthLayout({ habits, ctx }) {
                 <tr key={h.id} className="border-t border-white/5">
                   <td className="sticky left-0 z-10 bg-surface-container px-3 py-1 max-w-[260px]">
                     <div className="flex items-center gap-2 min-w-0">
-                      <button
-                        onClick={() => ctx.toggleExpanded(h.id)}
-                        aria-expanded={!!ctx.expanded[h.id]}
-                        aria-label={`Detalhes de ${h.name}`}
-                        className="flex items-center gap-1.5 min-w-0 text-left"
-                      >
-                        <MI
-                          name={h.icon || HABIT_ICONS[i % HABIT_ICONS.length]}
-                          className={`text-xl shrink-0 ${kind === "quit" ? "text-error" : "text-primary-container"}`}
-                        />
-                        <span className="truncate text-[14px] text-on-surface">{h.name}</span>
-                      </button>
+                      <HabitName h={h} i={i} ctx={ctx} />
                       {hasSteps && <StepSegments h={h} ctx={ctx} />}
                     </div>
                   </td>
@@ -1044,12 +1115,7 @@ function MonthLayout({ habits, ctx }) {
         </span>
       </div>
 
-      {/* card cheio de quem foi aberto pelo nome */}
-      {opened.map((h) => (
-        <div key={h.id} className="glass-card rounded-xl">
-          <FullCard h={h} i={habits.indexOf(h)} ctx={ctx} bare />
-        </div>
-      ))}
+      {openHabit && <HabitModal h={openHabit} i={habits.indexOf(openHabit)} ctx={ctx} onClose={ctx.closeOpen} />}
     </div>
   );
 }
@@ -1068,10 +1134,11 @@ export default function HabitosPage() {
   const [editDetails, setEditDetails] = useState({}); // { [id]: detalhe em edição }
   const [pickingIcon, setPickingIcon] = useState(null); // id do hábito com picker aberto
   const [stepDrafts, setStepDrafts] = useState({}); // { [id]: texto do passo sendo digitado }
-  const [expanded, setExpanded] = useState({}); // { [id]: bool } — item expandido mostrando o card cheio
+  const [openId, setOpenId] = useState(null); // hábito com o card aberto em modal (um por vez)
   const today = getDateStr(0);
 
-  const toggleExpanded = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
+  const toggleOpen = (id) => setOpenId((cur) => (cur === id ? null : id));
+  const closeOpen = () => setOpenId(null);
 
   // ===== recompensas pendentes: marcos de dias limpos (quit) + bônus de semana na meta (weekly) =====
   useEffect(() => {
@@ -1312,8 +1379,9 @@ export default function HabitosPage() {
     removeStep,
     moveStep,
     toggleStep,
-    expanded,
-    toggleExpanded,
+    openId,
+    toggleOpen,
+    closeOpen,
   };
 
   // props do form de criação num objeto só
