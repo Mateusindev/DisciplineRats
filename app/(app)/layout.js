@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { AppProvider, useApp } from "./AppContext";
 import { MI, Caps } from "@/components/ui";
 import { HelpButton } from "@/components/help";
+import GatoDaTela from "@/components/GatoDaTela";
 import { TABS, NAV_SECTIONS, HOME_ROUTE, gamify, fmtK } from "@/lib/state";
 import { hasSupabase } from "@/lib/persistence";
 import { DEFAULT_MODE } from "@/lib/themes";
@@ -210,7 +211,15 @@ function Chrome({ children }) {
       {/* o padding acompanha o aside: recolhido, o conteúdo usa a largura inteira */}
       <main className={`pt-8 pb-32 md:pb-12 min-h-screen transition-[padding] duration-200 ${collapsed ? "md:pl-0" : "md:pl-64"}`}>
         <div className="max-w-6xl mx-auto px-4 sm:px-container-padding py-8">
-          {DISABLED_ROUTES.includes(pathname) ? <DisabledScreen /> : children}
+          {DISABLED_ROUTES.includes(pathname) ? (
+            <DisabledScreen />
+          ) : (
+            <>
+              {/* o mascote comentando a seção atual — ele mesmo decide onde não aparecer */}
+              <GatoDaTela state={state} pathname={pathname} />
+              {children}
+            </>
+          )}
         </div>
       </main>
 

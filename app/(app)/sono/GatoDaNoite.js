@@ -52,12 +52,17 @@ function arcPath(from, to, steps = 40) {
   return pts.join(" ");
 }
 
-// Céu fixo em hex, mesma regra da pelagem: noite é noite nos dois temas. Quanto
-// mais tarde você deitou, mais fundo o céu — a tela escurece junto com a hora.
+// Céu fixo em hex, mesma regra da pelagem: noite é noite nos dois temas — mas um
+// ANOITECER, não meia-noite fechada. O azul-marinho quase preto virava um bloco
+// morto no meio da tela; este é um lusco-fusco cor de pervinca, claro o bastante
+// pra o painel continuar sendo parte do app.
+//
+// A escala continua: quanto mais tarde você deitou, mais fundo fica — só que os
+// três degraus inteiros subiram de luz. Trocar a paleta é trocar estas 9 cores.
 function skyOf(lateMin) {
-  if (lateMin <= 0) return "linear-gradient(180deg, #262a52 0%, #3b3560 58%, #4a3a5c 100%)";
-  if (lateMin <= 60) return "linear-gradient(180deg, #151b38 0%, #24254a 60%, #2e2a4e 100%)";
-  return "linear-gradient(180deg, #080c1d 0%, #12162e 60%, #1b1c36 100%)";
+  if (lateMin <= 0) return "linear-gradient(180deg, #59689c 0%, #7b81b0 55%, #a08fa8 100%)";
+  if (lateMin <= 60) return "linear-gradient(180deg, #46558a 0%, #656ba0 58%, #877e9c 100%)";
+  return "linear-gradient(180deg, #35426f 0%, #4e5589 60%, #6d6890 100%)";
 }
 
 // 5 pousos fixos pras estrelas de qualidade. Fixos e não sorteados porque estrela
@@ -110,7 +115,7 @@ export default function GatoDaNoite({ state, bedtime, wake, durationMin, goalMin
         <div className="absolute inset-x-6 top-3 h-[104px]">
           <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden="true">
             {/* a noite inteira, de leve */}
-            <polyline points={arcPath(0, 1)} fill="none" stroke="#ffffff" strokeOpacity="0.18" strokeWidth="1" strokeDasharray="3 4" vectorEffect="non-scaling-stroke" />
+            <polyline points={arcPath(0, 1)} fill="none" stroke="#ffffff" strokeOpacity="0.4" strokeWidth="1" strokeDasharray="3 4" vectorEffect="non-scaling-stroke" />
             {/* o seu sono */}
             <polyline
               points={arcPath(Math.min(tBed, tWake), Math.max(tBed, tWake))}
@@ -127,7 +132,7 @@ export default function GatoDaNoite({ state, bedtime, wake, durationMin, goalMin
               x2={tLimit * 100}
               y2={arcY(tLimit) + 9}
               stroke="#ffffff"
-              strokeOpacity="0.55"
+              strokeOpacity="0.75"
               strokeWidth="1.5"
               strokeDasharray="2 2"
               vectorEffect="non-scaling-stroke"
@@ -140,7 +145,7 @@ export default function GatoDaNoite({ state, bedtime, wake, durationMin, goalMin
             return (
               <span
                 key={i}
-                className={`pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 ${on ? "pet-twinkle text-[#ffe9a8]" : "text-white/15"}`}
+                className={`pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 ${on ? "pet-twinkle text-[#f7c948]" : "text-white/55"}`}
                 style={{ left: `${s.l}%`, top: `${s.t}%`, animationDelay: `${i * 420}ms` }}
                 aria-hidden="true"
               >
@@ -155,10 +160,10 @@ export default function GatoDaNoite({ state, bedtime, wake, durationMin, goalMin
             style={{ left: `${tBed * 100}%`, top: `${arcY(tBed)}%` }}
             aria-hidden="true"
           >
-            <MI name="bedtime" fill className={`text-xl ${onTime ? "text-[#ffe9a8]" : "text-error"}`} />
+            <MI name="bedtime" fill className={`text-xl ${onTime ? "text-[#f7c948]" : "text-error"}`} />
           </span>
           <span
-            className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 text-[#ffc978]"
+            className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 text-[#ffcf83]"
             style={{ left: `${tWake * 100}%`, top: `${arcY(tWake)}%` }}
             aria-hidden="true"
           >
@@ -167,11 +172,11 @@ export default function GatoDaNoite({ state, bedtime, wake, durationMin, goalMin
         </div>
 
         {/* chão do quarto */}
-        <div className="absolute inset-x-0 bottom-0 h-9 border-t border-white/10 bg-black/25" />
+        <div className="absolute inset-x-0 bottom-0 h-9 border-t border-white/10 bg-black/20" />
 
         {/* cama */}
-        <div className="absolute bottom-4 left-1/2 h-7 w-[164px] -translate-x-1/2 rounded-full border border-white/10 bg-white/10" />
-        <div className="absolute bottom-[26px] left-[calc(50%-64px)] h-5 w-11 rounded-lg border border-white/10 bg-white/15" />
+        <div className="absolute bottom-4 left-1/2 h-7 w-[164px] -translate-x-1/2 rounded-full border border-white/25 bg-white/25" />
+        <div className="absolute bottom-[26px] left-[calc(50%-64px)] h-5 w-11 rounded-lg border border-white/25 bg-white/40" />
 
         {/* o gato: o mesmo do perfil, com o que ele estiver vestindo */}
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2">
@@ -179,7 +184,7 @@ export default function GatoDaNoite({ state, bedtime, wake, durationMin, goalMin
           {Array.from({ length: zzz }, (_, i) => (
             <span
               key={i}
-              className="pet-zzz pointer-events-none absolute right-1 top-0 font-headline-md text-[11px] text-white/70"
+              className="pet-zzz pointer-events-none absolute right-1 top-0 font-headline-md text-[11px] text-white/85"
               style={{ animationDelay: `${i * 650}ms` }}
               aria-hidden="true"
             >
@@ -204,7 +209,7 @@ export default function GatoDaNoite({ state, bedtime, wake, durationMin, goalMin
             LIMITE {limit}
           </span>
           <span className="flex items-center gap-1.5">
-            <MI name="star" fill className="text-[11px] text-[#ffe9a8]" />
+            <MI name="star" fill className="text-[11px] text-[#f7c948]" />
             {quality}/5 DE DESCANSO
           </span>
         </div>
