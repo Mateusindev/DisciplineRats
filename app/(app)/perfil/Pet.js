@@ -260,7 +260,9 @@ export default function Pet() {
   const stageIdx = PET_STAGES.indexOf(stage);
 
   return (
-    <section>
+    // id + scroll-mt: o atalho da patinha no canto da tela chega por âncora, e sem a
+    // margem de rolagem o título encostaria na borda de cima
+    <section id="mascote" className="scroll-mt-16">
       <div className="flex items-end justify-between mb-4">
         <h3 className="font-headline-md text-headline-md text-primary uppercase">Mascote</h3>
         <Caps className="text-outline">

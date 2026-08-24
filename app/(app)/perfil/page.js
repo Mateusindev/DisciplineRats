@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps, Spinner, inputCls } from "@/components/ui";
 import { gamify, fmtK, computeBadges } from "@/lib/state";
@@ -26,6 +26,22 @@ export default function PerfilPage() {
   const [nick, setNick] = useState("");
   const [savingNick, setSavingNick] = useState(false);
   const g = gamify(state.stats);
+
+  // Rolagem até a âncora do mascote. O browser não faz isso sozinho aqui: a seção só
+  // existe depois do primeiro paint (daí o rAF), e voltar pra MESMA página só troca o
+  // hash — sem navegação, sem remount, sem efeito novo (daí o hashchange).
+  useEffect(() => {
+    const go = () => {
+      if (window.location.hash !== "#mascote") return;
+      document.getElementById("mascote")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    const raf = requestAnimationFrame(go);
+    window.addEventListener("hashchange", go);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("hashchange", go);
+    };
+  }, []);
 
   function startNick() {
     setNick(myName || "");
