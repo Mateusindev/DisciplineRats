@@ -59,7 +59,7 @@ function MassStepper({ grams, step, onStep, onChange, size = "sm" }) {
         inputMode="numeric"
         placeholder="0"
         aria-label="Total em gramas"
-        className={`${big ? "w-16 text-[15px]" : "w-14 text-[13px]"} bg-transparent text-center font-bold text-on-surface tabular-nums outline-none border-b border-white/10 focus:border-primary-container/60 transition`}
+        className={`${big ? "w-16 text-[15px]" : "w-12 sm:w-14 text-[13px]"} bg-transparent text-center font-bold text-on-surface tabular-nums outline-none border-b border-white/10 focus:border-primary-container/60 transition`}
       />
       <button onClick={() => onChange(g + step)} aria-label={`Mais ${step} gramas`} className={btn}>
         +
@@ -337,8 +337,8 @@ function Despensa({ state, setState, toast, confirm }) {
                 );
               const used = planItemsUsingFood(state, f.id);
               return (
-                <li key={f.id} className="flex items-center gap-3 p-3 bg-surface-container-high rounded-lg border border-white/5">
-                  <div className="flex-1 min-w-0">
+                <li key={f.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-3 bg-surface-container-high rounded-lg border border-white/5">
+                  <div className="w-full min-w-0 sm:w-auto sm:flex-1">
                     <div className="text-[13px] font-bold text-on-surface truncate">
                       {f.name}
                       <span className="text-outline font-normal"> · {isMassUnit(f.unit) ? `por ${f.portionGrams || 100} g` : `por ${f.unit}${f.portionGrams ? ` (${f.portionGrams} g)` : ""}`}</span>
@@ -348,12 +348,14 @@ function Despensa({ state, setState, toast, confirm }) {
                     </div>
                     {used > 0 && <div className="text-[10px] text-outline">em {used} item(ns) do plano</div>}
                   </div>
-                  <button onClick={() => setEdit({ id: f.id, ...f, portionGrams: f.portionGrams || "" })} aria-label={`Editar ${f.name}`} className="p-1 text-outline hover:text-primary-container transition">
-                    <MI name="edit" className="text-lg" />
-                  </button>
-                  <button onClick={() => drop(f)} aria-label={`Excluir ${f.name}`} className="p-1 text-outline hover:text-error transition">
-                    <MI name="delete" className="text-lg" />
-                  </button>
+                  <div className="ml-auto flex shrink-0 items-center sm:ml-0">
+                    <button onClick={() => setEdit({ id: f.id, ...f, portionGrams: f.portionGrams || "" })} aria-label={`Editar ${f.name}`} className="p-1 text-outline hover:text-primary-container transition">
+                      <MI name="edit" className="text-lg" />
+                    </button>
+                    <button onClick={() => drop(f)} aria-label={`Excluir ${f.name}`} className="p-1 text-outline hover:text-error transition">
+                      <MI name="delete" className="text-lg" />
+                    </button>
+                  </div>
                 </li>
               );
             })}
@@ -617,7 +619,7 @@ export default function DietaPage() {
       </div>
 
       {tab === "plano" && (
-        <div className="glass-card p-6 rounded-xl">
+        <div className="glass-card p-4 sm:p-6 rounded-xl">
           <Caps className="text-outline text-[10px] block mb-4">METAS DIÁRIAS</Caps>
           <MetasEditor
             fields={[
@@ -633,7 +635,7 @@ export default function DietaPage() {
       {tab === "plano" && (<>
 
       {/* Índice geral do plano */}
-      <section className="glass-card p-6 md:p-8 rounded-xl">
+      <section className="glass-card p-4 sm:p-6 md:p-8 rounded-xl">
         <div className="flex items-center justify-between mb-6">
           <h3 className="font-headline-md text-headline-md text-primary">ÍNDICE GERAL DO PLANO</h3>
           <Caps className="text-outline">{plan.length} REFEIÇÃO(ÕES) · {allItems.length} ITEM(NS)</Caps>
@@ -662,7 +664,7 @@ export default function DietaPage() {
         const mt = dietTotals(m.items || []);
         const f = getForm(m.id);
         return (
-          <section key={m.id} className="glass-card p-6 rounded-xl">
+          <section key={m.id} className="glass-card p-4 sm:p-6 rounded-xl">
             <div className="flex items-center gap-3 mb-4">
               <MI name="restaurant" className="text-primary-container shrink-0" />
               <input
@@ -764,20 +766,13 @@ export default function DietaPage() {
                   const base = dietItemBaseGrams(e);
                   const scaled = t.qty !== 1;
                   return (
-                    <div key={e.id} className="flex items-center gap-3 p-3 bg-surface-container-high rounded-lg border border-white/5">
-                      {/* ajuste recalcula na hora: em massa o controle é o total em gramas,
-                          por unidade é a quantidade de porções */}
-                      {mass ? (
-                        <MassStepper
-                          grams={t.grams}
-                          step={gStep}
-                          onStep={setGStep}
-                          onChange={(g) => patchItem(m.id, e.id, { qty: dietQtyFromGrams(g, base) })}
-                        />
-                      ) : (
-                        <QtyStepper value={t.qty} unit={e.unit || "un"} onChange={(q) => patchItem(m.id, e.id, { qty: q })} />
-                      )}
-                      <div className="flex-1 min-w-0">
+                    // No celular o texto vem primeiro e SOZINHO na linha. O stepper tem
+                    // largura fixa (~160px) e não encolhe, e ainda há três botões de
+                    // ação: dividir a linha com eles em 360px deixava ~12px pro texto,
+                    // e a linha de macros virava uma coluna de uma palavra por linha.
+                    // De sm pra cima a ordem volta a ser stepper → texto → ações.
+                    <div key={e.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 p-3 bg-surface-container-high rounded-lg border border-white/5">
+                      <div className="order-1 w-full min-w-0 sm:order-2 sm:w-auto sm:flex-1">
                         <div className="text-[13px] font-bold text-on-surface truncate">
                           {e.name}
                           {!mass && t.grams ? <span className="text-outline font-normal"> · {gFmt(t.grams)}</span> : null}
@@ -792,25 +787,43 @@ export default function DietaPage() {
                           </div>
                         )}
                       </div>
-                      {(() => {
-                        const known = findFoodByName(state, e.name);
-                        return (
-                          <button
-                            onClick={() => bankItem(e)}
-                            aria-label={known ? `Atualizar ${e.name} na despensa` : `Salvar ${e.name} na despensa`}
-                            title={known ? "Já está na despensa · atualizar com estes valores" : "Salvar na despensa pra reusar"}
-                            className={`p-1 transition ${known ? "text-primary-container/60 hover:text-primary-container" : "text-outline hover:text-primary-container"}`}
-                          >
-                            <MI name={known ? "bookmark_added" : "bookmark_add"} className="text-lg" />
-                          </button>
-                        );
-                      })()}
-                      <button onClick={() => startEdit(e)} aria-label="Editar item" className="text-outline hover:text-primary-container transition p-1">
-                        <MI name="edit" className="text-lg" />
-                      </button>
-                      <button onClick={() => removeItem(m.id, e.id)} aria-label="Remover item" className="text-outline hover:text-error transition p-1">
-                        <MI name="delete" className="text-lg" />
-                      </button>
+
+                      {/* ajuste recalcula na hora: em massa o controle é o total em
+                          gramas, por unidade é a quantidade de porções */}
+                      <div className="order-2 shrink-0 sm:order-1">
+                        {mass ? (
+                          <MassStepper
+                            grams={t.grams}
+                            step={gStep}
+                            onStep={setGStep}
+                            onChange={(g) => patchItem(m.id, e.id, { qty: dietQtyFromGrams(g, base) })}
+                          />
+                        ) : (
+                          <QtyStepper value={t.qty} unit={e.unit || "un"} onChange={(q) => patchItem(m.id, e.id, { qty: q })} />
+                        )}
+                      </div>
+
+                      <div className="order-3 ml-auto flex shrink-0 items-center sm:ml-0">
+                        {(() => {
+                          const known = findFoodByName(state, e.name);
+                          return (
+                            <button
+                              onClick={() => bankItem(e)}
+                              aria-label={known ? `Atualizar ${e.name} na despensa` : `Salvar ${e.name} na despensa`}
+                              title={known ? "Já está na despensa · atualizar com estes valores" : "Salvar na despensa pra reusar"}
+                              className={`p-1 transition ${known ? "text-primary-container/60 hover:text-primary-container" : "text-outline hover:text-primary-container"}`}
+                            >
+                              <MI name={known ? "bookmark_added" : "bookmark_add"} className="text-lg" />
+                            </button>
+                          );
+                        })()}
+                        <button onClick={() => startEdit(e)} aria-label="Editar item" className="text-outline hover:text-primary-container transition p-1">
+                          <MI name="edit" className="text-lg" />
+                        </button>
+                        <button onClick={() => removeItem(m.id, e.id)} aria-label="Remover item" className="text-outline hover:text-error transition p-1">
+                          <MI name="delete" className="text-lg" />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
