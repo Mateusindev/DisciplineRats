@@ -474,55 +474,21 @@ function AddList({ onAdd, compact }) {
 // ---------------------------------------------------------------- card aberto
 
 // ============================================================================
-// PREVIEW — 5 LAYOUTS PRO DETALHE DO CARTÃO
+// DETALHE DO CARTÃO — PILHA
 //
-// Mesmo conteúdo nos 5 (concluir, título, lista de origem, etiquetas, descrição,
-// prazo, prioridade, arquivar, excluir): o que muda é a ARRUMAÇÃO. Switch em
-// state local, dentro do próprio modal, pra dar pra trocar olhando.
-// Depois de escolher um, os outros 4 (e este comentário) somem.
+// Uma coluna só, na ordem em que as coisas são olhadas: estado e título, de onde
+// ele veio, etiquetas, prazo e prioridade lado a lado, descrição, checklist. As
+// ações destrutivas ficam num rodapé separado por linha — longe do texto que se
+// edita, porque excluir não pode ficar a um clique errado do que se estava
+// digitando.
+//
+// Sem barra lateral de propósito: a lateral rouba metade da largura pra três
+// botões, e é a descrição e a checklist que precisam da largura.
 // ============================================================================
 
-const CARD_LAYOUTS = [
-  { id: "stack", label: "PILHA", icon: "view_agenda", w: "max-w-lg", hint: "Uma coluna só, na ordem de leitura — sem barra lateral" },
-  { id: "props", label: "PROPRIEDADES", icon: "list_alt", w: "max-w-2xl", hint: "Campos como linhas rótulo/valor, descrição embaixo" },
-  { id: "tabs", label: "ABAS", icon: "tab", w: "max-w-xl", hint: "Detalhes, campos e ações em abas — janela baixa" },
-  { id: "hero", label: "CAPA", icon: "crop_16_9", w: "max-w-2xl", hint: "Faixa de topo com título e chips; ações no rodapé" },
-  { id: "focus", label: "FOCO", icon: "notes", w: "max-w-3xl", hint: "Descrição manda; campos viram chips que abrem ao clicar" },
-];
-
-function CardLayoutSwitcher({ value, onChange }) {
-  return (
-    <div className="flex items-center gap-1 flex-wrap border-b border-outline-variant/50 px-3 py-2">
-      <Caps className="text-outline text-[9px] flex items-center gap-1 mr-1 shrink-0">
-        <MI name="science" className="text-[13px]" /> PREVIEW
-      </Caps>
-      {CARD_LAYOUTS.map((l) => {
-        const on = value === l.id;
-        return (
-          <button
-            key={l.id}
-            onClick={() => onChange(l.id)}
-            aria-pressed={on}
-            title={l.hint}
-            className={`flex items-center gap-1 px-2 h-6 rounded-full font-label-caps text-[9px] border transition ${
-              on ? "bg-primary/15 text-primary border-primary/40" : "border-outline-variant text-outline hover:text-on-surface-variant"
-            }`}
-          >
-            <MI name={l.icon} className="text-[13px]" />
-            {l.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-// ---- peças compartilhadas: cada layout só decide ONDE elas ficam ----
-
-const SIDE_BTN = "w-full flex items-center gap-2 rounded-lg bg-surface-variant/60 px-3 py-2 font-label-caps text-[10px] text-on-surface hover:bg-surface-variant transition";
 const CHIP_BTN = "flex items-center gap-1.5 rounded-full border border-outline-variant px-2.5 py-1 font-label-caps text-[10px] text-on-surface-variant hover:border-outline hover:text-on-surface transition";
 
-function DoneToggle({ card, colId, ctx, size = "text-2xl" }) {
+function DoneToggle({ card, colId, ctx }) {
   return (
     <button
       onClick={() => ctx.toggleDone(colId, card.id)}
@@ -534,13 +500,15 @@ function DoneToggle({ card, colId, ctx, size = "text-2xl" }) {
       <MI
         name={card.done ? "check_circle" : "radio_button_unchecked"}
         fill={card.done}
-        className={`${size} ${card.done ? "text-primary-container" : "text-outline hover:text-on-surface"}`}
+        className={`text-2xl ${card.done ? "text-primary-container" : "text-outline hover:text-on-surface"}`}
       />
     </button>
   );
 }
 
-function TitleField({ card, colId, ctx, cls = "font-headline-md text-headline-md" }) {
+// textarea, não input: título de cartão passa de uma linha e cortar o resto fora
+// da vista faria o usuário perder o que ele mesmo escreveu
+function TitleField({ card, colId, ctx }) {
   return (
     <textarea
       value={card.text}
@@ -548,17 +516,17 @@ function TitleField({ card, colId, ctx, cls = "font-headline-md text-headline-md
       rows={1}
       maxLength={280}
       aria-label="Título do cartão"
-      className={`w-full resize-none bg-transparent ${cls} text-on-surface outline-none rounded px-1 -mx-1 hover:bg-surface-variant/30 focus:bg-surface-variant/40 transition`}
+      className="w-full resize-none bg-transparent font-headline-md text-headline-md text-on-surface outline-none rounded px-1 -mx-1 hover:bg-surface-variant/30 focus:bg-surface-variant/40 transition"
     />
   );
 }
 
-function DescField({ card, colId, ctx, rows = 6 }) {
+function DescField({ card, colId, ctx }) {
   return (
     <textarea
       value={card.desc || ""}
       onChange={(e) => ctx.updateCard(colId, card.id, { desc: e.target.value })}
-      rows={rows}
+      rows={7}
       maxLength={2000}
       placeholder="O que precisa ser feito, links, passos..."
       aria-label="Descrição do cartão"
@@ -676,7 +644,7 @@ function DueField({ card, colId, ctx }) {
   );
 }
 
-// horizontal: três pastilhas lado a lado; o ponto colorido carrega a escala
+// três pastilhas lado a lado; o ponto colorido e a tinta da palavra carregam a escala
 function PriorityPicker({ card, colId, ctx }) {
   return (
     <div className="flex gap-1">
@@ -700,9 +668,9 @@ function PriorityPicker({ card, colId, ctx }) {
   );
 }
 
-function LabelsRow({ card, ctx, empty = null }) {
+function LabelsRow({ card, ctx }) {
   const labels = ctx.labelsOf(card);
-  if (!labels.length) return empty;
+  if (!labels.length) return null;
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {labels.map((l) => (
@@ -712,322 +680,23 @@ function LabelsRow({ card, ctx, empty = null }) {
   );
 }
 
-// botão + popover de etiquetas. O wrapper `relative` é o que ancora o popover,
-// então ele viaja junto com o botão em qualquer layout.
-function LabelButton({ card, colId, ctx, className = SIDE_BTN, label = "ETIQUETAS" }) {
+// botão + popover de etiquetas. O wrapper `relative` é o que ancora o popover.
+function LabelButton({ card, colId, ctx }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="relative">
-      <button onClick={() => setOpen((v) => !v)} aria-expanded={open} className={className}>
-        <MI name="label" className="text-base" /> {label}
+      <button onClick={() => setOpen((v) => !v)} aria-expanded={open} className={CHIP_BTN}>
+        <MI name="label" className="text-base" /> ETIQUETAS
       </button>
       {open && <LabelPopover card={card} colId={colId} onClose={() => setOpen(false)} ctx={ctx} />}
     </div>
   );
 }
 
-function ActionButtons({ card, colId, ctx, vertical = true }) {
-  const arch = (
-    <button onClick={() => ctx.updateCard(colId, card.id, { archived: !card.archived })} className={vertical ? SIDE_BTN : CHIP_BTN}>
-      <MI name={card.archived ? "unarchive" : "archive"} className="text-base" />
-      {card.archived ? "DESARQUIVAR" : "ARQUIVAR"}
-    </button>
-  );
-  const del = (
-    <button
-      onClick={() => ctx.removeCard(colId, card.id)}
-      className={
-        vertical
-          ? "w-full flex items-center gap-2 rounded-lg px-3 py-2 font-label-caps text-[10px] text-error hover:bg-error/10 transition"
-          : "flex items-center gap-1.5 rounded-full border border-error/40 px-2.5 py-1 font-label-caps text-[10px] text-error hover:bg-error/10 transition"
-      }
-    >
-      <MI name="delete" className="text-base" /> EXCLUIR
-    </button>
-  );
-  return <div className={vertical ? "space-y-1.5" : "flex items-center gap-2"}>{arch}{del}</div>;
-}
-
-function ModalHead({ card, colId, colName, ctx, onClose, titleCls }) {
-  return (
-    <div className="flex items-start gap-3 border-b border-outline-variant/50 p-5">
-      <DoneToggle card={card} colId={colId} ctx={ctx} />
-      <div className="flex-1 min-w-0">
-        <TitleField card={card} colId={colId} ctx={ctx} cls={titleCls} />
-        <p className="mt-1 px-1 text-[11px] text-outline">
-          na lista <span className="text-on-surface-variant">{colName}</span>
-          {card.archived && " · arquivado"}
-        </p>
-      </div>
-      <button onClick={onClose} aria-label="Fechar" className="shrink-0 p-1 text-outline hover:text-on-surface transition">
-        <MI name="close" />
-      </button>
-    </div>
-  );
-}
-
 const FieldLabel = ({ children }) => <Caps className="text-outline text-[10px] mb-1.5 block">{children}</Caps>;
-
-// ---- 1. PILHA: uma coluna, ordem de leitura, ações no rodapé ----
-function CardStack(props) {
-  const { card, colId, ctx } = props;
-  return (
-    <>
-      <ModalHead {...props} />
-      <div className="space-y-4 p-5">
-        <div className="flex flex-wrap items-center gap-2">
-          <LabelsRow card={card} ctx={ctx} />
-          <LabelButton card={card} colId={colId} ctx={ctx} className={CHIP_BTN} label="ETIQUETAS" />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <FieldLabel>PRAZO</FieldLabel>
-            <DueField card={card} colId={colId} ctx={ctx} />
-          </div>
-          <div>
-            <FieldLabel>PRIORIDADE</FieldLabel>
-            <PriorityPicker card={card} colId={colId} ctx={ctx} />
-          </div>
-        </div>
-        <div>
-          <FieldLabel>DESCRIÇÃO</FieldLabel>
-          <DescField card={card} colId={colId} ctx={ctx} rows={7} />
-        </div>
-        <ChecklistField card={card} colId={colId} ctx={ctx} />
-      </div>
-      <div className="flex justify-end border-t border-outline-variant/50 px-5 py-3">
-        <ActionButtons card={card} colId={colId} ctx={ctx} vertical={false} />
-      </div>
-    </>
-  );
-}
-
-// ---- 2. PROPRIEDADES: campos como linhas rótulo/valor, tipo registro ----
-function CardProps(props) {
-  const { card, colId, colName, ctx } = props;
-  const Row = ({ label, children }) => (
-    <div className="grid grid-cols-[110px_1fr] items-center gap-3 border-b border-outline-variant/30 px-5 py-2.5 last:border-b-0">
-      <Caps className="text-outline text-[10px]">{label}</Caps>
-      <div className="min-w-0">{children}</div>
-    </div>
-  );
-  return (
-    <>
-      <ModalHead {...props} />
-      <div className="border-b border-outline-variant/50">
-        <Row label="LISTA">
-          <span className="text-[13px] text-on-surface-variant">{colName}</span>
-        </Row>
-        <Row label="PRAZO">
-          <div className="flex items-center gap-2">
-            <div className="w-40">
-              <DueField card={card} colId={colId} ctx={ctx} />
-            </div>
-            {card.due && <DueBadge due={card.due} done={card.done} />}
-          </div>
-        </Row>
-        <Row label="PRIORIDADE">
-          <div className="max-w-xs">
-            <PriorityPicker card={card} colId={colId} ctx={ctx} />
-          </div>
-        </Row>
-        <Row label="ETIQUETAS">
-          <div className="flex flex-wrap items-center gap-2">
-            <LabelsRow card={card} ctx={ctx} />
-            <LabelButton card={card} colId={colId} ctx={ctx} className={CHIP_BTN} label="EDITAR" />
-          </div>
-        </Row>
-        <Row label="AÇÕES">
-          <ActionButtons card={card} colId={colId} ctx={ctx} vertical={false} />
-        </Row>
-      </div>
-      <div className="space-y-4 p-5">
-        <div>
-          <FieldLabel>DESCRIÇÃO</FieldLabel>
-          <DescField card={card} colId={colId} ctx={ctx} rows={8} />
-        </div>
-        <ChecklistField card={card} colId={colId} ctx={ctx} />
-      </div>
-    </>
-  );
-}
-
-// ---- 3. ABAS: janela baixa; cada assunto no seu painel ----
-const CARD_TABS = [
-  { id: "desc", label: "DETALHES", icon: "notes" },
-  { id: "checks", label: "CHECKLIST", icon: "checklist" },
-  { id: "fields", label: "CAMPOS", icon: "tune" },
-  { id: "acts", label: "AÇÕES", icon: "more_horiz" },
-];
-
-function CardTabs(props) {
-  const { card, colId, ctx } = props;
-  const [tab, setTab] = useState("desc");
-  return (
-    <>
-      <ModalHead {...props} />
-      <div role="tablist" className="flex border-b border-outline-variant/50">
-        {CARD_TABS.map((t) => (
-          <button
-            key={t.id}
-            role="tab"
-            aria-selected={tab === t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 font-label-caps text-[10px] border-b-2 transition ${
-              tab === t.id ? "border-primary text-primary" : "border-transparent text-on-surface-variant hover:bg-surface-variant/40"
-            }`}
-          >
-            <MI name={t.icon} className="text-base" /> {t.label}
-            {t.id === "checks" && cardCheckProgress(card) && (
-              <span className="tabular-nums text-[9px] text-outline">
-                {cardCheckProgress(card).done}/{cardCheckProgress(card).total}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-      <div className="p-5">
-        {tab === "desc" && <DescField card={card} colId={colId} ctx={ctx} rows={9} />}
-        {tab === "checks" && <ChecklistField card={card} colId={colId} ctx={ctx} />}
-        {tab === "fields" && (
-          <div className="space-y-4">
-            <div>
-              <FieldLabel>PRAZO</FieldLabel>
-              <div className="max-w-xs">
-                <DueField card={card} colId={colId} ctx={ctx} />
-              </div>
-            </div>
-            <div>
-              <FieldLabel>PRIORIDADE</FieldLabel>
-              <div className="max-w-sm">
-                <PriorityPicker card={card} colId={colId} ctx={ctx} />
-              </div>
-            </div>
-            <div>
-              <FieldLabel>ETIQUETAS</FieldLabel>
-              <div className="flex flex-wrap items-center gap-2">
-                <LabelsRow card={card} ctx={ctx} />
-                <LabelButton card={card} colId={colId} ctx={ctx} className={CHIP_BTN} label="EDITAR" />
-              </div>
-            </div>
-          </div>
-        )}
-        {tab === "acts" && (
-          <div className="max-w-xs">
-            <ActionButtons card={card} colId={colId} ctx={ctx} />
-          </div>
-        )}
-      </div>
-    </>
-  );
-}
-
-// ---- 4. CAPA: faixa de topo com tudo resumido, corpo só descrição ----
-function CardHero(props) {
-  const { card, colId, colName, ctx, onClose } = props;
-  const p = PRI[card.priority] || PRI[2];
-  return (
-    <>
-      <div className="relative overflow-hidden rounded-t-2xl bg-surface-variant/40 p-5">
-        {/* barra de prioridade na borda: cor sem pintar a faixa inteira */}
-        <span className={`absolute left-0 top-0 h-full w-1.5 ${p.dot}`} />
-        <div className="flex items-start gap-3">
-          <DoneToggle card={card} colId={colId} ctx={ctx} size="text-3xl" />
-          <div className="flex-1 min-w-0">
-            <TitleField card={card} colId={colId} ctx={ctx} cls="font-headline-lg text-headline-lg" />
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <Caps className="text-outline text-[10px]">{colName}</Caps>
-              {card.archived && <Caps className="text-outline text-[10px]">· ARQUIVADO</Caps>}
-              {card.due && <DueBadge due={card.due} done={card.done} />}
-              <PriTag priority={card.priority} />
-              <LabelsRow card={card} ctx={ctx} />
-            </div>
-          </div>
-          <button onClick={onClose} aria-label="Fechar" className="shrink-0 p-1 text-outline hover:text-on-surface transition">
-            <MI name="close" />
-          </button>
-        </div>
-      </div>
-      <div className="space-y-4 p-5">
-        <DescField card={card} colId={colId} ctx={ctx} rows={8} />
-        <ChecklistField card={card} colId={colId} ctx={ctx} />
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="w-40">
-            <DueField card={card} colId={colId} ctx={ctx} />
-          </div>
-          <div className="w-56">
-            <PriorityPicker card={card} colId={colId} ctx={ctx} />
-          </div>
-          <LabelButton card={card} colId={colId} ctx={ctx} className={CHIP_BTN} label="ETIQUETAS" />
-        </div>
-      </div>
-      <div className="flex justify-end border-t border-outline-variant/50 px-5 py-3">
-        <ActionButtons card={card} colId={colId} ctx={ctx} vertical={false} />
-      </div>
-    </>
-  );
-}
-
-// ---- 5. FOCO: descrição é o assunto; campo só aparece quando pedido ----
-function CardFocus(props) {
-  const { card, colId, ctx } = props;
-  const [panel, setPanel] = useState(null); // "due" | "pri" | "acts" | null
-  const toggle = (id) => setPanel((cur) => (cur === id ? null : id));
-  return (
-    <>
-      <ModalHead {...props} />
-      <div className="flex flex-wrap items-center gap-2 border-b border-outline-variant/50 px-5 py-2.5">
-        <LabelsRow card={card} ctx={ctx} />
-        <LabelButton card={card} colId={colId} ctx={ctx} className={CHIP_BTN} label="ETIQUETAS" />
-        <button onClick={() => toggle("due")} aria-expanded={panel === "due"} className={CHIP_BTN}>
-          <MI name="event" className="text-base" />
-          {card.due ? ddmm(card.due) : "PRAZO"}
-        </button>
-        <button onClick={() => toggle("pri")} aria-expanded={panel === "pri"} className={CHIP_BTN}>
-          <PriTag priority={card.priority} />
-        </button>
-        <button onClick={() => toggle("acts")} aria-expanded={panel === "acts"} aria-label="Mais ações" className={`${CHIP_BTN} ml-auto`}>
-          <MI name="more_horiz" className="text-base" />
-        </button>
-      </div>
-      {panel && (
-        <div className="border-b border-outline-variant/50 bg-surface-variant/20 px-5 py-3">
-          {panel === "due" && (
-            <div className="max-w-xs">
-              <DueField card={card} colId={colId} ctx={ctx} />
-            </div>
-          )}
-          {panel === "pri" && (
-            <div className="max-w-sm">
-              <PriorityPicker card={card} colId={colId} ctx={ctx} />
-            </div>
-          )}
-          {panel === "acts" && <ActionButtons card={card} colId={colId} ctx={ctx} vertical={false} />}
-        </div>
-      )}
-      <div className="space-y-4 p-5">
-        <DescField card={card} colId={colId} ctx={ctx} rows={10} />
-        <ChecklistField card={card} colId={colId} ctx={ctx} />
-      </div>
-    </>
-  );
-}
-
-const CARD_BODIES = { stack: CardStack, props: CardProps, tabs: CardTabs, hero: CardHero, focus: CardFocus };
 
 function CardModal({ card, colId, colName, ctx }) {
   const { closeCard } = ctx;
-  const [layout, setLayout] = useState("stack");
-  const conf = CARD_LAYOUTS.find((l) => l.id === layout) || CARD_LAYOUTS[0];
-  const Body = CARD_BODIES[layout] || CardStack;
-
-  useEffect(() => {
-    const saved = typeof window !== "undefined" && localStorage.getItem("cardLayoutPreview");
-    if (saved && CARD_LAYOUTS.some((l) => l.id === saved)) setLayout(saved);
-  }, []);
-  useEffect(() => {
-    if (typeof window !== "undefined") localStorage.setItem("cardLayoutPreview", layout);
-  }, [layout]);
 
   // Escape fecha, menos quando um popover está aberto por cima — daí ele fecha
   // primeiro. Cada popover cuida do seu, então aqui basta o cartão.
@@ -1049,9 +718,58 @@ function CardModal({ card, colId, colName, ctx }) {
       {/* container (não container-lowest): o lowest é #070a11, preto de fato, e é
           nele que se passa o tempo mexendo no cartão. Os campos usam
           container-high, então eles sobem em cima deste fundo em vez de sumir. */}
-      <div className={`w-full ${conf.w} rounded-2xl border border-outline-variant bg-surface-container shadow-2xl shadow-black/25`} onClick={stop}>
-        <CardLayoutSwitcher value={layout} onChange={setLayout} />
-        <Body card={card} colId={colId} colName={colName} ctx={ctx} onClose={closeCard} />
+      <div className="w-full max-w-lg rounded-2xl border border-outline-variant bg-surface-container shadow-2xl shadow-black/25" onClick={stop}>
+        {/* cabeça: estado + título + de onde ele veio */}
+        <div className="flex items-start gap-3 border-b border-outline-variant/50 p-4 sm:p-5">
+          <DoneToggle card={card} colId={colId} ctx={ctx} />
+          <div className="flex-1 min-w-0">
+            <TitleField card={card} colId={colId} ctx={ctx} />
+            <p className="mt-1 px-1 text-[11px] text-outline">
+              na lista <span className="text-on-surface-variant">{colName}</span>
+              {card.archived && " · arquivado"}
+            </p>
+          </div>
+          <button onClick={closeCard} aria-label="Fechar" className="shrink-0 p-1 text-outline hover:text-on-surface transition">
+            <MI name="close" />
+          </button>
+        </div>
+
+        <div className="space-y-4 p-4 sm:p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <LabelsRow card={card} ctx={ctx} />
+            <LabelButton card={card} colId={colId} ctx={ctx} />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <FieldLabel>PRAZO</FieldLabel>
+              <DueField card={card} colId={colId} ctx={ctx} />
+            </div>
+            <div>
+              <FieldLabel>PRIORIDADE</FieldLabel>
+              <PriorityPicker card={card} colId={colId} ctx={ctx} />
+            </div>
+          </div>
+          <div>
+            <FieldLabel>DESCRIÇÃO</FieldLabel>
+            <DescField card={card} colId={colId} ctx={ctx} />
+          </div>
+          <ChecklistField card={card} colId={colId} ctx={ctx} />
+        </div>
+
+        {/* rodapé só de ações: separado por linha do texto que se edita, porque
+            excluir não pode ficar a um clique errado do que se estava digitando */}
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-outline-variant/50 px-4 sm:px-5 py-3">
+          <button onClick={() => ctx.updateCard(colId, card.id, { archived: !card.archived })} className={CHIP_BTN}>
+            <MI name={card.archived ? "unarchive" : "archive"} className="text-base" />
+            {card.archived ? "DESARQUIVAR" : "ARQUIVAR"}
+          </button>
+          <button
+            onClick={() => ctx.removeCard(colId, card.id)}
+            className="flex items-center gap-1.5 rounded-full border border-error/40 px-2.5 py-1 font-label-caps text-[10px] text-error hover:bg-error/10 transition"
+          >
+            <MI name="delete" className="text-base" /> EXCLUIR
+          </button>
+        </div>
       </div>
     </div>
   );
