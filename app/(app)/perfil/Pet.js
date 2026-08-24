@@ -22,6 +22,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "../AppContext";
+import { startPackCheckout } from "@/lib/persistence";
 import { MI, Caps, inputCls } from "@/components/ui";
 import {
   fmtK,
@@ -35,9 +36,11 @@ import {
   PET_STAGES,
   PET_COATS,
   PET_SLOTS,
-  PET_ITEMS,
+  PET_ALL_ITEMS,
   PET_ITEM_BY_ID,
+  PET_PACKS,
   PET_NAME_LEN,
+  petOwns,
 } from "@/lib/state";
 
 // Cor de tecido, igual à pelagem: hex fixo, não token de tema. Gorro vermelho é
@@ -103,6 +106,25 @@ function HeadGear({ id }) {
           <circle cx="0" cy="-17" r="1.7" fill={T.wool} />
         </g>
       );
+    // ---- pagos ----
+    case "ushanka":
+      return (
+        <g>
+          <path d="M-14.5 -7 a14.5 14.5 0 0 1 29 0 z" fill="#6b7686" />
+          <path d="M-15.5 -10 q-5 6 -2 13 q4 2 6 -2 z" fill="#d8d2c4" />
+          <path d="M15.5 -10 q5 6 2 13 q-4 2 -6 -2 z" fill="#d8d2c4" />
+          <rect x="-15.5" y="-11.5" width="31" height="6" rx="3" fill="#e6e0d2" />
+        </g>
+      );
+    case "helmet":
+      return (
+        <g>
+          <circle r="19.5" fill={T.sky} opacity="0.28" />
+          <circle r="19.5" fill="none" stroke={T.cloth} strokeWidth="2.2" />
+          <path d="M-13 -13 a19.5 19.5 0 0 1 9 -5" stroke="#fff" strokeWidth="2.4" fill="none" opacity="0.7" />
+          <path d="M-19 12 q19 9 38 0" stroke={T.cloth} strokeWidth="4" fill="none" />
+        </g>
+      );
     default:
       return null;
   }
@@ -142,6 +164,22 @@ function FaceGear({ id }) {
           <path d="M6.5 4.4 q-2 6 -7 7.6" strokeWidth="1" />
         </g>
       );
+    // ---- pagos ----
+    case "starshades": {
+      const star = "M0 -6.4 L1.9 -2 L6.6 -1.6 L3 1.6 L4.1 6.2 L0 3.7 L-4.1 6.2 L-3 1.6 L-6.6 -1.6 L-1.9 -2 Z";
+      return (
+        <g>
+          <path d="M-1.4 -2.6 h3" stroke={T.plum} strokeWidth="1.6" />
+          <path d="M-12 -4.4 l-3.4 -1.4" stroke={T.plum} strokeWidth="1.4" />
+          <g transform="translate(-6,-1)" fill={T.plum}>
+            <path d={star} />
+          </g>
+          <g transform="translate(6.5,-2)" fill={T.plum}>
+            <path d={star} />
+          </g>
+        </g>
+      );
+    }
     default:
       return null;
   }
@@ -184,6 +222,31 @@ function NeckGear({ id }) {
           <path d="M-6 24 h6" stroke={T.leafDark} strokeWidth="1.2" />
         </g>
       );
+    // ---- pagos ----
+    case "plaid":
+      return (
+        <g>
+          <path d="M-13.5 10 Q-1 20 12.5 8" stroke="#8d3b34" strokeWidth="6" fill="none" strokeLinecap="round" />
+          <path d="M-7 16 q-3 10 -1 17 l7 1 q-1 -10 1 -16 z" fill="#8d3b34" />
+          <g stroke="#e8dcc6" strokeWidth="1.1" opacity="0.85">
+            <path d="M-9 13 q10 7 21 -3" />
+            <path d="M-6.5 22 h7" />
+            <path d="M-5.5 29 h7" />
+            <path d="M-3 16 q-1 9 0 17" />
+          </g>
+        </g>
+      );
+    case "spikes":
+      return (
+        <g>
+          <path d="M-13 11 Q-1 19 12 9" stroke={T.ink} strokeWidth="4.4" fill="none" strokeLinecap="round" />
+          <g fill="#c9ccd4">
+            <path d="M-10 14.5 l-3.5 4.6 l4.4 -0.6 z" />
+            <path d="M-2 18 l-1.6 5.4 l3.6 -3.4 z" />
+            <path d="M6 16.5 l1.4 5.2 l2.6 -4.2 z" />
+          </g>
+        </g>
+      );
     default:
       return null;
   }
@@ -213,6 +276,29 @@ function BackGear({ id, dy = 0 }) {
         <g transform={`translate(0,${dy})`} fill={T.cloth}>
           <path d="M56 42 q-16 -20 -30 -16 q4 16 22 20 z" />
           <path d="M58 42 q-8 -22 4 -26 q8 14 2 26 z" opacity="0.8" />
+        </g>
+      );
+    // ---- pagos ----
+    case "jetpack":
+      return (
+        <g transform={`translate(0,${dy})`}>
+          <rect x="38" y="38" width="9" height="20" rx="4.5" fill="#c9ccd4" />
+          <rect x="48" y="38" width="9" height="20" rx="4.5" fill="#aeb4c0" />
+          <rect x="40" y="40" width="15" height="3" rx="1.5" fill="#8b919c" />
+          <path d="M42.5 58 q1.6 7 0 11 q-1.8 -4 -2 -11 z" fill="#f6a23c" />
+          <path d="M52.5 58 q1.6 6 0 9 q-1.8 -3 -2 -9 z" fill="#e8762f" />
+        </g>
+      );
+    case "guitar":
+      return (
+        <g transform={`translate(0,${dy})`}>
+          <rect x="52" y="30" width="4.4" height="22" rx="1.6" transform="rotate(28 54 41)" fill="#4a3524" />
+          <ellipse cx="40" cy="52" rx="12" ry="9.5" fill="#b8342f" />
+          <ellipse cx="40" cy="52" rx="4" ry="3.4" fill="#3a2a1c" />
+          <g stroke="#e6e0d2" strokeWidth="0.7" opacity="0.8">
+            <path d="M46 41 l12 -8" />
+            <path d="M48 43 l12 -8" />
+          </g>
         </g>
       );
     default:
@@ -258,6 +344,26 @@ function Toy({ id }) {
           <path d="M10 20 q10 4 20 0" stroke={T.plumDark} strokeWidth="1.4" fill="none" />
         </g>
       )}
+      {id === "cocoa" && (
+        <g>
+          <path d="M11 14 h16 l-1.6 15 h-12.8 z" fill={T.cloth} />
+          <ellipse cx="19" cy="14" rx="8" ry="2.4" fill="#6b4a35" />
+          <path d="M27 17 q6 1 5 5 q-1 3 -5 3" stroke={T.cloth} strokeWidth="2" fill="none" />
+          <g stroke="#c9ccd4" strokeWidth="1.2" fill="none" opacity="0.7">
+            <path d="M16 10 q3 -3 0 -6" />
+            <path d="M22 10 q3 -3 0 -6" />
+          </g>
+        </g>
+      )}
+      {id === "rocket" && (
+        <g>
+          <path d="M20 3 q6 6 6 15 h-12 q0 -9 6 -15 z" fill={T.cloth} />
+          <path d="M14 18 l-5 8 h5 z" fill={T.wool} />
+          <path d="M26 18 l5 8 h-5 z" fill={T.wool} />
+          <circle cx="20" cy="12" r="2.8" fill={T.sky} />
+          <path d="M16 26 q4 6 4 6 q0 0 4 -6 z" fill="#f6a23c" />
+        </g>
+      )}
     </svg>
   );
 }
@@ -287,6 +393,59 @@ function Scene({ id }) {
           <rect x="28" y="6" width="5" height="14" fill={T.leaf} />
           <rect x="34" y="9" width="4" height="11" fill={T.denim} />
           <rect x="86" y="7" width="6" height="13" fill={T.plum} />
+        </g>
+      )}
+      {id === "snow" && (
+        <g>
+          <rect x="0" y="0" width="120" height="64" fill="#c9dced" opacity="0.35" />
+          <path d="M14 58 l7 -20 l7 20 z" fill="#3f6b52" opacity="0.55" />
+          <path d="M96 58 l9 -26 l9 26 z" fill="#3f6b52" opacity="0.5" />
+          <g fill="#ffffff" opacity="0.85">
+            {[
+              [22, 10],
+              [40, 22],
+              [58, 8],
+              [70, 30],
+              [88, 16],
+              [104, 40],
+              [12, 34],
+              [50, 44],
+            ].map(([x, y]) => (
+              <circle key={`sn-${x}-${y}`} cx={x} cy={y} r="1.5" />
+            ))}
+          </g>
+        </g>
+      )}
+      {id === "space" && (
+        <g>
+          <rect x="0" y="0" width="120" height="64" fill="#0d1428" opacity="0.85" />
+          <circle cx="26" cy="18" r="11" fill="#3f6fa8" />
+          <path d="M26 13 q6 3 11 1 q-4 6 -11 4 z" fill="#4f8f5e" opacity="0.85" />
+          <ellipse cx="98" cy="34" rx="13" ry="3.4" fill="none" stroke="#c2a86a" strokeWidth="1.6" transform="rotate(-18 98 34)" />
+          <circle cx="98" cy="34" r="6.5" fill="#c9a25f" />
+          <g fill="#f4f0d8" opacity="0.9">
+            {[
+              [56, 10],
+              [70, 22],
+              [46, 34],
+              [84, 12],
+              [110, 20],
+              [64, 46],
+              [16, 44],
+            ].map(([x, y]) => (
+              <circle key={`sp-${x}-${y}`} cx={x} cy={y} r="1" />
+            ))}
+          </g>
+        </g>
+      )}
+      {id === "stage" && (
+        <g>
+          <rect x="0" y="0" width="120" height="64" fill="#161320" opacity="0.85" />
+          <path d="M24 0 l14 0 l22 60 l-40 0 z" fill="#f0dc8a" opacity="0.18" />
+          <path d="M96 0 l-14 0 l-22 60 l40 0 z" fill="#f0dc8a" opacity="0.18" />
+          <circle cx="31" cy="4" r="4" fill="#f0dc8a" opacity="0.8" />
+          <circle cx="89" cy="4" r="4" fill="#f0dc8a" opacity="0.8" />
+          <rect x="0" y="56" width="120" height="8" fill="#2a2338" />
         </g>
       )}
       {id === "night" && (
@@ -476,31 +635,32 @@ function Cat({ stage, coat, act, gear }) {
 // A peça do card é a MESMA que vai pro gato: o preview só monta uma cabeça (ou um
 // dorso) de mentira em volta pra dar contexto. Ilustração separada por item seria
 // uma segunda verdade pra manter em dia.
-function GearPreview({ item, coat }) {
+function GearPreview({ item, coat, small = false }) {
   const c = coat;
   const tip = c.points ? c.dark : c.fur;
+  const h = small ? "h-11" : "h-16";
   if (item.slot === "toy")
     return (
-      <div className="grid h-16 place-items-center">
+      <div className={`grid ${h} place-items-center`}>
         <Toy id={item.id} />
       </div>
     );
   if (item.slot === "scene")
     return (
-      <div className="relative h-16 overflow-hidden rounded-lg bg-surface-container-high">
+      <div className={`relative ${h} overflow-hidden rounded-lg bg-surface-container-high`}>
         <Scene id={item.id} />
       </div>
     );
   if (item.slot === "back")
     return (
-      <svg viewBox="20 26 62 40" className="h-16 w-full" aria-hidden="true">
+      <svg viewBox="20 26 62 40" className={`${h} w-full`} aria-hidden="true">
         <BackGear id={item.id} />
         <ellipse cx="56" cy="56" rx="28" ry="17" fill={c.fur} />
         <ellipse cx="59" cy="64" rx="20" ry="8" fill={c.belly} opacity="0.85" />
       </svg>
     );
   return (
-    <svg viewBox="-26 -34 52 62" className="h-16 w-full" aria-hidden="true">
+    <svg viewBox="-26 -34 52 62" className={`${h} w-full`} aria-hidden="true">
       <path d="M-15 -7 L-19 -23 L-4 -14 Z" fill={tip} />
       <path d="M1 -14 L9 -25 L15 -7 Z" fill={tip} />
       <circle r="16" fill={c.fur} />
@@ -515,7 +675,46 @@ function GearPreview({ item, coat }) {
   );
 }
 
-function Shop({ pet, level, balance, coat, onBuy, onToggle, onClose }) {
+// Vitrine dos packs pagos. Mostra as QUATRO peças do tema, porque o que se compra é
+// o conjunto — um card com um nome e um preço pede fé; quatro desenhos mostram o que
+// entra no bicho.
+function PackCard({ pack, owned, coat, busy, onBuy }) {
+  const items = pack.items.map((id) => PET_ITEM_BY_ID[id]).filter(Boolean);
+  return (
+    <div className={`flex flex-col rounded-xl border p-3 ${owned ? "border-primary-container bg-primary-container/10" : "border-outline-variant/60 bg-surface-container-high/40"}`}>
+      <div className="grid grid-cols-4 gap-1">
+        {items.map((it) => (
+          <div key={it.id} className="overflow-hidden rounded-lg bg-surface-container/60">
+            <GearPreview item={it} coat={coat} small />
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex-1">
+        <div className="text-[13px] leading-tight text-on-surface">{pack.name}</div>
+        <div className="text-[10px] leading-tight text-outline">{pack.desc}</div>
+      </div>
+      <div className="mt-2">
+        {owned ? (
+          <div className="flex items-center justify-center gap-1 rounded-lg bg-primary-container/20 py-1.5 font-label-caps text-[10px] text-primary-container">
+            <MI name="check_circle" fill className="text-sm" /> SEU · VISTA NAS ABAS
+          </div>
+        ) : (
+          <button
+            onClick={() => onBuy(pack.id)}
+            disabled={busy}
+            className="w-full rounded-lg border border-primary py-1.5 font-label-caps text-[10px] tabular-nums text-primary transition hover:bg-primary/10 active:scale-[.98] disabled:opacity-50"
+          >
+            {busy ? "ABRINDO..." : `R$ ${pack.priceBRL.toFixed(2).replace(".", ",")}`}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const SHOP_TABS = [...PET_SLOTS, { id: "packs", label: "PACKS R$", icon: "redeem" }];
+
+function Shop({ pet, level, balance, coat, entitlements, buying, onBuy, onBuyPack, onToggle, onClose }) {
   const [slot, setSlot] = useState(PET_SLOTS[0].id);
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && onClose();
@@ -523,7 +722,8 @@ function Shop({ pet, level, balance, coat, onBuy, onToggle, onClose }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const items = PET_ITEMS.filter((i) => i.slot === slot);
+  const items = PET_ALL_ITEMS.filter((i) => i.slot === slot);
+  const ownsItem = (id) => (PET_ITEM_BY_ID[id]?.source === "brl" ? entitlements.includes(PET_ITEM_BY_ID[id].pack) : pet.owned.includes(id));
 
   return (
     <div
@@ -564,17 +764,17 @@ function Shop({ pet, level, balance, coat, onBuy, onToggle, onClose }) {
           </span>
           <span className="flex items-baseline gap-1.5 ml-auto">
             <span className="text-[13px] text-on-surface-variant tabular-nums">
-              {pet.owned.length}/{PET_ITEMS.length}
+              {PET_ALL_ITEMS.filter((i) => ownsItem(i.id)).length}/{PET_ALL_ITEMS.length}
             </span>
             <Caps className="text-outline text-[10px]">ITENS</Caps>
           </span>
         </div>
 
         <div className="flex gap-1 overflow-x-auto ff-scroll border-b border-outline-variant/50 px-4 sm:px-5 py-2">
-          {PET_SLOTS.map((sl) => {
+          {SHOP_TABS.map((sl) => {
             const on = sl.id === slot;
-            const all = PET_ITEMS.filter((i) => i.slot === sl.id);
-            const have = all.filter((i) => pet.owned.includes(i.id)).length;
+            const all = sl.id === "packs" ? PET_PACKS : PET_ALL_ITEMS.filter((i) => i.slot === sl.id);
+            const have = sl.id === "packs" ? PET_PACKS.filter((p) => entitlements.includes(p.id)).length : all.filter((i) => ownsItem(i.id)).length;
             return (
               <button
                 key={sl.id}
@@ -596,12 +796,35 @@ function Shop({ pet, level, balance, coat, onBuy, onToggle, onClose }) {
           })}
         </div>
 
+        {slot === "packs" ? (
+          <div className="p-4 sm:p-5">
+            {/* O que a lei manda e o usuário merece saber ANTES de pagar: é
+                cosmético, não muda progresso, e não é assinatura. */}
+            <p className="mb-3 text-[11px] text-on-surface-variant">
+              Compra única, sem assinatura. São <strong className="text-on-surface">acessórios cosméticos</strong>: não dão XP, não sobem nível, não mexem no
+              ranking. Pagamento pelo Mercado Pago (Pix, cartão ou boleto) — o pack libera assim que o pagamento é aprovado.
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {PET_PACKS.map((pack) => (
+                <PackCard
+                  key={pack.id}
+                  pack={pack}
+                  owned={entitlements.includes(pack.id)}
+                  coat={coat}
+                  busy={buying === pack.id}
+                  onBuy={onBuyPack}
+                />
+              ))}
+            </div>
+          </div>
+        ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 sm:p-5">
           {items.map((item) => {
-            const owned = pet.owned.includes(item.id);
+            const paid = item.source === "brl";
+            const owned = ownsItem(item.id);
             const worn = pet.gear?.[item.slot] === item.id;
-            const locked = !owned && level < item.minLevel;
-            const poor = !owned && !locked && balance < item.price;
+            const locked = !owned && !paid && level < item.minLevel;
+            const poor = !owned && !locked && !paid && balance < item.price;
             return (
               <div
                 key={item.id}
@@ -628,6 +851,14 @@ function Shop({ pet, level, balance, coat, onBuy, onToggle, onClose }) {
                     >
                       {worn ? "VESTIDO · TIRAR" : "VESTIR"}
                     </button>
+                  ) : paid ? (
+                    <button
+                      onClick={() => setSlot("packs")}
+                      title={`Vem no ${PET_PACKS.find((p) => p.id === item.pack)?.name || "pack"}`}
+                      className="flex w-full items-center justify-center gap-1 rounded-lg border border-outline-variant py-1.5 font-label-caps text-[10px] text-on-surface-variant transition hover:border-outline hover:text-on-surface"
+                    >
+                      <MI name="redeem" className="text-sm" /> NO PACK
+                    </button>
                   ) : locked ? (
                     <div className="flex items-center justify-center gap-1 rounded-lg border border-outline-variant py-1.5 font-label-caps text-[10px] text-outline">
                       <MI name="lock" className="text-sm" /> NÍVEL {item.minLevel}
@@ -649,6 +880,7 @@ function Shop({ pet, level, balance, coat, onBuy, onToggle, onClose }) {
             );
           })}
         </div>
+        )}
       </div>
     </div>
   );
@@ -660,7 +892,7 @@ const WALK_MIN = 8; // % da largura — margem pra ele não colar nas paredes
 const WALK_MAX = 88;
 
 export default function Pet() {
-  const { state, setState, toast } = useApp();
+  const { state, setState, toast, refreshEntitlements } = useApp();
   const g = gamify(state.stats);
   const growth = petGrowth(state.stats);
   const stage = growth.cur;
@@ -669,10 +901,12 @@ export default function Pet() {
   const gear = pet.gear || {};
   const name = (pet.name || "").trim();
   const balance = petBalance(state);
+  const entitlements = state.entitlements || [];
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [shop, setShop] = useState(false);
+  const [buying, setBuying] = useState(null); // id do pack cuja cobrança está abrindo
   const [hearts, setHearts] = useState([]);
   const [walk, setWalk] = useState({ act: "idle", x: 46, dir: 1, dur: 0 });
   const walkRef = useRef(walk);
@@ -737,6 +971,61 @@ export default function Pet() {
     setState((prev) => buyPetItem(prev, id));
     if (item) toast(`${item.name} comprado`, { sub: `−${item.price} XP livre · já vestido`, icon: "shopping_bag" });
   }
+
+  // Compra de pack: sai do app pro Mercado Pago. Nada é liberado aqui — a volta
+  // acontece pelo back_url, e a liberação pelo webhook.
+  async function buyPack(packId) {
+    setBuying(packId);
+    const res = await startPackCheckout(packId);
+    setBuying(null);
+    if (res.ok) {
+      window.location.href = res.url;
+      return;
+    }
+    const msg =
+      res.reason === "ja_possui"
+        ? "Você já tem esse pack"
+        : res.reason === "sem_sessao"
+          ? "Entre na conta pra comprar"
+          : res.reason === "mp_nao_configurado" || res.reason === "site_url_nao_configurada"
+            ? "Pagamento ainda não configurado neste servidor"
+            : "Não foi possível abrir o pagamento agora";
+    toast(msg, { type: "error" });
+    if (res.reason === "ja_possui") refreshEntitlements();
+  }
+
+  // Volta do checkout. O webhook pode levar alguns segundos depois do "aprovado", e
+  // é por isso que a consulta tenta algumas vezes em vez de uma só: chegar aqui e
+  // não ver o pack é a hora exata em que o usuário desconfia da compra.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("compra");
+    if (!q) return;
+    // limpa a query pra um F5 não repetir o aviso
+    window.history.replaceState({}, "", `${window.location.pathname}#mascote`);
+    if (q === "falhou") return toast("Pagamento não concluído", { type: "error" });
+    if (q === "pendente") {
+      toast("Pagamento pendente", { sub: "Pix/boleto libera quando o banco confirmar", icon: "hourglass_top", duration: 6000 });
+      return;
+    }
+    let tries = 0;
+    let alive = true;
+    const before = (state.entitlements || []).length;
+    const poll = async () => {
+      if (!alive) return;
+      const ents = await refreshEntitlements();
+      if (ents && ents.length > before) {
+        setShop(true);
+        return toast("Pack liberado!", { sub: "Já pode vestir na lojinha", icon: "redeem", duration: 6000 });
+      }
+      if (++tries < 6) return setTimeout(poll, 2000);
+      toast("Pagamento recebido", { sub: "A liberação pode levar alguns minutos — recarregue depois", icon: "hourglass_top", duration: 7000 });
+    };
+    poll();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const label = name || "SEM NOME";
   const stageIdx = PET_STAGES.indexOf(stage);
@@ -851,7 +1140,7 @@ export default function Pet() {
             </span>
             <span className="flex items-baseline gap-1.5">
               <span className="text-[13px] text-on-surface-variant tabular-nums">
-                {pet.owned.length}/{PET_ITEMS.length}
+                {PET_ALL_ITEMS.filter((i) => petOwns(state, i.id)).length}/{PET_ALL_ITEMS.length}
               </span>
               <Caps className="text-outline text-[10px]">ITENS · {wornCount} VESTIDO(S)</Caps>
             </span>
@@ -899,6 +1188,9 @@ export default function Pet() {
           level={g.level}
           balance={balance}
           coat={coat}
+          entitlements={entitlements}
+          buying={buying}
+          onBuyPack={buyPack}
           onBuy={buy}
           onToggle={(id) => setState((prev) => togglePetGear(prev, id))}
           onClose={() => setShop(false)}

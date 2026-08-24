@@ -2,6 +2,13 @@
 
 project_id = "fodpuqffafluqcrglgzy"
 
+# O Mercado Pago não manda JWT nenhum: a chamada vem do servidor dele. Com verify_jwt
+# ligado, o gateway recusa ANTES de entrar no código — e aí a assinatura HMAC, que é o
+# que de fato autoriza, nunca é conferida. Desligar aqui não abre a função: sem
+# x-signature válido ela responde 401.
+[functions.mp-webhook]
+verify_jwt = false
+
 # Esta função é chamada por CRON, não por usuário logado. Com verify_jwt ligado, o
 # gateway exige um JWT no Authorization e recusa antes de chegar no código — e o
 # formato novo de chave do Supabase (sb_publishable_*/sb_secret_*) não é JWT, então

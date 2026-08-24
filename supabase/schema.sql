@@ -227,6 +227,45 @@ create policy "own profile insert" on public.profiles for insert with check (aut
 drop policy if exists "own profile update" on public.profiles;
 create policy "own profile update" on public.profiles for update using (auth.uid() = id) with check (auth.uid() = id);
 
+-- ============================================================
+-- LOJINHA PAGA DO MASCOTE
+--
+-- Estas duas tabelas são a única parte do banco que o CLIENTE NÃO ESCREVE. Não é
+-- capricho: `profiles` tem policy de update pro próprio dono, então tudo que mora
+-- lá (inclusive `pet.owned`) pode ser reescrito pelo console do navegador. Item
+-- pago não pode viver num lugar assim.
+--
+-- `pet_entitlements` tem policy só de SELECT. Sem policy de insert/update/delete,
+-- ninguém escreve via API pública — nem o dono. Quem escreve é a Edge Function
+-- `mp-webhook`, que usa a service key e por isso passa por cima do RLS.
+-- ============================================================
+create table if not exists public.pet_entitlements (
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  pack_id    text not null,                                  -- id do pack em PET_PACKS (lib/state.js)
+  payment_id text,                                           -- id do pagamento no Mercado Pago
+  amount     numeric(10,2),
+  granted_at timestamptz not null default now(),
+  primary key (user_id, pack_id)                             -- comprar duas vezes o mesmo pack não duplica
+);
+alter table public.pet_entitlements enable row level security;
+drop policy if exists "own entitlements select" on public.pet_entitlements;
+create policy "own entitlements select" on public.pet_entitlements for select using (auth.uid() = user_id);
+-- de propósito SEM policy de escrita: só a service key (webhook) grava aqui
+
+-- Log de pagamento. `payment_id` como PK é o que dá idempotência de graça: webhook
+-- do Mercado Pago repete, e repetir um insert com a mesma PK não concede duas vezes.
+create table if not exists public.pet_payments (
+  payment_id text primary key,
+  user_id    uuid references auth.users (id) on delete set null,
+  pack_id    text,
+  status     text,
+  amount     numeric(10,2),
+  raw        jsonb,
+  created_at timestamptz not null default now()
+);
+alter table public.pet_payments enable row level security;
+-- nenhuma policy: nem leitura pelo cliente. É registro financeiro, só backend vê.
+
 -- Policies "próprio user_id" para todas as tabelas de log (select/insert/update/delete).
 do $$
 declare t text;

@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { getSession, loadUserState, syncUserState, updateUsername, fetchLeaderboard, signOut, hasSupabase, savePushSubscription, deletePushSubscription, syncAgendaReminders } from "@/lib/persistence";
+import { getSession, loadUserState, syncUserState, updateUsername, fetchLeaderboard, signOut, hasSupabase, savePushSubscription, deletePushSubscription, syncAgendaReminders, fetchEntitlements } from "@/lib/persistence";
 import {
   defaultState,
   mergeWithDefaults,
@@ -581,6 +581,16 @@ export function AppProvider({ children }) {
   function setSetting(key, value) {
     setState((prev) => ({ ...prev, settings: { ...prev.settings, [key]: value } }));
   }
+
+  // Recarrega os packs pagos. Usada no retorno do checkout: o webhook do Mercado Pago
+  // pode levar segundos, então a tela pergunta de novo em vez de mandar o usuário
+  // recarregar na mão. Não gera escrita: `entitlements` não entra no patch do sync.
+  const refreshEntitlements = useCallback(async () => {
+    const ents = await fetchEntitlements(userIdRef.current);
+    if (!ents) return null;
+    setState((prev) => ({ ...prev, entitlements: ents }));
+    return ents;
+  }, []);
   const updateNickname = useCallback(
     async (nick) => {
       const res = await updateUsername(userIdRef.current, nick.trim());
@@ -621,6 +631,7 @@ export function AppProvider({ children }) {
     updateNickname,
     updateSetting,
     setSetting,
+    refreshEntitlements,
     resetAllData,
     handleLogout,
     toast,
