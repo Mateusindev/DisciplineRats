@@ -1,9 +1,22 @@
 -- ============================================================
 -- Discipline Rats — schema Supabase (normalizado)
--- Rode no SQL Editor do painel Supabase (uma vez).
+-- Rode no SQL Editor do painel Supabase. É idempotente: rodar de novo é seguro.
 -- Logs (sono, foco, treino, hábitos) viram tabelas.
 -- Config/planos/tasks ficam como jsonb no profile.
+--
+-- ANTES DE RODAR: FECHE O APP.
+--
+-- Todo `alter table` pede AccessExclusiveLock, que conflita até com um SELECT. Com o
+-- app aberto (ou outra aba do SQL editor, ou o Table Editor do painel introspectando),
+-- este script disputa lock com quem está lendo e o Postgres mata um dos dois com
+-- `40P01: deadlock detected`. Não é erro de sintaxe e nada fica aplicado pela metade:
+-- o editor roda em transação, então o deadlock desfaz tudo. Feche o app e rode de novo.
+--
+-- O lock_timeout abaixo troca o deadlock por uma espera curta que falha explicando —
+-- errar rápido e claro é melhor do que travar a base enquanto o app está no ar.
 -- ============================================================
+
+set lock_timeout = '8s';
 
 -- ---------- PROFILES: config + planos + agregados ----------
 create table if not exists public.profiles (
@@ -38,8 +51,8 @@ alter table public.profiles add column if not exists books        jsonb not null
 alter table public.profiles add column if not exists calendar     jsonb not null default '{}'::jsonb;  -- agenda: { [date]: [eventos] }
 alter table public.profiles add column if not exists mapa         jsonb not null default '{}'::jsonb;  -- mapa de longo prazo: { lanes, nodes, edges, focusId }
 alter table public.profiles add column if not exists workout_history jsonb not null default '[]'::jsonb;  -- fichas de treino arquivadas (snapshot imutável do plano em cada ciclo)
-alter table public.profiles add column if not exists rest_days     jsonb not null default '{}'::jsonb;
-alter table public.profiles add column if not exists pet           jsonb not null default '{}'::jsonb;  -- mascote: { name, coat, owned:[itemId], gear:{slot:itemId}, spent } — `spent` é o XP torrado na lojinha, nunca descontado de xp/stats  -- folgas justificadas: { date: {reason,note} } — abatem a meta semanal de treino
+alter table public.profiles add column if not exists rest_days     jsonb not null default '{}'::jsonb;  -- folgas justificadas: { date: {reason,note} } — abatem a meta semanal de treino
+alter table public.profiles add column if not exists pet           jsonb not null default '{}'::jsonb;  -- mascote: { name, coat, gear:{slot:itemId} }. Posse de item PAGO não mora aqui — ver pet_entitlements
 alter table public.profiles add column if not exists agenda_rules jsonb not null default '[]'::jsonb;  -- agenda: regras de recorrência semanal (ocorrência é calculada, não gravada)
 alter table public.profiles add column if not exists body         jsonb not null default '{}'::jsonb;  -- perfil corporal: sexo, nascimento, altura, %gordura, objetivo (idade é derivada)
 alter table public.profiles drop column if exists state;           -- blob legado removido
@@ -248,16 +261,18 @@ create table if not exists public.pet_entitlements (
   primary key (user_id, item_id)                             -- comprar duas vezes o mesmo item não duplica
 );
 -- Renomeia a coluna de quem instalou na versão de PACKS (a loja passou a vender item
--- avulso). Guardado por catálogo pra poder rodar o schema.sql quantas vezes quiser.
+-- avulso). Tenta e engole o erro em vez de consultar o catálogo antes: ler
+-- information_schema toma lock em várias relações do catálogo dentro da MESMA
+-- transação que já tem AccessExclusiveLock nesta tabela, e é assim que se fabrica
+-- deadlock. Tentar direto é idempotente pelos dois lados — sem a coluna antiga dá
+-- undefined_column, com a nova já criada dá duplicate_column, e os dois são "nada a
+-- fazer".
 do $$
 begin
-  if exists (select 1 from information_schema.columns
-             where table_schema='public' and table_name='pet_entitlements' and column_name='pack_id')
-     and not exists (select 1 from information_schema.columns
-             where table_schema='public' and table_name='pet_entitlements' and column_name='item_id')
-  then
-    alter table public.pet_entitlements rename column pack_id to item_id;
-  end if;
+  alter table public.pet_entitlements rename column pack_id to item_id;
+exception
+  when undefined_column then null;
+  when duplicate_column then null;
 end $$;
 alter table public.pet_entitlements enable row level security;
 drop policy if exists "own entitlements select" on public.pet_entitlements;
@@ -277,13 +292,10 @@ create table if not exists public.pet_payments (
 );
 do $$
 begin
-  if exists (select 1 from information_schema.columns
-             where table_schema='public' and table_name='pet_payments' and column_name='pack_id')
-     and not exists (select 1 from information_schema.columns
-             where table_schema='public' and table_name='pet_payments' and column_name='item_id')
-  then
-    alter table public.pet_payments rename column pack_id to item_id;
-  end if;
+  alter table public.pet_payments rename column pack_id to item_id;
+exception
+  when undefined_column then null;
+  when duplicate_column then null;
 end $$;
 alter table public.pet_payments enable row level security;
 -- nenhuma policy: nem leitura pelo cliente. É registro financeiro, só backend vê.
