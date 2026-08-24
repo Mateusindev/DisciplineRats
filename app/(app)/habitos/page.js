@@ -1072,6 +1072,68 @@ function StepSegments({ h, ctx, wide = false }) {
   );
 }
 
+// ============================================================================
+// O MÍNIMO NA LINHA DA MATRIZ — bandeira de um clique.
+//
+// O card cheio (com o botão FIZ SÓ O MÍNIMO) só existe dentro do modal, e o modal
+// abre clicando no nome. Só que o dia é marcado NA MATRIZ, clicando na bolinha de
+// hoje: quem marca ali nunca passa pelo modal, então o mínimo simplesmente não era
+// encontrado. A ação precisa morar onde o dia é marcado.
+//
+// Um ícone só, quatro estados, tudo no title:
+//   sem mínimo definido → bandeira apagada, abre o card em edição pra definir
+//   definido, hoje em aberto → contornada, clique marca o dia no mínimo
+//   hoje marcado no mínimo → preenchida, clique sobe pro dia cheio
+//   hoje já é dia cheio → apagada e inerte, o mínimo não tem mais o que fazer hoje
+// ============================================================================
+function MinFlag({ h, ctx }) {
+  if (!habitMinAllowed(h)) return null;
+  const today = ctx.today;
+  const text = habitMinimum(h);
+  const done = (h.doneDates || []).includes(today);
+  const isMin = habitMinDone(h, today);
+
+  if (!text)
+    return (
+      <button
+        onClick={() => ctx.openEdit(h)}
+        aria-label={`Definir mínimo executável de ${h.name}`}
+        title="Definir mínimo executável — a menor versão do hábito que ainda conta"
+        className="w-7 h-7 shrink-0 grid place-items-center rounded-md text-outline/50 hover:text-primary-container hover:bg-primary-container/10 transition"
+      >
+        <MI name="flag" className="text-base" />
+      </button>
+    );
+
+  if (done && !isMin)
+    return (
+      <span
+        title={`Dia cheio hoje · mínimo: ${text}`}
+        className="w-7 h-7 shrink-0 grid place-items-center text-outline/40"
+      >
+        <MI name="flag" className="text-base" />
+      </span>
+    );
+
+  const rest = Math.max(0, habitPriority(h).xp - habitMinXp(h));
+  return (
+    <button
+      onClick={() => (isMin ? ctx.completeFull(h.id) : ctx.markMinimum(h.id))}
+      aria-label={isMin ? `Subir ${h.name} pra dia cheio` : `Marcar ${h.name} no mínimo`}
+      title={
+        isMin
+          ? `Feito no mínimo hoje (${text}) — clique se fez mais que isso${rest ? ` (+${rest} XP)` : ""}`
+          : `Fiz só o mínimo: ${text} — marca o dia mesmo com microatividade em aberto (+${habitMinXp(h)} XP)`
+      }
+      className={`w-7 h-7 shrink-0 grid place-items-center rounded-md transition active:scale-95 ${
+        isMin ? "text-primary-container bg-primary-container/15" : "text-outline hover:text-primary-container hover:bg-primary-container/10"
+      }`}
+    >
+      <MI name="flag" fill={isMin} className="text-base" />
+    </button>
+  );
+}
+
 // Nome do hábito dentro de uma moldura tracejada de input. É o que anuncia o
 // clique: nome solto não parece botão, e o tracejado empresta a linguagem que
 // todo mundo já reconhece de campo editável. Não depende de hover — no celular
@@ -1526,6 +1588,7 @@ function MonthLayout({ habits, ctx }) {
                     <td className="sticky left-0 z-10 bg-surface-container px-3 py-1 max-w-[260px]">
                       <div className="flex items-center gap-2 min-w-0">
                         <HabitName h={h} i={i} ctx={ctx} />
+                        <MinFlag h={h} ctx={ctx} />
                         {hasSteps && <StepSegments h={h} ctx={ctx} />}
                       </div>
                     </td>
@@ -1586,6 +1649,10 @@ function MonthLayout({ habits, ctx }) {
           <span className="flex items-center gap-1.5">
             <span className="w-4 h-4 rounded-full bg-surface-variant ring-2 ring-on-surface" />
             <Caps className="text-outline text-[10px]">HOJE — CLIQUE PRA MARCAR</Caps>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <MI name="flag" className="text-base text-outline" />
+            <Caps className="text-outline text-[10px]">MÍNIMO EXECUTÁVEL — MARCA O DIA FAZENDO MENOS</Caps>
           </span>
         </div>
         </>
