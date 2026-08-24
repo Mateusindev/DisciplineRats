@@ -335,10 +335,17 @@ html:not(.light) .bg-white\/5 {
 }
 .pet-zzz { animation: pet-zzz 2.6s ease-out infinite; }
 
+/* céu da tela de sono: as estrelas acesas são a nota de qualidade do descanso */
+@keyframes pet-twinkle {
+  0%, 100% { opacity: 0.45; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+.pet-twinkle { animation: pet-twinkle 3.4s ease-in-out infinite; }
+
 /* Quem pede menos movimento recebe um gato parado — e ele continua sendo um gato.
    A vagabundagem pelo cercado também é desligada no JS (matchMedia). */
 @media (prefers-reduced-motion: reduce) {
-  .pet-breathe, .pet-tail, .pet-blink, .pet-step, .pet-leg, .pet-zzz { animation: none; }
+  .pet-breathe, .pet-tail, .pet-blink, .pet-step, .pet-leg, .pet-zzz, .pet-twinkle { animation: none; }
   .pet-walker { transition: none !important; }
 }
 

@@ -6,6 +6,7 @@ import { MI, Caps, StarRating, inputCls } from "@/components/ui";
 import MetasEditor from "@/components/MetasEditor";
 import { sleepXp, sleepMissXp, computeSleepXp, bedtimeLateness, SLEEP_LIMIT_DEFAULT, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX, award, getDateStr, minutesToHm, weekdayShort, last7Dates } from "@/lib/state";
 import { LineChart } from "@/components/charts";
+import GatoDaNoite from "./GatoDaNoite";
 
 function hm(min) {
   const h = Math.floor(min / 60);
@@ -244,8 +245,20 @@ export default function SonoPage() {
           {needsReason && <p className="text-[11px] text-error text-center -mt-2">Justifique por que deitou tarde pra registrar.</p>}
         </div>
 
+        <div className="md:col-span-5 flex flex-col gap-gutter">
+          {/* o mascote deitado: a mesma noite dos números acima, virada em cena */}
+          <GatoDaNoite
+            state={state}
+            bedtime={bedtime}
+            wake={wake}
+            durationMin={durationMin}
+            goalMin={goalMin}
+            limit={limit}
+            quality={quality}
+          />
+
         {/* Chart */}
-        <div className="md:col-span-5 glass-card p-gutter rounded-xl flex flex-col">
+        <div className="glass-card p-gutter rounded-xl flex flex-col flex-1">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-headline-md text-headline-md text-on-surface">ÚLTIMOS 7 DIAS</h3>
             {hasLate && (
@@ -301,6 +314,7 @@ export default function SonoPage() {
               </ul>
             </div>
           )}
+        </div>
         </div>
 
       </div>
