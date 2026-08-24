@@ -1,9 +1,12 @@
-# Packs pagos do mascote (Mercado Pago)
+# Acessórios pagos do mascote (Mercado Pago)
 
-Duas funções, uma tabela, e uma regra que não pode ser relaxada.
+Duas funções, duas tabelas, e uma regra que não pode ser relaxada.
+
+Cada acessório custa **R$ 0,99** (compra única). Cada categoria tem **um item grátis**
+liberado pra todo mundo. XP não compra nada — ele só faz o gato crescer.
 
 ```
-cliente clica R$  → mp-checkout  (cria a cobrança, NÃO libera nada)
+cliente clica R$ 0,99 → mp-checkout  (cria a cobrança, NÃO libera nada)
                         ↓ devolve init_point
 navegador vai pro Mercado Pago → usuário paga (Pix / cartão / boleto)
                         ↓ MP chama nosso webhook
@@ -17,17 +20,18 @@ cliente volta em /perfil?compra=ok → pergunta os entitlements de novo
 
 **`pet_entitlements` é a única tabela do projeto que o cliente não escreve.** Isso
 não é capricho. A policy de `profiles` permite ao dono atualizar a própria linha,
-então tudo que mora lá — inclusive `pet.owned` — pode ser reescrito pelo console do
-navegador. Item de XP nesse lugar é inofensivo (mentir ali engana só a si mesmo).
-Item **pago** ali seria o produto vazando: uma linha de JS liberaria o pack.
+então tudo que mora lá pode ser reescrito pelo console do navegador. Enquanto XP
+comprava acessório existia um `pet.owned` ali; com tudo pago, aquele campo virou
+vetor de fraude e foi **removido** — uma linha de JS liberaria o item.
 
 Por isso:
 
 - `pet_entitlements` tem policy **só de SELECT**. Sem policy de insert/update/delete,
   ninguém escreve pela API pública, nem o dono.
 - Quem escreve é o `mp-webhook`, com a service key, que passa por cima do RLS.
-- No cliente, `normalizePet` **expurga** item pago de `pet.owned` mesmo se estiver
-  escrito lá. A posse do pago é `state.entitlements`, que vem do banco e nunca volta.
+- No cliente não existe lista de comprados: `normalizePet` descarta `owned`/`spent`
+  se aparecerem. Item grátis é de todos; item pago é `state.entitlements`, que vem do
+  banco e nunca volta pra ele.
 
 Se você mexer nisso, mexa sabendo: `petOwns()` em `lib/state.js` é a fronteira.
 
@@ -36,12 +40,12 @@ Se você mexer nisso, mexa sabendo: `petOwns()` em `lib/state.js` é a fronteira
 O caminho **Checkout Pro** é fácil: um POST cria a cobrança, você redireciona, e
 recebe um webhook. O que dá trabalho não é a API — é o que está em volta:
 
-1. **Validar a assinatura.** O endpoint é público. Sem HMAC, liberar pack é um POST
+1. **Validar a assinatura.** O endpoint é público. Sem HMAC, liberar item é um POST
    que qualquer um monta.
 2. **Não confiar no corpo da notificação.** Ela só diz "o pagamento X mudou". Status,
    valor e dono vêm de uma consulta nossa.
 3. **Conferir o valor.** Preferência pode ser alterada por fora; sem essa conferência,
-   pagar R$ 0,01 leva o pack.
+   pagar R$ 0,01 leva o item.
 4. **Idempotência.** O MP reenvia. `payment_id` como PK resolve.
 5. **`pending` não é `approved`.** Pix e boleto ficam pendentes até liquidar. Conceder
    ali é entregar sem receber.
@@ -105,10 +109,10 @@ Application → Local Storage → `sb-...-auth-token`):
 curl -i -X POST 'https://<PROJECT_REF>.functions.supabase.co/mp-checkout' \
   -H 'Authorization: Bearer <ACCESS_TOKEN_DO_USUARIO>' \
   -H 'Content-Type: application/json' \
-  -d '{"packId":"inverno"}'
+  -d '{"itemId":"crown"}'
 ```
 
-Esperado: `200 {"url":"https://www.mercadopago.com.br/...","packId":"inverno","priceBRL":9.9}`.
+Esperado: `200 {"url":"https://www.mercadopago.com.br/...","itemId":"crown","priceBRL":0.99}`.
 Abrir essa URL leva pra tela de pagamento real.
 
 Webhook sem assinatura (tem que recusar):
@@ -125,17 +129,19 @@ passa por `pending` antes de `approved`, e é onde integrações quebram.
 Conferir o que chegou:
 
 ```sql
-select payment_id, status, amount, pack_id, created_at from pet_payments order by created_at desc limit 10;
+select payment_id, status, amount, item_id, created_at from pet_payments order by created_at desc limit 10;
 select * from pet_entitlements order by granted_at desc limit 10;
 ```
 
 Logs da função: `supabase functions logs mp-webhook`.
 
-## 6. Preço mora em dois lugares (de propósito)
+## 6. Catálogo mora em dois lugares (de propósito)
 
-`PET_PACKS` em `lib/state.js` pinta a tela. `PACKS` em `_shared/packs.ts` **cobra**. A
-duplicação existe porque a função roda em Deno e não importa o bundle do Next; o
-cliente é o lado que não manda.
+`PET_ITEMS` em `lib/state.js` pinta a tela. `ITEM_PRICE` + `PAID_ITEMS` em
+`_shared/items.ts` **cobram**. A duplicação existe porque a função roda em Deno e não
+importa o bundle do Next; o cliente é o lado que não manda. O script também garante
+que nenhum item **grátis** entrou na lista vendável — cobrar por algo que a pessoa já
+tem é o pior bug possível aqui.
 
 O que impede os dois de divergirem:
 
@@ -143,7 +149,7 @@ O que impede os dois de divergirem:
 bun run check:pet     # roda as duas suítes, inclusive a paridade de preço
 ```
 
-Divergiu, o script quebra. Mudou preço? Mude nos dois e rode.
+Divergiu, o script quebra. Mudou preço ou item? Mude nos dois e rode.
 
 ## Limites que vale saber
 
@@ -156,6 +162,9 @@ Divergiu, o script quebra. Mudou preço? Mude nos dois e rode.
 - **Direito de arrependimento (CDC, 7 dias)** se aplica a compra online no Brasil.
   Não sou advogado — só sinalizando que existe e que o fluxo de reembolso acima
   ainda não está implementado.
-- **Cosmético, e a tela diz isso.** Pack não dá XP, não sobe nível e não mexe no
+- **Cosmético, e a tela diz isso.** Acessório não dá XP, não sobe nível e não mexe no
   ranking. Vender vantagem de progresso num app de disciplina seria vender a ilusão
   de ter feito o trabalho.
+- **Taxa de gateway em R$ 0,99.** No Pix a taxa é percentual e sobra quase tudo; no
+  cartão a parte fixa pode comer a maior parte do valor. Confira sua tabela no painel
+  do MP antes de contar com a receita de cartão.

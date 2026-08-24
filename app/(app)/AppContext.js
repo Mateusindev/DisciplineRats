@@ -582,7 +582,7 @@ export function AppProvider({ children }) {
     setState((prev) => ({ ...prev, settings: { ...prev.settings, [key]: value } }));
   }
 
-  // Recarrega os packs pagos. Usada no retorno do checkout: o webhook do Mercado Pago
+  // Recarrega os itens pagos liberados. Usada no retorno do checkout: o webhook do Mercado Pago
   // pode levar segundos, então a tela pergunta de novo em vez de mandar o usuário
   // recarregar na mão. Não gera escrita: `entitlements` não entra no patch do sync.
   const refreshEntitlements = useCallback(async () => {

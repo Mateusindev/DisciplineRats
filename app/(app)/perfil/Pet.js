@@ -10,11 +10,10 @@
 // então o MESMO desenho serve pro gato e pra vitrine da loja — a peça que aparece
 // no card é a peça que vai pro bicho, não uma ilustração parecida que envelhece.
 //
-// A ordem de desenho não é detalhe: costas ANTES do corpo (fica atrás), e
-// cabeça/rosto/pescoço DEPOIS da cabeça e DENTRO do grupo dela, pra herdarem o
-// `headScale` — assim o chapéu do filhote é grande junto com a cabeça dele, de
-// graça. Brinquedo e cenário NÃO moram no gato: são do cercado, senão o novelo
-// sairia andando junto quando ele passeia.
+// A ordem de desenho não é detalhe: cabeça/rosto/pescoço vêm DEPOIS da cabeça e
+// DENTRO do grupo dela, pra herdarem o `headScale` — assim o chapéu do filhote é
+// grande junto com a cabeça dele, de graça. Brinquedo e cenário NÃO moram no gato:
+// são do cercado, senão o novelo sairia andando junto quando ele passeia.
 //
 // Quem pede menos movimento (prefers-reduced-motion) recebe um gato parado: as
 // keyframes morrem no CSS e a vagabundagem nem começa aqui.
@@ -22,25 +21,23 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "../AppContext";
-import { startPackCheckout } from "@/lib/persistence";
+import { startItemCheckout } from "@/lib/persistence";
 import { MI, Caps, inputCls } from "@/components/ui";
 import {
   fmtK,
   gamify,
   petGrowth,
   petCoat,
-  petBalance,
-  buyPetItem,
   togglePetGear,
   defaultPet,
   PET_STAGES,
   PET_COATS,
   PET_SLOTS,
-  PET_ALL_ITEMS,
+  PET_ITEMS,
   PET_ITEM_BY_ID,
-  PET_PACKS,
   PET_NAME_LEN,
   petOwns,
+  petPriceLabel,
 } from "@/lib/state";
 
 // Cor de tecido, igual à pelagem: hex fixo, não token de tema. Gorro vermelho é
@@ -252,60 +249,6 @@ function NeckGear({ id }) {
   }
 }
 
-// costas: coordenadas do CORPO (ellipse cx 56, cy 56+dy). Desenhado ANTES do
-// corpo, então nasce do dorso em vez de flutuar na frente dele.
-function BackGear({ id, dy = 0 }) {
-  switch (id) {
-    case "backpack":
-      return (
-        <g transform={`translate(0,${dy})`}>
-          <rect x="40" y="38" width="21" height="18" rx="5" fill={T.denim} />
-          <rect x="44" y="41" width="13" height="7" rx="3" fill={T.denimDark} />
-          <path d="M61 44 q7 2 8 8" stroke={T.denimDark} strokeWidth="2.4" fill="none" />
-        </g>
-      );
-    case "cape":
-      return (
-        <g transform={`translate(0,${dy})`}>
-          <path d="M70 42 q-30 -2 -44 14 q16 8 34 4 q10 -8 10 -18 z" fill={T.plum} opacity="0.92" />
-          <path d="M70 42 q-8 6 -10 14" stroke={T.plumDark} strokeWidth="1.6" fill="none" />
-        </g>
-      );
-    case "wings":
-      return (
-        <g transform={`translate(0,${dy})`} fill={T.cloth}>
-          <path d="M56 42 q-16 -20 -30 -16 q4 16 22 20 z" />
-          <path d="M58 42 q-8 -22 4 -26 q8 14 2 26 z" opacity="0.8" />
-        </g>
-      );
-    // ---- pagos ----
-    case "jetpack":
-      return (
-        <g transform={`translate(0,${dy})`}>
-          <rect x="38" y="38" width="9" height="20" rx="4.5" fill="#c9ccd4" />
-          <rect x="48" y="38" width="9" height="20" rx="4.5" fill="#aeb4c0" />
-          <rect x="40" y="40" width="15" height="3" rx="1.5" fill="#8b919c" />
-          <path d="M42.5 58 q1.6 7 0 11 q-1.8 -4 -2 -11 z" fill="#f6a23c" />
-          <path d="M52.5 58 q1.6 6 0 9 q-1.8 -3 -2 -9 z" fill="#e8762f" />
-        </g>
-      );
-    case "guitar":
-      return (
-        <g transform={`translate(0,${dy})`}>
-          <rect x="52" y="30" width="4.4" height="22" rx="1.6" transform="rotate(28 54 41)" fill="#4a3524" />
-          <ellipse cx="40" cy="52" rx="12" ry="9.5" fill="#b8342f" />
-          <ellipse cx="40" cy="52" rx="4" ry="3.4" fill="#3a2a1c" />
-          <g stroke="#e6e0d2" strokeWidth="0.7" opacity="0.8">
-            <path d="M46 41 l12 -8" />
-            <path d="M48 43 l12 -8" />
-          </g>
-        </g>
-      );
-    default:
-      return null;
-  }
-}
-
 // brinquedo: fica no chão do cercado
 function Toy({ id }) {
   if (!id) return null;
@@ -500,8 +443,6 @@ function Cat({ stage, coat, act, gear }) {
       </g>
 
       <g className={walking ? "pet-step" : undefined}>
-        <BackGear id={gear.back} dy={dy} />
-
         {/* patas de trás */}
         {low ? (
           <g>
@@ -651,14 +592,6 @@ function GearPreview({ item, coat, small = false }) {
         <Scene id={item.id} />
       </div>
     );
-  if (item.slot === "back")
-    return (
-      <svg viewBox="20 26 62 40" className={`${h} w-full`} aria-hidden="true">
-        <BackGear id={item.id} />
-        <ellipse cx="56" cy="56" rx="28" ry="17" fill={c.fur} />
-        <ellipse cx="59" cy="64" rx="20" ry="8" fill={c.belly} opacity="0.85" />
-      </svg>
-    );
   return (
     <svg viewBox="-26 -34 52 62" className={`${h} w-full`} aria-hidden="true">
       <path d="M-15 -7 L-19 -23 L-4 -14 Z" fill={tip} />
@@ -675,46 +608,7 @@ function GearPreview({ item, coat, small = false }) {
   );
 }
 
-// Vitrine dos packs pagos. Mostra as QUATRO peças do tema, porque o que se compra é
-// o conjunto — um card com um nome e um preço pede fé; quatro desenhos mostram o que
-// entra no bicho.
-function PackCard({ pack, owned, coat, busy, onBuy }) {
-  const items = pack.items.map((id) => PET_ITEM_BY_ID[id]).filter(Boolean);
-  return (
-    <div className={`flex flex-col rounded-xl border p-3 ${owned ? "border-primary-container bg-primary-container/10" : "border-outline-variant/60 bg-surface-container-high/40"}`}>
-      <div className="grid grid-cols-4 gap-1">
-        {items.map((it) => (
-          <div key={it.id} className="overflow-hidden rounded-lg bg-surface-container/60">
-            <GearPreview item={it} coat={coat} small />
-          </div>
-        ))}
-      </div>
-      <div className="mt-2 flex-1">
-        <div className="text-[13px] leading-tight text-on-surface">{pack.name}</div>
-        <div className="text-[10px] leading-tight text-outline">{pack.desc}</div>
-      </div>
-      <div className="mt-2">
-        {owned ? (
-          <div className="flex items-center justify-center gap-1 rounded-lg bg-primary-container/20 py-1.5 font-label-caps text-[10px] text-primary-container">
-            <MI name="check_circle" fill className="text-sm" /> SEU · VISTA NAS ABAS
-          </div>
-        ) : (
-          <button
-            onClick={() => onBuy(pack.id)}
-            disabled={busy}
-            className="w-full rounded-lg border border-primary py-1.5 font-label-caps text-[10px] tabular-nums text-primary transition hover:bg-primary/10 active:scale-[.98] disabled:opacity-50"
-          >
-            {busy ? "ABRINDO..." : `R$ ${pack.priceBRL.toFixed(2).replace(".", ",")}`}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-const SHOP_TABS = [...PET_SLOTS, { id: "packs", label: "PACKS R$", icon: "redeem" }];
-
-function Shop({ pet, level, balance, coat, entitlements, buying, onBuy, onBuyPack, onToggle, onClose }) {
+function Shop({ pet, coat, entitlements, buying, onBuy, onToggle, onClose }) {
   const [slot, setSlot] = useState(PET_SLOTS[0].id);
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && onClose();
@@ -722,8 +616,12 @@ function Shop({ pet, level, balance, coat, entitlements, buying, onBuy, onBuyPac
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const items = PET_ALL_ITEMS.filter((i) => i.slot === slot);
-  const ownsItem = (id) => (PET_ITEM_BY_ID[id]?.source === "brl" ? entitlements.includes(PET_ITEM_BY_ID[id].pack) : pet.owned.includes(id));
+  const items = PET_ITEMS.filter((i) => i.slot === slot);
+  // grátis é de todos; pago é de quem tem o entitlement. Nenhum dos dois consulta
+  // dado que o navegador possa editar.
+  const ownsItem = (it) => it.source === "free" || entitlements.includes(it.id);
+  const total = PET_ITEMS.length;
+  const have = PET_ITEMS.filter(ownsItem).length;
 
   return (
     <div
@@ -741,11 +639,11 @@ function Shop({ pet, level, balance, coat, entitlements, buying, onBuy, onBuyPac
           <MI name="storefront" className="text-primary-container text-3xl shrink-0" />
           <div className="flex-1 min-w-0">
             <h3 className="font-headline-md text-headline-md text-primary uppercase">Lojinha</h3>
-            {/* A frase existe porque a dúvida vem sempre: gastar não derruba nível
-                nem tamanho. O total da vida fica intocado; a loja come de um saldo
-                separado. */}
+            {/* O que a pessoa merece saber ANTES de pagar, e o que a lei manda dizer:
+                é cosmético, é compra única e não mexe em progresso nenhum. */}
             <p className="text-[11px] text-on-surface-variant">
-              Paga em XP livre. Comprar <strong className="text-on-surface">não</strong> abaixa seu nível nem encolhe o gato — o XP total fica intocado.
+              Um item grátis por categoria. Os outros custam <strong className="text-on-surface">{petPriceLabel()}</strong> cada, compra única, sem assinatura. São
+              acessórios <strong className="text-on-surface">cosméticos</strong>: não dão XP, não sobem nível e não mexem no ranking — XP serve só pra o gato crescer.
             </p>
           </div>
           <button onClick={onClose} aria-label="Fechar" className="shrink-0 p-1 text-outline hover:text-on-surface transition">
@@ -753,28 +651,23 @@ function Shop({ pet, level, balance, coat, entitlements, buying, onBuy, onBuyPac
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-outline-variant/50 px-4 sm:px-5 py-3">
+        <div className="flex items-center gap-x-5 border-b border-outline-variant/50 px-4 sm:px-5 py-2.5">
           <span className="flex items-baseline gap-1.5">
-            <span className="font-headline-md text-headline-md text-primary tabular-nums">{fmtK(balance)}</span>
-            <Caps className="text-outline text-[10px]">XP LIVRE</Caps>
-          </span>
-          <span className="flex items-baseline gap-1.5">
-            <span className="text-[13px] text-on-surface-variant tabular-nums">{fmtK(pet.spent || 0)}</span>
-            <Caps className="text-outline text-[10px]">JÁ GASTO</Caps>
-          </span>
-          <span className="flex items-baseline gap-1.5 ml-auto">
             <span className="text-[13px] text-on-surface-variant tabular-nums">
-              {PET_ALL_ITEMS.filter((i) => ownsItem(i.id)).length}/{PET_ALL_ITEMS.length}
+              {have}/{total}
             </span>
-            <Caps className="text-outline text-[10px]">ITENS</Caps>
+            <Caps className="text-outline text-[10px]">ITENS SEUS</Caps>
+          </span>
+          <span className="ml-auto flex items-center gap-1.5">
+            <MI name="pix" className="text-sm text-outline" />
+            <Caps className="text-outline text-[10px]">PIX · CARTÃO · BOLETO</Caps>
           </span>
         </div>
 
         <div className="flex gap-1 overflow-x-auto ff-scroll border-b border-outline-variant/50 px-4 sm:px-5 py-2">
-          {SHOP_TABS.map((sl) => {
+          {PET_SLOTS.map((sl) => {
             const on = sl.id === slot;
-            const all = sl.id === "packs" ? PET_PACKS : PET_ALL_ITEMS.filter((i) => i.slot === sl.id);
-            const have = sl.id === "packs" ? PET_PACKS.filter((p) => entitlements.includes(p.id)).length : all.filter((i) => ownsItem(i.id)).length;
+            const all = PET_ITEMS.filter((i) => i.slot === sl.id);
             return (
               <button
                 key={sl.id}
@@ -789,42 +682,18 @@ function Shop({ pet, level, balance, coat, entitlements, buying, onBuy, onBuyPac
                 <MI name={sl.icon} className="text-base" />
                 {sl.label}
                 <span className="tabular-nums text-outline">
-                  {have}/{all.length}
+                  {all.filter(ownsItem).length}/{all.length}
                 </span>
               </button>
             );
           })}
         </div>
 
-        {slot === "packs" ? (
-          <div className="p-4 sm:p-5">
-            {/* O que a lei manda e o usuário merece saber ANTES de pagar: é
-                cosmético, não muda progresso, e não é assinatura. */}
-            <p className="mb-3 text-[11px] text-on-surface-variant">
-              Compra única, sem assinatura. São <strong className="text-on-surface">acessórios cosméticos</strong>: não dão XP, não sobem nível, não mexem no
-              ranking. Pagamento pelo Mercado Pago (Pix, cartão ou boleto) — o pack libera assim que o pagamento é aprovado.
-            </p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {PET_PACKS.map((pack) => (
-                <PackCard
-                  key={pack.id}
-                  pack={pack}
-                  owned={entitlements.includes(pack.id)}
-                  coat={coat}
-                  busy={buying === pack.id}
-                  onBuy={onBuyPack}
-                />
-              ))}
-            </div>
-          </div>
-        ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 sm:p-5">
           {items.map((item) => {
-            const paid = item.source === "brl";
-            const owned = ownsItem(item.id);
+            const free = item.source === "free";
+            const owned = ownsItem(item);
             const worn = pet.gear?.[item.slot] === item.id;
-            const locked = !owned && !paid && level < item.minLevel;
-            const poor = !owned && !locked && !paid && balance < item.price;
             return (
               <div
                 key={item.id}
@@ -832,8 +701,13 @@ function Shop({ pet, level, balance, coat, entitlements, buying, onBuy, onBuyPac
                   worn ? "border-primary-container bg-primary-container/10" : "border-outline-variant/60 bg-surface-container-high/40"
                 }`}
               >
-                <div className={locked ? "opacity-40" : undefined}>
+                <div className="relative">
                   <GearPreview item={item} coat={coat} />
+                  {free && (
+                    <span className="absolute right-0 top-0 rounded-full bg-surface-container px-1.5 py-0.5 font-label-caps text-[9px] text-primary-container">
+                      GRÁTIS
+                    </span>
+                  )}
                 </div>
                 <div className="mt-2 min-w-0 flex-1">
                   <div className="text-[13px] leading-tight text-on-surface">{item.name}</div>
@@ -851,28 +725,14 @@ function Shop({ pet, level, balance, coat, entitlements, buying, onBuy, onBuyPac
                     >
                       {worn ? "VESTIDO · TIRAR" : "VESTIR"}
                     </button>
-                  ) : paid ? (
-                    <button
-                      onClick={() => setSlot("packs")}
-                      title={`Vem no ${PET_PACKS.find((p) => p.id === item.pack)?.name || "pack"}`}
-                      className="flex w-full items-center justify-center gap-1 rounded-lg border border-outline-variant py-1.5 font-label-caps text-[10px] text-on-surface-variant transition hover:border-outline hover:text-on-surface"
-                    >
-                      <MI name="redeem" className="text-sm" /> NO PACK
-                    </button>
-                  ) : locked ? (
-                    <div className="flex items-center justify-center gap-1 rounded-lg border border-outline-variant py-1.5 font-label-caps text-[10px] text-outline">
-                      <MI name="lock" className="text-sm" /> NÍVEL {item.minLevel}
-                    </div>
                   ) : (
                     <button
                       onClick={() => onBuy(item.id)}
-                      disabled={poor}
-                      title={poor ? `Faltam ${fmtK(item.price - balance)} XP livre` : `Comprar por ${item.price} XP`}
-                      className={`w-full rounded-lg py-1.5 font-label-caps text-[10px] tabular-nums transition active:scale-[.98] ${
-                        poor ? "border border-outline-variant text-outline" : "border border-primary text-primary hover:bg-primary/10"
-                      }`}
+                      disabled={buying === item.id}
+                      title={`Comprar por ${petPriceLabel()}`}
+                      className="w-full rounded-lg border border-primary py-1.5 font-label-caps text-[10px] tabular-nums text-primary transition hover:bg-primary/10 active:scale-[.98] disabled:opacity-50"
                     >
-                      {fmtK(item.price)} XP
+                      {buying === item.id ? "ABRINDO..." : petPriceLabel()}
                     </button>
                   )}
                 </div>
@@ -880,7 +740,6 @@ function Shop({ pet, level, balance, coat, entitlements, buying, onBuy, onBuyPac
             );
           })}
         </div>
-        )}
       </div>
     </div>
   );
@@ -900,13 +759,12 @@ export default function Pet() {
   const coat = petCoat(pet.coat);
   const gear = pet.gear || {};
   const name = (pet.name || "").trim();
-  const balance = petBalance(state);
   const entitlements = state.entitlements || [];
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [shop, setShop] = useState(false);
-  const [buying, setBuying] = useState(null); // id do pack cuja cobrança está abrindo
+  const [buying, setBuying] = useState(null); // id do item cuja cobrança está abrindo
   const [hearts, setHearts] = useState([]);
   const [walk, setWalk] = useState({ act: "idle", x: 46, dir: 1, dur: 0 });
   const walkRef = useRef(walk);
@@ -966,17 +824,11 @@ export default function Pet() {
     setEditing(false);
   }
 
-  function buy(id) {
-    const item = PET_ITEM_BY_ID[id];
-    setState((prev) => buyPetItem(prev, id));
-    if (item) toast(`${item.name} comprado`, { sub: `−${item.price} XP livre · já vestido`, icon: "shopping_bag" });
-  }
-
-  // Compra de pack: sai do app pro Mercado Pago. Nada é liberado aqui — a volta
-  // acontece pelo back_url, e a liberação pelo webhook.
-  async function buyPack(packId) {
-    setBuying(packId);
-    const res = await startPackCheckout(packId);
+  // Compra: sai do app pro Mercado Pago. Nada é liberado aqui — a volta acontece
+  // pelo back_url, e a liberação só pelo webhook, depois que o dinheiro entrou.
+  async function buyItem(itemId) {
+    setBuying(itemId);
+    const res = await startItemCheckout(itemId);
     setBuying(null);
     if (res.ok) {
       window.location.href = res.url;
@@ -984,7 +836,7 @@ export default function Pet() {
     }
     const msg =
       res.reason === "ja_possui"
-        ? "Você já tem esse pack"
+        ? "Você já tem esse item"
         : res.reason === "sem_sessao"
           ? "Entre na conta pra comprar"
           : res.reason === "mp_nao_configurado" || res.reason === "site_url_nao_configurada"
@@ -996,7 +848,7 @@ export default function Pet() {
 
   // Volta do checkout. O webhook pode levar alguns segundos depois do "aprovado", e
   // é por isso que a consulta tenta algumas vezes em vez de uma só: chegar aqui e
-  // não ver o pack é a hora exata em que o usuário desconfia da compra.
+  // não ver o item é a hora exata em que o usuário desconfia da compra.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get("compra");
     if (!q) return;
@@ -1015,7 +867,7 @@ export default function Pet() {
       const ents = await refreshEntitlements();
       if (ents && ents.length > before) {
         setShop(true);
-        return toast("Pack liberado!", { sub: "Já pode vestir na lojinha", icon: "redeem", duration: 6000 });
+        return toast("Item liberado!", { sub: "Já pode vestir na lojinha", icon: "redeem", duration: 6000 });
       }
       if (++tries < 6) return setTimeout(poll, 2000);
       toast("Pagamento recebido", { sub: "A liberação pode levar alguns minutos — recarregue depois", icon: "hourglass_top", duration: 7000 });
@@ -1127,20 +979,16 @@ export default function Pet() {
             )}
           </div>
 
-          {/* dois números, dois papéis: o total faz ele crescer, o livre compra
-              coisa. Mostrar só um deles é o que geraria a dúvida de sempre. */}
+          {/* XP tem UM papel só agora: fazer o gato crescer. Não há saldo pra
+              mostrar porque não há nada pra gastar com ele. */}
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
             <span className="flex items-baseline gap-1.5">
-              <span className="text-[13px] text-primary tabular-nums">{fmtK(balance)}</span>
-              <Caps className="text-outline text-[10px]">XP LIVRE</Caps>
-            </span>
-            <span className="flex items-baseline gap-1.5">
-              <span className="text-[13px] text-on-surface-variant tabular-nums">{fmtK(g.xp)}</span>
-              <Caps className="text-outline text-[10px]">XP TOTAL · NÍVEL {g.level}</Caps>
+              <span className="text-[13px] text-primary tabular-nums">{fmtK(g.xp)}</span>
+              <Caps className="text-outline text-[10px]">XP · NÍVEL {g.level}</Caps>
             </span>
             <span className="flex items-baseline gap-1.5">
               <span className="text-[13px] text-on-surface-variant tabular-nums">
-                {PET_ALL_ITEMS.filter((i) => petOwns(state, i.id)).length}/{PET_ALL_ITEMS.length}
+                {PET_ITEMS.filter((i) => petOwns(state, i.id)).length}/{PET_ITEMS.length}
               </span>
               <Caps className="text-outline text-[10px]">ITENS · {wornCount} VESTIDO(S)</Caps>
             </span>
@@ -1185,13 +1033,10 @@ export default function Pet() {
       {shop && (
         <Shop
           pet={pet}
-          level={g.level}
-          balance={balance}
           coat={coat}
           entitlements={entitlements}
           buying={buying}
-          onBuyPack={buyPack}
-          onBuy={buy}
+          onBuy={buyItem}
           onToggle={(id) => setState((prev) => togglePetGear(prev, id))}
           onClose={() => setShop(false)}
         />

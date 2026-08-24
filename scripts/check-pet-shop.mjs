@@ -1,30 +1,31 @@
-// Regras da lojinha do mascote que NÃO dá pra ver na tela: os dois livros de XP, a
-// fronteira de confiança entre item de XP (escrito pelo cliente) e item pago
-// (concedido pelo servidor), e a sanidade do catálogo.
+// Regras da lojinha do mascote que NÃO dá pra ver na tela: XP só faz crescer, a
+// fronteira de confiança entre item grátis (todos) e item pago (só com entitlement do
+// servidor), e a sanidade do catálogo.
 //
 //   bun scripts/check-pet-shop.mjs
 //
-// O par deste script é scripts/check-pack-prices.mjs, que garante que o preço da
-// tela e o preço da cobrança não divergem.
+// O par deste script é scripts/check-item-prices.mjs, que garante que o catálogo da
+// tela e o da cobrança não divergem.
 
 import {
   normalizePet,
   defaultPet,
-  petBalance,
-  buyPetItem,
   togglePetGear,
   petOwns,
   mergeWithDefaults,
   gamify,
   xpToReachLevel,
   petGrowth,
+  petStage,
   petItemIsPaid,
+  petPriceLabel,
   PET_ITEMS,
-  PET_ALL_ITEMS,
   PET_PAID_ITEMS,
+  PET_FREE_ITEMS,
   PET_ITEM_BY_ID,
+  PET_ITEM_PRICE,
   PET_SLOTS,
-  PET_PACKS,
+  PET_STAGES,
 } from "../lib/state.js";
 
 let fail = 0;
@@ -34,114 +35,88 @@ const ok = (c, m) => {
 };
 const st = (xp, pet, ents) => ({ stats: { xp, streak: 0 }, pet: pet || defaultPet(), entitlements: ents || [] });
 
-console.log("=== XP: dois livros ===");
-ok(petBalance(st(1000)) === 1000, "saldo = xp quando nada foi gasto");
-ok(petBalance(st(1000, { ...defaultPet(), spent: 400 })) === 600, "saldo desconta o gasto");
-ok(petBalance(st(100, { ...defaultPet(), spent: 999 })) === 0, "saldo nunca negativo");
-
+console.log("=== XP faz UMA coisa: crescer ===");
+ok(!("owned" in defaultPet()) && !("spent" in defaultPet()), "pet não tem mais lista de comprados nem saldo gasto");
+ok(petStage(1).name === "FILHOTE" && petStage(15).name === "LENDÁRIO", "degraus de crescimento seguem no XP");
 {
-  const antes = st(1000);
-  const depois = buyPetItem(antes, "bell"); // 250 XP, nível 1
-  ok(depois.pet.owned.includes("bell") && depois.pet.spent === 250, "compra guarda item e cobra");
-  ok(depois.pet.gear.neck === "bell", "compra já veste");
-  ok(petBalance(depois) === 750, "saldo cai");
-  ok(depois.stats.xp === antes.stats.xp, "XP TOTAL intocado — é o que impede o gato de encolher ao comprar");
-  ok(gamify(depois.stats).level === gamify(antes.stats).level, "nível idêntico depois de comprar");
-  ok(petGrowth(depois.stats).pct === petGrowth(antes.stats).pct, "barra de crescimento não mexe");
-  ok(buyPetItem(depois, "bell") === depois, "não compra duas vezes o mesmo item");
-}
-ok(buyPetItem(st(100), "bell").pet.owned.length === 0, "sem saldo não compra");
-ok(buyPetItem(st(3200), "crown").pet.owned.length === 0, `trava de nível morde (3200 xp = nível ${gamify({ xp: 3200 }).level}, coroa pede 12)`);
-ok(buyPetItem(st(1000), "id_que_nao_existe").pet.owned.length === 0, "id inexistente não compra nem explode");
-ok(buyPetItem(st(xpToReachLevel(12) + 5000), "crown").pet.owned.includes("crown"), "nível 12 compra a coroa");
-
-console.log("=== XP: equipar ===");
-{
-  const dono = buyPetItem(st(xpToReachLevel(12) + 5000), "crown");
-  const tirado = togglePetGear(dono, "crown");
-  ok(!tirado.pet.gear.head, "clicar no vestido tira");
-  ok(togglePetGear(tirado, "crown").pet.gear.head === "crown", "clicar de novo veste");
-  ok(!togglePetGear(st(1000), "crown").pet.gear.head, "não veste o que não possui");
-  let dois = buyPetItem(st(9999), "bell");
-  dois = buyPetItem(dois, "bowtie");
-  ok(dois.pet.gear.neck === "bowtie", "segundo item do mesmo slot substitui o primeiro");
+  // nada no app tira XP: os degraus só dependem do total, e o total só sobe
+  const antes = petGrowth({ xp: 5000 });
+  const depois = petGrowth({ xp: 5000 });
+  ok(antes.pct === depois.pct && antes.cur.name === depois.cur.name, "crescimento é função pura do XP total");
+  ok(petGrowth({ xp: 999999 }).next === null && petGrowth({ xp: 999999 }).pct === 100, "último degrau não mente");
+  ok(gamify({ xp: xpToReachLevel(6) }).level === 6, "xpToReachLevel casa com gamify");
 }
 
-console.log("=== XP: normalizador ===");
-{
-  const sujo = { name: "x".repeat(50), coat: "inexistente", owned: ["bell", "bell", "fantasma"], gear: { neck: "crown", head: "tophat" }, spent: -5 };
-  const limpo = normalizePet(sujo, null, []);
-  ok(limpo.name.length === 18, "nome cortado no limite");
-  ok(limpo.coat === "laranja", "pelagem inválida cai no padrão");
-  ok(limpo.owned.length === 1 && limpo.owned[0] === "bell", "item duplicado e fantasma removidos");
-  ok(!limpo.gear.neck, "equipado no slot errado (coroa no pescoço) é desequipado");
-  ok(!limpo.gear.head, "equipado sem possuir é desequipado");
-  ok(limpo.spent === 0, "spent negativo vira 0");
-  ok(JSON.stringify(Object.keys(limpo)) === '["name","coat","owned","gear","spent"]', "ordem de chaves estável (diff-sync)");
-  ok(JSON.stringify(normalizePet(limpo, null, [])) === JSON.stringify(limpo), "normalizador idempotente");
+console.log("=== fronteira de confiança ===");
+ok(PET_FREE_ITEMS.length === PET_SLOTS.length, `um item grátis por categoria (${PET_FREE_ITEMS.length} grátis, ${PET_SLOTS.length} categorias)`);
+for (const sl of PET_SLOTS) {
+  const free = PET_ITEMS.filter((i) => i.slot === sl.id && i.source === "free");
+  ok(free.length === 1, `categoria ${sl.id}: exatamente 1 grátis (${free.map((f) => f.id).join(",") || "nenhum"})`);
 }
+ok(PET_FREE_ITEMS.every((i) => petOwns(st(0, null, []), i.id)), "grátis é de todos, mesmo com zero XP e zero compras");
+ok(PET_PAID_ITEMS.every((i) => !petOwns(st(999999, null, []), i.id)), "pago não é de ninguém sem entitlement, nem com XP infinito");
+ok(petOwns(st(0, null, ["crown"]), "crown"), "entitlement do item libera aquele item");
+ok(!petOwns(st(0, null, ["crown"]), "tophat"), "entitlement de um item não libera outro");
+ok(!petOwns(st(0, null, ["nao_existe"]), "crown"), "entitlement de id inexistente não libera nada");
 
-console.log("=== PAGO: fronteira de confiança ===");
 {
-  // `pet.owned` é escrito pelo cliente (a policy de profiles deixa o dono escrever a
-  // própria linha), então item pago NÃO pode valer por estar ali.
-  const forjado = { ...defaultPet(), owned: ["ushanka", "helmet", "guitar", "bell"], gear: { head: "ushanka" } };
+  // o vetor de fraude que existia: escrever no próprio profiles. Agora não há campo.
+  const forjado = { ...defaultPet(), owned: ["crown", "helmet"], spent: -999, gear: { head: "crown" } };
   const limpo = normalizePet(forjado, null, []);
-  ok(!limpo.owned.includes("ushanka") && !limpo.owned.includes("helmet"), "item pago forjado em owned é EXPURGADO");
-  ok(limpo.owned.length === 1 && limpo.owned[0] === "bell", "item de XP forjado sobrevive (mentir pra si mesmo é permitido)");
+  ok(!("owned" in limpo) && !("spent" in limpo), "owned/spent forjados são DESCARTADOS pelo normalizador");
   ok(!limpo.gear.head, "pago equipado sem entitlement é desequipado");
-
-  const comEnt = normalizePet({ ...defaultPet(), gear: { head: "ushanka" } }, null, ["inverno"]);
-  ok(comEnt.gear.head === "ushanka", "com entitlement, o pago fica vestido");
-  ok(!comEnt.owned.includes("ushanka"), "e mesmo assim não entra em owned — a posse é o entitlement");
+  const comEnt = normalizePet({ ...defaultPet(), gear: { head: "crown" } }, null, ["crown"]);
+  ok(comEnt.gear.head === "crown", "com entitlement, o pago fica vestido");
+  const gratis = normalizePet({ ...defaultPet(), gear: { head: "beanie" } }, null, []);
+  ok(gratis.gear.head === "beanie", "grátis fica vestido sem nada");
 }
-ok(petOwns(st(0, null, ["inverno"]), "ushanka"), "petOwns vê pago pelo entitlement");
-ok(!petOwns(st(0, null, ["espaco"]), "ushanka"), "entitlement de outro pack não libera");
-ok(!petOwns(st(0, null, []), "ushanka"), "sem entitlement, não possui");
-ok(petOwns(st(0, { ...defaultPet(), owned: ["bell"] }), "bell"), "petOwns vê item de XP em owned");
 
+console.log("=== equipar ===");
 {
-  const richo = st(999999);
-  ok(buyPetItem(richo, "ushanka") === richo, "XP não compra item pago nem com saldo infinito");
-  ok(buyPetItem(richo, "helmet") === richo, "idem capacete");
   const semEnt = st(0);
-  ok(togglePetGear(semEnt, "ushanka") === semEnt, "não veste pago sem entitlement");
-  const vestido = togglePetGear(st(0, null, ["inverno"]), "ushanka");
-  ok(vestido.pet.gear.head === "ushanka", "veste pago com entitlement");
-  ok(togglePetGear(vestido, "ushanka").pet.gear.head === undefined, "e tira no segundo clique");
+  ok(togglePetGear(semEnt, "crown") === semEnt, "não veste pago sem entitlement");
+  const v = togglePetGear(st(0, null, ["crown"]), "crown");
+  ok(v.pet.gear.head === "crown", "veste pago com entitlement");
+  ok(togglePetGear(v, "crown").pet.gear.head === undefined, "e tira no segundo clique");
+  let dois = togglePetGear(st(0), "bell"); // grátis
+  dois = togglePetGear(dois, "bandana"); // pago sem entitlement
+  ok(dois.pet.gear.neck === "bell", "item pago sem entitlement não rouba o slot do grátis");
+  const trocado = togglePetGear(st(0, dois.pet, ["bandana"]), "bandana");
+  ok(trocado.pet.gear.neck === "bandana", "com entitlement, o segundo item do slot substitui o primeiro");
 }
 
 console.log("=== merge/carga ===");
 {
-  const m = mergeWithDefaults({ entitlements: ["inverno", "inverno", "pack_falso"] });
-  ok(m.entitlements.length === 1 && m.entitlements[0] === "inverno", "merge dedup e descarta pack inexistente");
+  const m = mergeWithDefaults({ entitlements: ["crown", "crown", "beanie", "id_falso"] });
+  ok(m.entitlements.length === 1 && m.entitlements[0] === "crown", "merge dedup, e descarta grátis e id inexistente da lista de entitlements");
   ok(Array.isArray(mergeWithDefaults({}).entitlements), "entitlements sempre array");
   const mig = mergeWithDefaults({ settings: { petName: "Mingau", petCoat: "siames" } });
   ok(mig.pet.name === "Mingau" && mig.pet.coat === "siames", "nome/pelagem migram de settings pro pet");
-  ok(mig.settings.petName === undefined && mig.settings.petCoat === undefined, "campos antigos saem de settings");
-  ok(mergeWithDefaults({ settings: { petName: "Velho" }, pet: { name: "Novo" } }).pet.name === "Novo", "pet existente ganha do settings legado");
+  ok(mig.settings.petName === undefined, "campo antigo sai de settings");
+  ok(JSON.stringify(Object.keys(mig.pet)) === '["name","coat","gear"]', "ordem de chaves do pet estável (diff-sync)");
+  ok(JSON.stringify(normalizePet(mig.pet, null, [])) === JSON.stringify(mig.pet), "normalizador idempotente");
 }
 
 console.log("=== catálogo ===");
-ok(PET_ALL_ITEMS.length === Object.keys(PET_ITEM_BY_ID).length, "nenhum id duplicado no catálogo inteiro");
-ok(PET_ALL_ITEMS.length === PET_ITEMS.length + PET_PAID_ITEMS.length, `catálogo unificado: ${PET_ALL_ITEMS.length} itens`);
-ok(PET_ALL_ITEMS.every((i) => PET_SLOTS.some((s) => s.id === i.slot)), "todo item tem slot válido");
-ok(PET_ITEMS.every((i) => i.price > 0 && i.minLevel >= 1 && i.name && i.desc && i.source === "xp"), "item de XP tem preço, nível, nome, descrição e source");
-ok(PET_PAID_ITEMS.every((i) => i.source === "brl" && i.price === 0), "item pago é source brl e não tem preço em XP");
-ok(PET_PAID_ITEMS.every((i) => i.pack && PET_PACKS.some((p) => p.id === i.pack)), "todo item pago aponta pra um pack existente");
-ok(PET_PAID_ITEMS.every((i) => i.minLevel === 1), "item pago não tem trava de nível (você pagou)");
-ok(!PET_PAID_ITEMS.some((i) => ["crown", "wings", "halo"].includes(i.id)), "coroa/asas/auréola seguem exclusivas de XP (dinheiro compra largura, XP compra prestígio)");
-for (const sl of PET_SLOTS) ok(PET_ALL_ITEMS.filter((i) => i.slot === sl.id).length >= 3, `slot ${sl.id}: ${PET_ALL_ITEMS.filter((i) => i.slot === sl.id).length} itens`);
-for (const p of PET_PACKS) {
-  ok(p.items.every((id) => PET_ITEM_BY_ID[id]), `pack ${p.id}: todos os itens existem`);
-  ok(p.items.every((id) => petItemIsPaid(id)), `pack ${p.id}: só itens pagos`);
-  ok(new Set(p.items.map((id) => PET_ITEM_BY_ID[id].slot)).size === p.items.length, `pack ${p.id}: um item por slot (as peças não se cobrem)`);
-  ok(p.priceBRL > 0 && p.name && p.desc, `pack ${p.id}: preço, nome e descrição`);
+ok(PET_ITEMS.length === Object.keys(PET_ITEM_BY_ID).length, "nenhum id duplicado");
+ok(!PET_SLOTS.some((s) => s.id === "back"), "categoria de costas foi removida");
+ok(!PET_ITEMS.some((i) => ["backpack", "cape", "wings", "jetpack", "guitar"].includes(i.id)), "itens de costas foram removidos do catálogo");
+ok(PET_ITEMS.every((i) => PET_SLOTS.some((s) => s.id === i.slot)), "todo item tem categoria válida");
+ok(PET_ITEMS.every((i) => i.source === "free" || i.source === "brl"), "todo item é grátis ou pago — não há terceiro estado");
+ok(PET_ITEMS.every((i) => i.name && i.desc), "todo item tem nome e descrição");
+ok(!PET_ITEMS.some((i) => "minLevel" in i || "price" in i), "item não carrega trava de nível nem preço próprio (preço é único)");
+ok(PET_PAID_ITEMS.every((i) => petItemIsPaid(i.id)) && PET_FREE_ITEMS.every((i) => !petItemIsPaid(i.id)), "petItemIsPaid concorda com source");
+ok(PET_ITEM_PRICE > 0, `preço único: ${petPriceLabel()}`);
+ok(petPriceLabel() === "R$ 0,99", "rótulo de preço em pt-BR");
+for (const sl of PET_SLOTS) {
+  const n = PET_ITEMS.filter((i) => i.slot === sl.id).length;
+  ok(n >= 4, `categoria ${sl.id}: ${n} itens`);
 }
+ok(PET_STAGES.length === 5, "5 degraus de crescimento");
 
 console.log(
-  `\n${PET_ITEMS.length} itens de XP (${PET_ITEMS.reduce((a, i) => a + i.price, 0)} XP pra ter todos) · ` +
-    `${PET_PACKS.length} packs pagos com ${PET_PAID_ITEMS.length} itens (R$ ${PET_PACKS.reduce((a, p) => a + p.priceBRL, 0).toFixed(2)})`,
+  `\n${PET_SLOTS.length} categorias · ${PET_FREE_ITEMS.length} grátis · ${PET_PAID_ITEMS.length} pagos a ${petPriceLabel()} ` +
+    `(${petPriceLabel(PET_PAID_ITEMS.length * PET_ITEM_PRICE)} por tudo)`,
 );
 console.log(fail ? `${fail} FALHA(S)` : "todas as checagens passaram");
 process.exit(fail ? 1 : 0);

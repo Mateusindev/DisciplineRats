@@ -241,12 +241,24 @@ create policy "own profile update" on public.profiles for update using (auth.uid
 -- ============================================================
 create table if not exists public.pet_entitlements (
   user_id    uuid not null references auth.users (id) on delete cascade,
-  pack_id    text not null,                                  -- id do pack em PET_PACKS (lib/state.js)
+  item_id    text not null,                                  -- id do item em PET_ITEMS (lib/state.js)
   payment_id text,                                           -- id do pagamento no Mercado Pago
   amount     numeric(10,2),
   granted_at timestamptz not null default now(),
-  primary key (user_id, pack_id)                             -- comprar duas vezes o mesmo pack não duplica
+  primary key (user_id, item_id)                             -- comprar duas vezes o mesmo item não duplica
 );
+-- Renomeia a coluna de quem instalou na versão de PACKS (a loja passou a vender item
+-- avulso). Guardado por catálogo pra poder rodar o schema.sql quantas vezes quiser.
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+             where table_schema='public' and table_name='pet_entitlements' and column_name='pack_id')
+     and not exists (select 1 from information_schema.columns
+             where table_schema='public' and table_name='pet_entitlements' and column_name='item_id')
+  then
+    alter table public.pet_entitlements rename column pack_id to item_id;
+  end if;
+end $$;
 alter table public.pet_entitlements enable row level security;
 drop policy if exists "own entitlements select" on public.pet_entitlements;
 create policy "own entitlements select" on public.pet_entitlements for select using (auth.uid() = user_id);
@@ -257,12 +269,22 @@ create policy "own entitlements select" on public.pet_entitlements for select us
 create table if not exists public.pet_payments (
   payment_id text primary key,
   user_id    uuid references auth.users (id) on delete set null,
-  pack_id    text,
+  item_id    text,
   status     text,
   amount     numeric(10,2),
   raw        jsonb,
   created_at timestamptz not null default now()
 );
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+             where table_schema='public' and table_name='pet_payments' and column_name='pack_id')
+     and not exists (select 1 from information_schema.columns
+             where table_schema='public' and table_name='pet_payments' and column_name='item_id')
+  then
+    alter table public.pet_payments rename column pack_id to item_id;
+  end if;
+end $$;
 alter table public.pet_payments enable row level security;
 -- nenhuma policy: nem leitura pelo cliente. É registro financeiro, só backend vê.
 

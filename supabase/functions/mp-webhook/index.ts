@@ -1,15 +1,15 @@
 // Recebe a notificação do Mercado Pago e é o ÚNICO lugar do sistema que libera um
-// pack pago. Roda com a service key, então passa por cima do RLS — é justamente por
+// acessório pago. Roda com a service key, então passa por cima do RLS — é justamente por
 // isso que `pet_entitlements` não tem policy de escrita: ninguém mais chega lá.
 //
 // Três regras que fazem isso ser seguro, e nenhuma delas é opcional:
 //
 //   1. VALIDA A ASSINATURA antes de olhar o conteúdo. O endpoint é público; sem o
-//      HMAC, liberar pack seria um POST que qualquer um monta.
+//      HMAC, liberar item seria um POST que qualquer um monta.
 //   2. NÃO CONFIA NO CORPO. A notificação diz "o pagamento X mudou"; o valor, o
 //      status e o dono vêm de uma consulta nossa à API do MP, não do que chegou.
 //   3. CONFERE O VALOR contra o preço do servidor. Preferência pode ser alterada
-//      por fora; pagar R$ 0,01 e receber o pack seria o resultado.
+//      por fora; pagar R$ 0,01 e receber o item seria o resultado.
 //
 // Responde 200 mesmo em caso que não concede nada (pagamento pendente, evento de
 // outro tipo). O MP reenvia enquanto não vê 200/201, e ficar reenviando pra sempre
@@ -19,7 +19,7 @@
 // Ver o README ao lado.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { PACKS, CENT } from "../_shared/packs.ts";
+import { ITEM_PRICE, PAID_ITEMS, CENT } from "../_shared/items.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -102,8 +102,8 @@ Deno.serve(async (req) => {
   const status = String(pay?.status ?? "");
   const amount = Number(pay?.transaction_amount ?? 0);
   const ref = String(pay?.external_reference ?? "");
-  const [userId, packId] = ref.split("|");
-  const pack = PACKS[packId ?? ""];
+  const [userId, itemId] = ref.split("|");
+  const vendavel = PAID_ITEMS.has(itemId ?? "");
 
   const db = createClient(SB_URL, SB_KEY);
 
@@ -112,8 +112,8 @@ Deno.serve(async (req) => {
   await db.from("pet_payments").upsert(
     {
       payment_id: String(pay?.id ?? dataId),
-      user_id: userId && pack ? userId : null,
-      pack_id: packId ?? null,
+      user_id: userId && vendavel ? userId : null,
+      item_id: itemId ?? null,
       status,
       amount,
       raw: { status, amount, ref, method: pay?.payment_type_id ?? null, detail: pay?.status_detail ?? null },
@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
     { onConflict: "payment_id" },
   );
 
-  if (!pack || !userId) {
+  if (!vendavel || !userId) {
     console.error("referencia externa irreconhecivel", ref);
     return Response.json({ ok: true, ignorado: "ref_invalida" });
   }
@@ -131,18 +131,18 @@ Deno.serve(async (req) => {
   if (status !== "approved") return Response.json({ ok: true, status, concedido: false });
 
   // ---- 3. o valor pago tem que bater com o preço do servidor ----
-  if (amount + CENT < pack.priceBRL) {
-    console.error("valor abaixo do preco", { ref, amount, esperado: pack.priceBRL });
+  if (amount + CENT < ITEM_PRICE) {
+    console.error("valor abaixo do preco", { ref, amount, esperado: ITEM_PRICE });
     return Response.json({ ok: true, status, concedido: false, motivo: "valor_menor" });
   }
 
   const { error } = await db.from("pet_entitlements").upsert(
-    { user_id: userId, pack_id: packId, payment_id: String(pay?.id ?? dataId), amount },
-    { onConflict: "user_id,pack_id" },
+    { user_id: userId, item_id: itemId, payment_id: String(pay?.id ?? dataId), amount },
+    { onConflict: "user_id,item_id" },
   );
   if (error) {
     console.error("concessao falhou", error.message);
     return new Response("concessao_falhou", { status: 500 }); // reenviar é o certo
   }
-  return Response.json({ ok: true, status, concedido: true, packId });
+  return Response.json({ ok: true, status, concedido: true, itemId });
 });
