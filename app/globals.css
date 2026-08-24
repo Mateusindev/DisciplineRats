@@ -280,6 +280,68 @@ html:not(.light) .bg-white\/5 {
   100% { transform: translateY(0); opacity: 1; }
 }
 
+/* ---- mascote (perfil): micro-animações do gato ----
+   transform-box: fill-box em tudo, porque transform CSS em <g> de SVG mede o
+   sistema de coordenadas do documento por padrão — sem isso o transform-origin
+   em % cai no lugar errado e o rabo gira em volta do nada.
+   E: CSS transform SOBRESCREVE o atributo transform do SVG, então cada peça
+   animada mora num <g> filho, nunca no mesmo <g> que já tem translate/scale. */
+.pet-part { transform-box: fill-box; }
+
+@keyframes pet-breathe {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(1.04); }
+}
+.pet-breathe { transform-box: fill-box; transform-origin: 50% 100%; animation: pet-breathe 3.4s ease-in-out infinite; }
+
+@keyframes pet-tail {
+  0%, 100% { transform: rotate(-7deg); }
+  50% { transform: rotate(11deg); }
+}
+.pet-tail { transform-box: fill-box; transform-origin: 100% 100%; animation: pet-tail 2.6s ease-in-out infinite; }
+.pet-tail-fast { animation-duration: 0.9s; }
+
+@keyframes pet-blink {
+  0%, 93%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(0.08); }
+}
+.pet-blink { transform-box: fill-box; transform-origin: 50% 50%; animation: pet-blink 5.2s ease-in-out infinite; }
+
+/* passo: o corpo inteiro sobe e desce um fio enquanto anda */
+@keyframes pet-step {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.6px); }
+}
+.pet-step { transform-box: fill-box; animation: pet-step 0.42s ease-in-out infinite; }
+
+@keyframes pet-leg {
+  0%, 100% { transform: rotate(-10deg); }
+  50% { transform: rotate(10deg); }
+}
+.pet-leg { transform-box: fill-box; transform-origin: 50% 0%; animation: pet-leg 0.42s ease-in-out infinite; }
+.pet-leg-b { animation-delay: -0.21s; }
+
+@keyframes pet-heart {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.5); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--pet-dx, 0px), -44px) scale(1.1); }
+}
+.pet-heart { animation: pet-heart 1.5s ease-out forwards; }
+
+@keyframes pet-zzz {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.7); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: translate(10px, -26px) scale(1); }
+}
+.pet-zzz { animation: pet-zzz 2.6s ease-out infinite; }
+
+/* Quem pede menos movimento recebe um gato parado — e ele continua sendo um gato.
+   A vagabundagem pelo cercado também é desligada no JS (matchMedia). */
+@media (prefers-reduced-motion: reduce) {
+  .pet-breathe, .pet-tail, .pet-blink, .pet-step, .pet-leg, .pet-zzz { animation: none; }
+  .pet-walker { transition: none !important; }
+}
+
 .progress-ring__circle {
   transition: stroke-dashoffset 0.35s;
   transform: rotate(-90deg);

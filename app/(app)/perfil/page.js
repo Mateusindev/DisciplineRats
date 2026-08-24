@@ -6,6 +6,7 @@ import { MI, Caps, Spinner, inputCls } from "@/components/ui";
 import { gamify, fmtK, computeBadges } from "@/lib/state";
 import { hasSupabase, NICK_RE } from "@/lib/persistence";
 import { MODES, DEFAULT_MODE } from "@/lib/themes";
+import Pet from "./Pet";
 
 function StatCell({ icon, label, value }) {
   return (
@@ -158,6 +159,9 @@ export default function PerfilPage() {
           </div>
         </div>
       </section>
+
+      {/* Mascote */}
+      <Pet />
 
       {/* Estatísticas */}
       <section>
