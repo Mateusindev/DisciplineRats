@@ -33,6 +33,14 @@ import {
   habitStepsBlock,
   HABIT_STEPS_MAX,
   HABIT_STEP_LEN,
+  habitMinimum,
+  habitMinAllowed,
+  habitHasMinimum,
+  habitMinDone,
+  habitMinXp,
+  markHabitMinimum,
+  completeHabitFull,
+  HABIT_MIN_LEN,
 } from "@/lib/state";
 
 // Limite do porquê. Curto de propósito: motivo que não cabe numa linha não é lido
@@ -329,7 +337,7 @@ function HabitForm({ f }) {
 // entre renders, então os inputs de edição não remontam a cada tecla (evita o
 // foco pular pro título ao digitar os detalhes).
 function CardHeader({ h, i, ctx }) {
-  const { edits, editDetails, editWhys, setEdits, setEditDetails, setEditWhys, pickingIcon, setPickingIcon, setIcon, saveEdit, cancelEdit, startEdit, removeHabit, setPriority } = ctx;
+  const { edits, editDetails, editWhys, editMins, setEdits, setEditDetails, setEditWhys, setEditMins, pickingIcon, setPickingIcon, setIcon, saveEdit, cancelEdit, startEdit, removeHabit, setPriority } = ctx;
   const editing = edits[h.id] !== undefined;
   const picking = pickingIcon === h.id;
   return (
@@ -417,6 +425,29 @@ function CardHeader({ h, i, ctx }) {
             aria-label="Detalhes do hábito"
             className={`${inputCls} w-full mb-2 resize-y`}
           />
+          {/* O mínimo é config de hábito, mas é TEXTO — então mora aqui com os
+              outros campos de texto e é gravado pelo mesmo salvar. Fora do diário
+              e da meta semanal ele nem aparece: em vício e em limite semanal a
+              ideia de "mínimo" não significa nada (ver habitHasMinimum). */}
+          {habitMinAllowed(h) && (
+            <div className="mb-2">
+              <Caps className="text-outline text-[10px] mb-1 flex items-center gap-1">
+                <MI name="flag" className="text-sm" /> MÍNIMO EXECUTÁVEL
+              </Caps>
+              <input
+                value={editMins[h.id] || ""}
+                onChange={(e) => setEditMins((es) => ({ ...es, [h.id]: e.target.value }))}
+                onKeyDown={(e) => (e.key === "Enter" ? saveEdit(h.id) : e.key === "Escape" ? cancelEdit(h.id) : null)}
+                maxLength={HABIT_MIN_LEN}
+                placeholder="A menor versão que ainda conta. Ex: 10 flexões"
+                aria-label="Mínimo executável do hábito"
+                className={`${inputCls} w-full`}
+              />
+              <p className="text-[10px] text-outline mt-1">
+                Feito o mínimo, o dia é marcado mesmo com microatividade em aberto — e paga metade do XP.
+              </p>
+            </div>
+          )}
         </>
       ) : (
         <div className="flex items-baseline gap-2 flex-wrap mb-2">
@@ -640,12 +671,92 @@ function StepChecklist({ h, ctx }) {
   );
 }
 
+// ============================================================
+// O MÍNIMO NO CARD — três estados, um bloco só.
+//
+//   não marcado  → o texto do mínimo + o botão que marca o dia por ele
+//   feito no mín → diz que foi no mínimo (e não deixa parecer dia cheio) e oferece
+//                  subir pro dia cheio, pagando a diferença
+//   dia cheio    → o mínimo recua pra lembrete apagado; hoje ele já não importa
+//
+// O XP mostrado é o base (sem multiplicador de sequência), igual ao resto da tela:
+// prometer o número final aqui e outro no crédito seria pior que não prometer.
+function MinimumBar({ h, ctx, className = "" }) {
+  if (!habitMinAllowed(h)) return null;
+  const today = ctx.today;
+  const text = habitMinimum(h);
+  // Sem mínimo definido, um convite — mesmo padrão do porquê. Feature que não se
+  // anuncia não existe: o campo mora no modo edição, e ninguém abre o modo edição
+  // pra procurar campo que não sabe que tem.
+  if (!text)
+    return (
+      <button
+        onClick={() => ctx.openEdit(h)}
+        className={`flex items-center gap-1.5 font-label-caps text-[10px] text-outline hover:text-primary-container transition ${className}`}
+      >
+        <MI name="flag" className="text-sm" />
+        DEFINIR MÍNIMO EXECUTÁVEL
+      </button>
+    );
+  const done = (h.doneDates || []).includes(today);
+  const isMin = habitMinDone(h, today);
+  const blocked = habitStepsBlock(h, today);
+  const prog = habitStepProgress(h, today);
+  const rest = Math.max(0, habitPriority(h).xp - habitMinXp(h));
+
+  if (done && !isMin)
+    return (
+      <div className={`flex items-start gap-1.5 text-[11px] text-outline ${className}`}>
+        <MI name="flag" className="text-sm shrink-0" />
+        <span className="min-w-0">Mínimo: {text}</span>
+      </div>
+    );
+
+  if (isMin)
+    return (
+      <div className={`rounded-lg border border-primary-container/40 bg-primary-container/10 p-2.5 ${className}`}>
+        <Caps className="text-primary-container text-[10px] flex items-center gap-1 mb-1">
+          <MI name="flag" fill className="text-sm" /> FEITO NO MÍNIMO
+        </Caps>
+        <p className="text-[12px] text-on-surface mb-2 whitespace-pre-wrap">{text}</p>
+        {blocked ? (
+          <Caps className="text-outline text-[9px] block">
+            FECHE {prog.pending} MICROATIVIDADE{prog.pending > 1 ? "S" : ""} PRO DIA VIRAR CHEIO
+          </Caps>
+        ) : (
+          <button
+            onClick={() => ctx.completeFull(h.id)}
+            className="w-full py-2 rounded-lg border border-primary-container/50 text-primary-container font-label-caps text-[10px] hover:bg-primary-container/10 active:scale-[.98] transition"
+          >
+            FIZ MAIS QUE O MÍNIMO{rest ? ` · +${rest} XP` : ""}
+          </button>
+        )}
+      </div>
+    );
+
+  return (
+    <div className={`rounded-lg border border-dashed border-outline/40 p-2.5 ${className}`}>
+      <Caps className="text-outline text-[10px] flex items-center gap-1 mb-1">
+        <MI name="flag" className="text-sm" /> MÍNIMO EXECUTÁVEL
+      </Caps>
+      <p className="text-[12px] text-on-surface mb-2 whitespace-pre-wrap">{text}</p>
+      <button
+        onClick={() => ctx.markMinimum(h.id)}
+        title="Marca o dia mesmo com microatividade em aberto"
+        className="w-full py-2 rounded-lg border border-primary-container/40 text-primary-container font-label-caps text-[10px] hover:bg-primary-container/10 active:scale-[.98] transition"
+      >
+        FIZ SÓ O MÍNIMO · +{habitMinXp(h)} XP
+      </button>
+    </div>
+  );
+}
+
 // Marcar/desmarcar o hábito do dia. Interruptor em vez de botão: o estado fica
 // escrito em palavras, então nunca resta a dúvida de "cliquei ou não?".
 // Marcar credita XP, desmarcar estorna o valor exato pago no dia.
 // Travado (passo em aberto) segue CLICÁVEL de propósito: o clique é o que dispara o
 // aviso dizendo quantos passos faltam. Botão morto não explica nada.
-function DoneSwitch({ done, dueToday, xp, blocked = false, pending = 0, onToggle }) {
+function DoneSwitch({ done, dueToday, xp, blocked = false, pending = 0, minDay = false, onToggle }) {
   return (
     <button
       onClick={onToggle}
@@ -658,7 +769,7 @@ function DoneSwitch({ done, dueToday, xp, blocked = false, pending = 0, onToggle
     >
       <span className="text-left min-w-0">
         <Caps className={`text-[11px] block ${done ? "text-primary-container" : "text-on-surface"}`}>
-          {done ? "FEITO HOJE" : dueToday ? "AINDA NÃO FEITO" : "NÃO AGENDADO HOJE"}
+          {done ? (minDay ? "FEITO NO MÍNIMO" : "FEITO HOJE") : dueToday ? "AINDA NÃO FEITO" : "NÃO AGENDADO HOJE"}
         </Caps>
         <Caps className="text-outline text-[9px] block">
           {blocked ? `FALTAM ${pending} MICROATIVIDADE${pending > 1 ? "S" : ""}` : done ? `+${xp} XP CREDITADOS` : `VALE +${xp} XP`}
@@ -712,12 +823,15 @@ function BuildCard({ h, i, ctx, bare = false }) {
 
       {!editing && <StepChecklist h={h} ctx={ctx} />}
 
+      {!editing && <MinimumBar h={h} ctx={ctx} className="mb-3" />}
+
       <DoneSwitch
         done={done}
         dueToday={dueToday}
         xp={prio.xp}
         blocked={blocked}
         pending={prog?.pending || 0}
+        minDay={habitMinDone(h, today)}
         onToggle={() => toggleHabit(h.id)}
       />
     </div>
@@ -760,6 +874,7 @@ function WeeklyCard({ h, i, ctx, bare = false }) {
         <Caps className="text-outline text-[10px]">+{bonus} XP/SEMANA NA META</Caps>
       </div>
       {!editing && <StepChecklist h={h} ctx={ctx} />}
+      {!editing && <MinimumBar h={h} ctx={ctx} className="mb-3" />}
       <button
         onClick={() => toggleHabit(h.id)}
         aria-disabled={blocked}
@@ -779,7 +894,9 @@ function WeeklyCard({ h, i, ctx, bare = false }) {
           ? `FALTAM ${prog.pending} MICROATIVIDADE${prog.pending > 1 ? "S" : ""}`
           : dir === "min"
             ? done
-              ? "PRATICADO HOJE ✓"
+              ? habitMinDone(h, today)
+                ? "PRATICADO NO MÍNIMO ✓"
+                : "PRATICADO HOJE ✓"
               : "PRATIQUEI HOJE"
             : done
               ? "CONSUMIDO HOJE · DESFAZER"
@@ -884,6 +1001,10 @@ const createdOn = (h) => {
 //   semanal — a meta é da semana, então nenhum dia isolado é falha; só marcação
 //             pinta de azul
 //   largar  — todo dia sem recaída é dia cumprido; recaída pinta de vermelho
+//
+// Devolve token ("done" | "min" | "fail" | null), não classe: quem pinta escolhe
+// como (a matriz usa bolinha, o celular usa bolinha com número dentro), e quem lê
+// o veredito pra montar o texto do title não precisa comparar nome de classe.
 function dayVerdict(h, date, today) {
   const kind = h.kind || "build";
   const marked = h.doneDates.includes(date);
@@ -892,12 +1013,25 @@ function dayVerdict(h, date, today) {
   // pintaria todo o mês passado de vermelho — falha que nunca houve.
   const born = createdOn(h);
   if (born && date < born) return null;
-  if (kind === "quit") return marked ? "bg-error" : "bg-primary-container";
-  if (marked) return "bg-primary-container";
+  if (kind === "quit") return marked ? "fail" : "done";
+  if (marked) return habitMinDone(h, date) ? "min" : "done";
   if (kind === "weekly") return null;
   if (!habitIsScheduled(h, date)) return null; // folga
-  return date === today ? null : "bg-error"; // hoje ainda dá tempo
+  return date === today ? null : "fail"; // hoje ainda dá tempo
 }
+
+// Continuam sendo DUAS cores. O dia de mínimo é o mesmo azul, vazado: "cumpriu no
+// mínimo" é cumprir, e um terceiro tom aqui viraria um terceiro significado. Borda
+// em vez de ring porque o ring já é do "hoje" — dois rings no mesmo elemento
+// brigam pela mesma propriedade.
+const DAY_CLS = {
+  done: "bg-primary-container",
+  min: "bg-primary-container/15 border-2 border-primary-container",
+  fail: "bg-error",
+};
+const DAY_TEXT = { done: "text-on-primary-container", min: "text-primary-container", fail: "text-on-error" };
+const dayWord = (verdict, kind, future) =>
+  verdict === "fail" ? (kind === "quit" ? "recaída" : "falhou") : verdict === "min" ? "cumpriu no mínimo" : verdict === "done" ? "cumpriu" : future ? "" : "sem cobrança";
 
 // ============================================================================
 // MICROATIVIDADES NA LINHA — barra segmentada, um segmento por passo.
@@ -1168,11 +1302,11 @@ function MiniMonth({ h, ctx, y, m, dim }) {
           if (kind !== "quit") return ctx.toggleHabit(h.id);
           return marked ? ctx.undoRelapse(h.id) : ctx.logRelapse(h);
         };
-        const what = verdict === "bg-error" ? (kind === "quit" ? "recaída" : "falhou") : verdict ? "cumpriu" : future ? "" : "sem cobrança";
+        const what = dayWord(verdict, kind, future);
         // o número do dia cabe nesse tamanho de célula, então ele fica: com 31
         // bolinhas iguais e sem eixo por cima, contar dia a dia era o único jeito
         // de saber qual é qual
-        const text = verdict === "bg-error" ? "text-on-error" : verdict ? "text-on-primary-container" : future ? "text-outline/50" : "text-on-surface-variant";
+        const text = verdict ? DAY_TEXT[verdict] : future ? "text-outline/50" : "text-on-surface-variant";
         return (
           <button
             key={d}
@@ -1181,7 +1315,7 @@ function MiniMonth({ h, ctx, y, m, dim }) {
             aria-label={`${h.name} em ${d}/${pad2(m)}${what ? `: ${what}` : ""}`}
             title={`${d}/${pad2(m)}${isToday ? " — hoje, toque pra marcar" : what ? ` — ${what}` : ""}`}
             className={`aspect-square rounded-full grid place-items-center text-[11px] tabular-nums ${
-              verdict || (future ? "bg-surface-variant/30" : "bg-surface-variant")
+              verdict ? DAY_CLS[verdict] : future ? "bg-surface-variant/30" : "bg-surface-variant"
             } ${text} ${isToday ? "ring-2 ring-on-surface" : ""} ${isToday ? "cursor-pointer" : "cursor-default"}`}
           >
             {d}
@@ -1264,6 +1398,7 @@ function TodayAction({ h, ctx }) {
   // seguem o card grande, senão o botão pareceria premiar o estouro
   const isMax = kind === "weekly" && (h.direction || "min") === "max";
   const due = kind === "weekly" || habitIsScheduled(h, today);
+  const isMin = habitMinDone(h, today);
   const label = blocked
     ? `FALTAM ${prog.pending} MICROATIVIDADE${prog.pending > 1 ? "S" : ""}`
     : isMax
@@ -1271,7 +1406,9 @@ function TodayAction({ h, ctx }) {
         ? "CONSUMIDO HOJE · DESFAZER"
         : "CONSUMI HOJE"
       : marked
-        ? "FEITO HOJE ✓"
+        ? isMin
+          ? "FEITO NO MÍNIMO ✓"
+          : "FEITO HOJE ✓"
         : due
           ? "MARCAR HOJE"
           : "FOLGA HOJE — MARCAR MESMO";
@@ -1289,7 +1426,9 @@ function TodayAction({ h, ctx }) {
               ? "bg-error/15 text-error border-error/40"
               : "border-error/40 text-error"
             : marked
-              ? "bg-primary-container text-on-primary-container border-primary-container"
+              ? isMin
+                ? "bg-primary-container/15 text-primary-container border-primary-container/60"
+                : "bg-primary-container text-on-primary-container border-primary-container"
               : "border-primary text-primary"
       }`}
     >
@@ -1309,6 +1448,7 @@ function MobileHabitCard({ h, i, ctx, y, m, dim }) {
       </div>
       {hasSteps && <StepSegments h={h} ctx={ctx} wide />}
       <MiniMonth h={h} ctx={ctx} y={y} m={m} dim={dim} />
+      <MinimumBar h={h} ctx={ctx} />
       <TodayAction h={h} ctx={ctx} />
     </div>
   );
@@ -1400,7 +1540,7 @@ function MonthLayout({ habits, ctx }) {
                         if (kind !== "quit") return ctx.toggleHabit(h.id);
                         return marked ? ctx.undoRelapse(h.id) : ctx.logRelapse(h);
                       };
-                      const what = verdict === "bg-error" ? (kind === "quit" ? "recaída" : "falhou") : verdict ? "cumpriu" : future ? "" : "sem cobrança";
+                    const what = dayWord(verdict, kind, future);
                       return (
                         <td key={d} className="px-[3px] py-1">
                           <button
@@ -1410,9 +1550,9 @@ function MonthLayout({ habits, ctx }) {
                             title={`${d}/${pad2(m)}${isToday ? " — hoje, clique pra marcar" : what ? ` — ${what}` : ""}`}
                             // anel neutro (não colorido) pra marcar HOJE: um terceiro tom
                             // aqui competiria com as duas cores que carregam o significado
-                            className={`block w-5 h-5 rounded-full ${verdict || (future ? "bg-surface-variant/30" : "bg-surface-variant")} ${
-                              isToday ? "ring-2 ring-on-surface" : ""
-                            } ${isToday ? "cursor-pointer" : "cursor-default"}`}
+                            className={`block w-5 h-5 rounded-full ${
+                              verdict ? DAY_CLS[verdict] : future ? "bg-surface-variant/30" : "bg-surface-variant"
+                            } ${isToday ? "ring-2 ring-on-surface" : ""} ${isToday ? "cursor-pointer" : "cursor-default"}`}
                           />
                         </td>
                       );
@@ -1433,8 +1573,9 @@ function MonthLayout({ habits, ctx }) {
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
           {[
-            { c: "bg-primary-container", t: "CUMPRIU" },
-            { c: "bg-error", t: "FALHOU / RECAÍDA" },
+            { c: DAY_CLS.done, t: "CUMPRIU" },
+            { c: DAY_CLS.min, t: "CUMPRIU NO MÍNIMO" },
+            { c: DAY_CLS.fail, t: "FALHOU / RECAÍDA" },
             { c: "bg-surface-variant", t: "SEM COBRANÇA (FOLGA, META SEMANAL)" },
           ].map((l) => (
             <span key={l.t} className="flex items-center gap-1.5">
@@ -1467,6 +1608,7 @@ export default function HabitosPage() {
   const [edits, setEdits] = useState({}); // { [id]: nome em edição }
   const [editWhys, setEditWhys] = useState({}); // { [id]: porquê em edição }
   const [editDetails, setEditDetails] = useState({}); // { [id]: detalhe em edição }
+  const [editMins, setEditMins] = useState({}); // { [id]: mínimo executável em edição }
   const [pickingIcon, setPickingIcon] = useState(null); // id do hábito com picker aberto
   const [stepDrafts, setStepDrafts] = useState({}); // { [id]: texto do passo sendo digitado }
   const [openId, setOpenId] = useState(null); // hábito com o card aberto em modal (um por vez)
@@ -1536,6 +1678,8 @@ export default function HabitosPage() {
           why: newWhy.trim().slice(0, WHY_MAX),
           detail: "",
           createdAt: new Date().toISOString(),
+          minimum: "", // mínimo executável: definido depois, no card
+          minDays: [],
           pos: prev.habits.length, // entra no fim da ordem escolhida
           doneDates: [],
           checkXp: {},
@@ -1595,6 +1739,28 @@ export default function HabitosPage() {
       return toast(`Faltam ${p.pending} microatividade(s) em "${h.name}"`, { type: "error" });
     }
     setState((prev) => toggleHabitState(prev, id, today));
+  }
+
+  // ===== mínimo executável =====
+  // O aviso é parte da feature, não enfeite: marcar no mínimo com passo em aberto é
+  // legítimo, mas o usuário precisa VER que o dia entrou como mínimo — senão amanhã
+  // ele lê um mês de bolinhas azuis e acha que fez tudo cheio.
+  function markMinimum(id) {
+    const h = state.habits.find((x) => x.id === id);
+    if (!h) return;
+    setState((prev) => markHabitMinimum(prev, id, today));
+    toast(`"${h.name}" marcado no mínimo`, { sub: `+${habitMinXp(h)} XP · metade do dia cheio`, icon: "flag" });
+  }
+
+  function completeFull(id) {
+    const h = state.habits.find((x) => x.id === id);
+    if (!h) return;
+    if (habitStepsBlock(h, today)) {
+      const p = habitStepProgress(h, today);
+      return toast(`Faltam ${p.pending} microatividade(s) em "${h.name}"`, { type: "error" });
+    }
+    setState((prev) => completeHabitFull(prev, id, today));
+    toast(`"${h.name}" virou dia cheio`, { type: "success" });
   }
 
   // ===== microatividades =====
@@ -1694,6 +1860,7 @@ export default function HabitosPage() {
     setEdits((e) => ({ ...e, [h.id]: h.name }));
     setEditWhys((e) => ({ ...e, [h.id]: h.why || "" }));
     setEditDetails((e) => ({ ...e, [h.id]: h.detail || "" }));
+    setEditMins((e) => ({ ...e, [h.id]: h.minimum || "" }));
   };
   const cancelEdit = (id) => {
     const drop = (o) => {
@@ -1703,6 +1870,7 @@ export default function HabitosPage() {
     setEdits(drop);
     setEditWhys(drop);
     setEditDetails(drop);
+    setEditMins(drop);
     setStepDrafts(drop);
   };
   function saveEdit(id) {
@@ -1710,7 +1878,11 @@ export default function HabitosPage() {
     if (!name) return;
     const why = (editWhys[id] || "").trim().slice(0, WHY_MAX);
     const detail = (editDetails[id] || "").trim().slice(0, 500);
-    setState((prev) => ({ ...prev, habits: prev.habits.map((h) => (h.id === id ? { ...h, name: name.slice(0, 80), why, detail } : h)) }));
+    const minimum = (editMins[id] || "").trim().slice(0, HABIT_MIN_LEN);
+    setState((prev) => ({
+      ...prev,
+      habits: prev.habits.map((h) => (h.id === id ? { ...h, name: name.slice(0, 80), why, detail, minimum } : h)),
+    }));
     cancelEdit(id);
   }
 
@@ -1719,9 +1891,11 @@ export default function HabitosPage() {
     edits,
     editWhys,
     editDetails,
+    editMins,
     setEdits,
     setEditWhys,
     setEditDetails,
+    setEditMins,
     setWeekdays,
     pickingIcon,
     setPickingIcon,
@@ -1746,6 +1920,14 @@ export default function HabitosPage() {
     closeOpen,
     moveHabit,
     reorderHabits,
+    markMinimum,
+    completeFull,
+    // abre o card em modal JÁ em modo edição: o convite do mínimo sai do cartão do
+    // celular, onde o formulário de edição nem está montado
+    openEdit: (h) => {
+      startEdit(h);
+      setOpenId(h.id);
+    },
   };
 
   // props do form de criação num objeto só

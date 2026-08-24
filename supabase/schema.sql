@@ -140,6 +140,8 @@ alter table public.habits add column if not exists weekdays jsonb not null defau
 alter table public.habits add column if not exists steps jsonb not null default '[]'::jsonb;
 alter table public.habits add column if not exists step_checks jsonb not null default '{}'::jsonb;
 alter table public.habits add column if not exists pos integer not null default 0;   -- ordem escolhida pelo usuário na lista de hábitos
+alter table public.habits add column if not exists minimum text;                     -- mínimo executável: menor versão do hábito que ainda conta
+alter table public.habits add column if not exists min_days jsonb not null default '[]'::jsonb;  -- ["YYYY-MM-DD"] dias marcados SÓ no mínimo (subconjunto dos checks)
 create index if not exists habits_user on public.habits (user_id);
 create index if not exists habits_user_pos on public.habits (user_id, pos);
 

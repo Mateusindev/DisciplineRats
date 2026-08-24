@@ -50,6 +50,8 @@ The rule that keeps it from thrashing the app: **one global write per gesture.**
 
 XP/level/streak rules are in `lib/state.js` (`XP`, `award`, `streakMult`, `gamify`, `tierFor`) and applied in `AppContext` (`completeFocusSession`) and feature pages. `GAMIFICATION.md` documents the rules but says they live in `app/page.js` — that is **stale**; the source of truth is `lib/state.js`. Streak multiplier is applied at the moment XP is awarded, so it must be computed before adding XP.
 
+Habits also carry an optional **mínimo executável** (`habits.minimum`): a text describing the smallest version that still counts. `markHabitMinimum` marks the day *bypassing the checklist lock*, pays half the priority XP, and records the date in `habits.min_days` — so a minimum day is never indistinguishable from a full one (the calendar paints it hollow, same blue). `completeHabitFull` promotes a minimum day to full, paying only the difference; `toggleHabitStep` routes into it when the last step closes on a minimum day, and never unmarks a minimum day when a step is reopened. Only `/habitos` exposes the action — Home, Agenda and Calendário still enforce the full lock.
+
 ### The global Pomodoro timer
 
 Lives in `AppContext` (state `phase`/`secondsLeft`/`isRunning`/`cyclePos`), so it survives navigation between pages. It anchors on wall-clock time (`endRef = Date.now() + secondsLeft*1000`) rather than counting interval ticks, making it immune to background-tab throttling; a `visibilitychange` handler resyncs on return. `TimerWidget` (also in AppContext) renders a floating mini-timer on every page except `/foco`.
