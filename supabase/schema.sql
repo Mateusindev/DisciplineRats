@@ -139,7 +139,9 @@ alter table public.habits add column if not exists why text;
 alter table public.habits add column if not exists weekdays jsonb not null default '[]'::jsonb;  -- build: dias da semana agendados (0=Seg..6=Dom); [] = todo dia
 alter table public.habits add column if not exists steps jsonb not null default '[]'::jsonb;
 alter table public.habits add column if not exists step_checks jsonb not null default '{}'::jsonb;
+alter table public.habits add column if not exists pos integer not null default 0;   -- ordem escolhida pelo usuário na lista de hábitos
 create index if not exists habits_user on public.habits (user_id);
+create index if not exists habits_user_pos on public.habits (user_id, pos);
 
 create table if not exists public.habit_checks (
   user_id  uuid not null references auth.users (id) on delete cascade,
