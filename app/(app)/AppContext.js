@@ -9,6 +9,7 @@ import {
   mergeWithDefaults,
   getDateStr,
   XP,
+  XP_DAILY_CAP,
   award,
   focusXp,
   formatTime,
@@ -184,6 +185,7 @@ export function AppProvider({ children }) {
   const stateRef = useRef(state);
   stateRef.current = state;
   const userIdRef = useRef(null);
+  const xpCapDayRef = useRef(null); // dia em que já avisamos do teto — 1 aviso, não 1 por save
 
   async function handleLogout() {
     await signOut();
@@ -387,6 +389,18 @@ export function AppProvider({ children }) {
         // senão o baseline ficaria acima do banco e o próximo delta nasceria errado.
         const serverXp = res?.xp;
         if (Number.isFinite(serverXp) && serverXp !== (snapshot.stats?.xp || 0)) {
+          // Teto do dia batido: sem aviso o XP simplesmente para de subir e ninguém
+          // entende por quê. Uma vez por dia — o save roda a cada 600ms de atividade.
+          const today = getDateStr(0);
+          if (serverXp < (snapshot.stats?.xp || 0) && xpCapDayRef.current !== today) {
+            xpCapDayRef.current = today;
+            toast("Teto diário de XP atingido", {
+              sub: `${XP_DAILY_CAP} XP por dia. O que você fizer hoje continua registrado — só não rende mais XP.`,
+              type: "error",
+              icon: "speed",
+              duration: 7000,
+            });
+          }
           const reconciled = { ...snapshot, stats: { ...snapshot.stats, xp: serverXp } };
           lastSavedRef.current = reconciled;
           setState((prev) => {

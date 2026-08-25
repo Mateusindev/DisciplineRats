@@ -66,10 +66,18 @@ drop policy if exists "own xp events select" on public.xp_events;
 create policy "own xp events select" on public.xp_events for select using (auth.uid() = user_id);
 -- de propósito SEM policy de escrita: só `apply_xp_delta` (security definer) grava aqui
 
--- Tetos. Um dia honesto no talo rende ~2500 XP (foco + hábitos + sono + treino +
--- rotina + diário); 5000 deixa folga de 2× e ainda torna impossível o salto absurdo.
+-- Teto do dia. A conta, com os valores de lib/state.js e o multiplicador de streak
+-- no talo (1.5): 8 sessões de foco de 25min = 600, 8 hábitos de prioridade alta =
+-- 300, sono na meta de 9h = 90, um treino = 60, diário = 22, rotina de 10 itens com
+-- bônus = 97, missões do dia fechadas = 15. Isso é ~1180 num dia em que a pessoa fez
+-- literalmente tudo. O pico raro é o marco de 90 dias limpos de um vício (+750, uma
+-- vez por hábito na vida), que leva o dia a ~1930.
+--
+-- Daí 2000: cobre o dia mais gordo que as regras permitem e não sobra pra trapaça.
+-- É `create or replace`, então dá pra mexer só no SQL editor, sem redeploy do app —
+-- mas mexa também em XP_DAILY_CAP (lib/state.js), que é o que a UI usa pra avisar.
 create or replace function public.xp_daily_cap() returns integer
-  language sql immutable as $$ select 5000 $$;
+  language sql immutable as $$ select 2000 $$;
 create or replace function public.xp_ceiling() returns integer
   language sql immutable as $$ select 2000000000 $$;  -- abaixo do teto do int4
 
