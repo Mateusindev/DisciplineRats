@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "check:pet": "bun scripts/check-pet-shop.mjs && node scripts/check-item-prices.mjs"
+    "check:pet": "bun scripts/check-pet-shop.mjs && node scripts/check-item-prices.mjs",
+    "grant:sql": "bun scripts/grant-all.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

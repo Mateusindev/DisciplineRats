@@ -19,7 +19,7 @@
 // ============================================================================
 
 import Link from "next/link";
-import { MI, Caps } from "@/components/ui";
+import { Caps } from "@/components/ui";
 import { Bicho } from "@/components/PetArt";
 import { petScene } from "@/lib/petMood";
 import { TABS, petCoat, petGrowth, petSpecies, defaultPet } from "@/lib/state";
@@ -43,12 +43,6 @@ export default function GatoDaTela({ state, pathname }) {
 
   return (
     <div className="glass-card relative mb-6 flex items-center gap-3 overflow-hidden rounded-xl pr-4 sm:gap-4">
-      {/* marca d'água da própria seção, mesma ideia do ícone gigante do Sono */}
-      <MI
-        name={tab.icon}
-        className="pointer-events-none absolute -right-3 top-1/2 -translate-y-1/2 text-[84px] text-primary opacity-[0.06]"
-      />
-
       <Link
         href="/perfil#mascote"
         title={`Meu ${bicho.label.toLowerCase()}`}
