@@ -380,8 +380,23 @@ export function AppProvider({ children }) {
     saveTimer.current = setTimeout(async () => {
       const snapshot = stateRef.current; // versão imutável que vamos sincronizar
       try {
-        await syncUserState(userIdRef.current, snapshot, lastSavedRef.current);
+        const res = await syncUserState(userIdRef.current, snapshot, lastSavedRef.current);
         lastSavedRef.current = snapshot; // baseline avança só no sucesso
+        // XP é do servidor: ele aplica o delta e devolve o valor real. Se o teto
+        // diário cortou, a tela adota o número do banco em vez de seguir otimista —
+        // senão o baseline ficaria acima do banco e o próximo delta nasceria errado.
+        const serverXp = res?.xp;
+        if (Number.isFinite(serverXp) && serverXp !== (snapshot.stats?.xp || 0)) {
+          const reconciled = { ...snapshot, stats: { ...snapshot.stats, xp: serverXp } };
+          lastSavedRef.current = reconciled;
+          setState((prev) => {
+            // o que o usuário ganhou DEPOIS do snapshot preserva o delta — vira o
+            // próximo pedido, em vez de sumir junto com o corte
+            const drift = (prev.stats?.xp || 0) - (snapshot.stats?.xp || 0);
+            const next = Math.max(0, serverXp + drift);
+            return prev.stats?.xp === next ? prev : { ...prev, stats: { ...prev.stats, xp: next } };
+          });
+        }
         setSaveError(false);
       } catch (e) {
         setSaveError(true); // mantém baseline → próxima mudança tenta de novo
