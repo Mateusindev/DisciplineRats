@@ -77,7 +77,7 @@ function Shop({ pet, coat, entitlements, buying, onBuy, onToggle, onSpecies, onC
             {/* O que a pessoa merece saber ANTES de pagar, e o que a lei manda dizer:
                 é cosmético, é compra única e não mexe em progresso nenhum. */}
             <p className="text-[11px] text-on-surface-variant">
-              O gato e um item de cada categoria são grátis. O resto — inclusive a outra espécie — custa{" "}
+              O rato e um item de cada categoria são grátis. O resto — inclusive a outra espécie — custa{" "}
               <strong className="text-on-surface">{petPriceLabel()}</strong> cada, compra única, sem assinatura. É tudo{" "}
               <strong className="text-on-surface">cosmético</strong>: não dá XP, não sobe nível e não mexe no ranking — XP serve só pra o bicho crescer.
             </p>

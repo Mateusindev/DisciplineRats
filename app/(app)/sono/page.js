@@ -6,7 +6,7 @@ import { MI, Caps, StarRating, inputCls } from "@/components/ui";
 import MetasEditor from "@/components/MetasEditor";
 import { sleepXp, sleepMissXp, computeSleepXp, bedtimeLateness, SLEEP_LIMIT_DEFAULT, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX, award, getDateStr, minutesToHm, weekdayShort, last7Dates } from "@/lib/state";
 import { LineChart } from "@/components/charts";
-import GatoDaNoite from "./GatoDaNoite";
+import BichoDaNoite from "./BichoDaNoite";
 
 function hm(min) {
   const h = Math.floor(min / 60);
@@ -247,7 +247,7 @@ export default function SonoPage() {
 
         <div className="md:col-span-5 flex flex-col gap-gutter">
           {/* o mascote deitado: a mesma noite dos números acima, virada em cena */}
-          <GatoDaNoite
+          <BichoDaNoite
             state={state}
             bedtime={bedtime}
             wake={wake}

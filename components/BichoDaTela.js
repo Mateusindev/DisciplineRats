@@ -1,7 +1,7 @@
 "use client";
 
 // ============================================================================
-// A FAIXA DO GATO — o mascote acompanhando a tela em que você está.
+// A FAIXA DO BICHO — o mascote acompanhando a tela em que você está.
 //
 // Mora no Chrome (`app/(app)/layout.js`), acima do conteúdo, e NÃO dentro de cada
 // página: assim é um lugar só pra ajustar, aparece igual em todas as seções e
@@ -30,7 +30,7 @@ const TONE = {
   idle: "text-on-surface-variant",
 };
 
-export default function GatoDaTela({ state, pathname }) {
+export default function BichoDaTela({ state, pathname }) {
   const tab = TABS.find((t) => t.path === pathname);
   const sc = tab ? petScene(tab.id, state) : null;
   if (!sc) return null;

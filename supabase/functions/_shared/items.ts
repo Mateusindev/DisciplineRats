@@ -17,12 +17,12 @@ export const ITEM_PRICE = 0.99;
 // (que ninguém deveria pagar) quanto pra id inventado no request.
 //
 // ESPÉCIE ENTRA AQUI. Do ponto de vista da cobrança não há diferença entre virar
-// rato e comprar um chapéu: mesma preferência, mesmo webhook, mesma linha em
+// gato e comprar um chapéu: mesma preferência, mesmo webhook, mesma linha em
 // `pet_entitlements`. A distinção entre bicho e acessório é só do cliente, que
 // precisa dela pra desenhar; o servidor não tem por que saber.
 export const PAID_ITEMS = new Set([
   // espécie
-  "rato",
+  "gato",
   // cabeça
   "cap",
   "tophat",

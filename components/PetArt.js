@@ -496,10 +496,12 @@ function RatTail({ c }) {
 // `stripes: false` no rato VETA a listra mesmo em pelagem listrada: laranja
 // malhado é padrão de gato, e um rato tigrado parece bug, não variação.
 const SPECIES_PARTS = {
-  gato: { Ears: CatEars, Muzzle: CatMuzzle, Tail: CatTail, stripes: true },
   rato: { Ears: RatEars, Muzzle: RatMuzzle, Tail: RatTail, stripes: false },
+  gato: { Ears: CatEars, Muzzle: CatMuzzle, Tail: CatTail, stripes: true },
 };
-const partsOf = (id) => SPECIES_PARTS[id] || SPECIES_PARTS.gato;
+// O fallback é o rato porque ele é PET_SPECIES[0]: id desconhecido tem que cair no
+// mesmo bicho pra que a arte e o estado nunca discordem sobre quem é o padrão.
+const partsOf = (id) => SPECIES_PARTS[id] || SPECIES_PARTS.rato;
 
 function Bicho({ stage, coat, act, gear, species }) {
   const c = coat;

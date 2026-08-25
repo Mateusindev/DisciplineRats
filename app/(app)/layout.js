@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { AppProvider, useApp } from "./AppContext";
 import { MI, Caps } from "@/components/ui";
 import { HelpButton } from "@/components/help";
-import GatoDaTela from "@/components/GatoDaTela";
+import BichoDaTela from "@/components/BichoDaTela";
 import { TABS, NAV_SECTIONS, HOME_ROUTE, gamify, fmtK } from "@/lib/state";
 import { hasSupabase } from "@/lib/persistence";
 import { DEFAULT_MODE } from "@/lib/themes";
@@ -216,7 +216,7 @@ function Chrome({ children }) {
           ) : (
             <>
               {/* o mascote comentando a seção atual — ele mesmo decide onde não aparecer */}
-              <GatoDaTela state={state} pathname={pathname} />
+              <BichoDaTela state={state} pathname={pathname} />
               {children}
             </>
           )}

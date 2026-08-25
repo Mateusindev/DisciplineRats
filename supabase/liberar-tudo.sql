@@ -26,7 +26,7 @@ insert into public.pet_entitlements (user_id, item_id, payment_id, amount)
 select u.id, x.item_id, 'cortesia', 0
 from auth.users u
 cross join (values
-    ('rato'),
+    ('gato'),
     ('cap'),
     ('tophat'),
     ('halo'),

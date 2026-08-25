@@ -101,9 +101,9 @@ console.log("=== merge/carga ===");
   ok(m.entitlements.length === 1 && m.entitlements[0] === "crown", "merge dedup, e descarta grátis e id inexistente da lista de entitlements");
   // Regressão cara: o filtro do merge já foi só de acessório. Espécie paga cairia
   // fora no carregamento e a pessoa perderia o que comprou, em silêncio.
-  const mr = mergeWithDefaults({ entitlements: ["rato"], pet: { species: "rato" } });
-  ok(mr.entitlements.includes("rato"), "entitlement de ESPÉCIE sobrevive ao merge");
-  ok(mr.pet.species === "rato", "espécie paga com entitlement fica de pé no carregamento");
+  const mr = mergeWithDefaults({ entitlements: ["gato"], pet: { species: "gato" } });
+  ok(mr.entitlements.includes("gato"), "entitlement de ESPÉCIE sobrevive ao merge");
+  ok(mr.pet.species === "gato", "espécie paga com entitlement fica de pé no carregamento");
   ok(Array.isArray(mergeWithDefaults({}).entitlements), "entitlements sempre array");
   const mig = mergeWithDefaults({ settings: { petName: "Mingau", petCoat: "siames" } });
   ok(mig.pet.name === "Mingau" && mig.pet.coat === "siames", "nome/pelagem migram de settings pro pet");
@@ -137,31 +137,32 @@ console.log(
 
 console.log("=== espécie ===");
 {
-  ok(PET_SPECIES[0].id === "gato" && PET_SPECIES[0].source === "free", "gato é o padrão e é grátis");
-  ok(petSpeciesIsPaid("rato") && PET_PAID_SPECIES.length === 1, "rato é pago");
-  ok(petSpecies("nao_existe").id === "gato", "espécie desconhecida cai no gato");
-  ok(petSku("rato") && petSkuIsPaid("rato"), "petSku enxerga espécie, não só acessório");
+  ok(PET_SPECIES[0].id === "rato" && PET_SPECIES[0].source === "free", "rato é o padrão e é grátis — é a cara do app");
+  ok(petSpeciesIsPaid("gato") && PET_PAID_SPECIES.length === 1, "gato é pago");
+  ok(defaultPet().species === "rato", "mascote novo nasce rato");
+  ok(petSpecies("nao_existe").id === "rato", "espécie desconhecida cai no rato");
+  ok(petSku("gato") && petSkuIsPaid("gato"), "petSku enxerga espécie, não só acessório");
   ok(petSku("crown") && petSkuIsPaid("crown"), "petSku continua enxergando acessório");
   ok(!petSku("nada"), "petSku não inventa sku");
 
   // fronteira de confiança, agora também pro corpo do bicho
-  ok(petOwns(st(999999, null, []), "gato"), "gato é de todos");
-  ok(!petOwns(st(999999, null, []), "rato"), "rato não é de ninguém sem entitlement, nem com XP infinito");
-  ok(petOwns(st(0, null, ["rato"]), "rato"), "entitlement libera o rato");
+  ok(petOwns(st(999999, null, []), "rato"), "rato é de todos");
+  ok(!petOwns(st(999999, null, []), "gato"), "gato não é de ninguém sem entitlement, nem com XP infinito");
+  ok(petOwns(st(0, null, ["gato"]), "gato"), "entitlement libera o gato");
 
-  const forjado = normalizePet({ ...defaultPet(), species: "rato" }, null, []);
-  ok(forjado.species === "gato", "espécie paga escrita no profiles sem compra volta pro gato");
-  ok(normalizePet({ ...defaultPet(), species: "rato" }, null, ["rato"]).species === "rato", "com entitlement, o rato fica");
+  const forjado = normalizePet({ ...defaultPet(), species: "gato" }, null, []);
+  ok(forjado.species === "rato", "espécie paga escrita no profiles sem compra volta pro rato");
+  ok(normalizePet({ ...defaultPet(), species: "gato" }, null, ["gato"]).species === "gato", "com entitlement, o gato fica");
 
   const semEnt = st(0);
-  ok(setPetSpecies(semEnt, "rato") === semEnt, "não vira rato sem entitlement");
-  const virou = setPetSpecies(st(0, null, ["rato"]), "rato");
-  ok(virou.pet.species === "rato", "vira rato com entitlement");
-  ok(setPetSpecies(virou, "rato") === virou, "trocar pela espécie atual não cria estado novo");
-  ok(setPetSpecies(virou, "gato").pet.species === "gato", "sempre dá pra voltar pro gato (é grátis)");
+  ok(setPetSpecies(semEnt, "gato") === semEnt, "não vira gato sem entitlement");
+  const virou = setPetSpecies(st(0, null, ["gato"]), "gato");
+  ok(virou.pet.species === "gato", "vira gato com entitlement");
+  ok(setPetSpecies(virou, "gato") === virou, "trocar pela espécie atual não cria estado novo");
+  ok(setPetSpecies(virou, "rato").pet.species === "rato", "sempre dá pra voltar pro rato (é grátis)");
 
   // espécie NÃO é slot: togglePetGear não pode deixar o bicho sem corpo
-  ok(togglePetGear(virou, "rato") === virou, "togglePetGear ignora espécie — bicho não se desequipa");
+  ok(togglePetGear(virou, "gato") === virou, "togglePetGear ignora espécie — bicho não se desequipa");
 
   ok(petCoatLabel(PET_COATS.find((c) => c.id === "siames"), "gato") === "SIAMÊS", "pelagem mantém o nome de raça no gato");
   ok(petCoatLabel(PET_COATS.find((c) => c.id === "siames"), "rato") === "PONTAS ESCURAS", "e troca por nome de cor no rato");
