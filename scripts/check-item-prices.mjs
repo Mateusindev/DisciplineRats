@@ -7,7 +7,7 @@
 // Next. Este script é o que impede ela de envelhecer — e divergência aqui é dinheiro
 // errado ou item que não abre cobrança.
 import { readFileSync } from "node:fs";
-import { PET_ITEMS, PET_PAID_ITEMS, PET_ITEM_PRICE } from "../lib/state.js";
+import { PET_ITEMS, PET_PAID_ITEMS, PET_ITEM_PRICE, PET_SPECIES, PET_PAID_SPECIES } from "../lib/state.js";
 
 const ts = readFileSync(new URL("../supabase/functions/_shared/items.ts", import.meta.url), "utf8");
 
@@ -20,11 +20,16 @@ const ok = (c, msg) => { console.log(`${c ? "ok  " : "FALHA"} ${msg}`); if (!c) 
 
 ok(!!priceMatch, "achou ITEM_PRICE no arquivo do servidor");
 ok(Number(priceMatch?.[1]) === PET_ITEM_PRICE, `preço igual nos dois lados (cliente ${PET_ITEM_PRICE}, servidor ${priceMatch?.[1]})`);
-ok(serverIds.size === PET_PAID_ITEMS.length, `mesma quantidade de itens pagos (cliente ${PET_PAID_ITEMS.length}, servidor ${serverIds.size})`);
-for (const it of PET_PAID_ITEMS) ok(serverIds.has(it.id), `item pago "${it.id}" está na lista do servidor`);
-for (const id of serverIds) ok(PET_PAID_ITEMS.some((i) => i.id === id), `id "${id}" do servidor existe e é pago no cliente`);
+// Espécie é vendida pelo MESMO fluxo, então entra na mesma conferência: um rato que
+// existisse só no cliente daria botão de compra que o servidor recusa.
+const pagos = [...PET_PAID_SPECIES, ...PET_PAID_ITEMS];
+const gratis = [...PET_SPECIES, ...PET_ITEMS].filter((i) => i.source === "free");
+
+ok(serverIds.size === pagos.length, `mesma quantidade de vendáveis (cliente ${pagos.length}, servidor ${serverIds.size})`);
+for (const it of pagos) ok(serverIds.has(it.id), `pago "${it.id}" está na lista do servidor`);
+for (const id of serverIds) ok(pagos.some((i) => i.id === id), `id "${id}" do servidor existe e é pago no cliente`);
 // o grátis NÃO pode estar vendável: cobrar por algo que a pessoa já tem é o pior bug possível aqui
-for (const it of PET_ITEMS.filter((i) => i.source === "free")) ok(!serverIds.has(it.id), `item grátis "${it.id}" NÃO é vendável no servidor`);
+for (const it of gratis) ok(!serverIds.has(it.id), `grátis "${it.id}" NÃO é vendável no servidor`);
 
 console.log(fail ? `\n${fail} FALHA(S) — catálogo da tela e da cobrança divergem` : "\ncatálogos conferem");
 process.exit(fail ? 1 : 0);

@@ -1,7 +1,7 @@
 "use client";
 
 // ============================================================================
-// A NOITE DO GATO — o mascote deitado na tela de sono.
+// A NOITE DO BICHO — o mascote deitado na tela de sono.
 //
 // Não é enfeite: é o mesmo gráfico que os números acima já contam, desenhado como
 // cena. O arco é a noite inteira (19h → 7h), o trecho grosso é o seu sono, a lua
@@ -14,8 +14,8 @@
 //     nas estrelinhas do formulário, só que no céu;
 //   • o gato dorme, cochila ou fica acordado conforme o registro que você está
 //     digitando AGORA (não o salvo) — mexer no horário move a lua e muda a pose;
-//   • é o gato de verdade: mesma pelagem, mesmo degrau de crescimento e mesmos
-//     acessórios da lojinha, porque o desenho vem de `components/PetArt.js`.
+//   • é o bicho de verdade: mesma espécie, mesma pelagem, mesmo degrau de
+//     crescimento e mesmos acessórios, porque o desenho vem de `components/PetArt.js`.
 //
 // Coordenadas: o SVG do arco usa preserveAspectRatio="none" sobre a MESMA caixa
 // que posiciona a lua e o sol em %, então os dois usam a fórmula `arcY` e caem
@@ -24,8 +24,8 @@
 
 import Link from "next/link";
 import { MI, Caps } from "@/components/ui";
-import { Cat } from "@/components/PetArt";
-import { petCoat, petGrowth, defaultPet, bedtimeLateness, minutesToHm } from "@/lib/state";
+import { Bicho } from "@/components/PetArt";
+import { petCoat, petGrowth, petSpecies, defaultPet, bedtimeLateness, minutesToHm } from "@/lib/state";
 
 // A noite desenhada vai das 19h às 7h. Fora disso o valor encosta na borda em vez
 // de sumir — dormir às 17h é raro, mas nunca deve quebrar o desenho.
@@ -81,6 +81,7 @@ export default function GatoDaNoite({ state, bedtime, wake, durationMin, goalMin
   const stage = petGrowth(state.stats).cur;
   const gear = pet.gear || {};
   const name = (pet.name || "").trim();
+  const bicho = petSpecies(pet.species);
 
   const lateMin = bedtimeLateness(bedtime, limit);
   const onTime = lateMin <= 0;
@@ -104,7 +105,7 @@ export default function GatoDaNoite({ state, bedtime, wake, durationMin, goalMin
   return (
     <div className="glass-card rounded-xl overflow-hidden">
       <div className="flex items-center justify-between px-4 pt-4">
-        <h3 className="font-headline-md text-headline-md text-on-surface uppercase">A noite {name ? `de ${name}` : "do gato"}</h3>
+        <h3 className="font-headline-md text-headline-md text-on-surface uppercase">A noite {name ? `de ${name}` : `do ${bicho.label.toLowerCase()}`}</h3>
         <Link href="/perfil#mascote" className="p-1 text-outline transition hover:text-primary-container" aria-label="Ver o mascote no perfil">
           <MI name="open_in_new" className="text-base" />
         </Link>
@@ -178,9 +179,9 @@ export default function GatoDaNoite({ state, bedtime, wake, durationMin, goalMin
         <div className="absolute bottom-4 left-1/2 h-7 w-[164px] -translate-x-1/2 rounded-full border border-white/25 bg-white/25" />
         <div className="absolute bottom-[26px] left-[calc(50%-64px)] h-5 w-11 rounded-lg border border-white/25 bg-white/40" />
 
-        {/* o gato: o mesmo do perfil, com o que ele estiver vestindo */}
+        {/* o mascote: o mesmo do perfil, com o que ele estiver vestindo */}
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2">
-          <Cat stage={stage} coat={coat} act={act} gear={gear} />
+          <Bicho stage={stage} coat={coat} act={act} gear={gear} species={pet.species} />
           {Array.from({ length: zzz }, (_, i) => (
             <span
               key={i}

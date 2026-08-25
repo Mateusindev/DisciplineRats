@@ -1,23 +1,27 @@
 "use client";
 
 // ============================================================================
-// ARTE DO MASCOTE — o desenho do gato e das peças, sem nada de estado.
+// ARTE DO MASCOTE — o desenho do bicho e das peças, sem nada de estado.
 //
-// Mora fora de `perfil/Pet.js` porque o gato deixou de ser exclusivo do perfil:
-// a tela de sono também o desenha. Um único arquivo de arte é o que garante que
-// o gato da cama é o MESMO bicho do cercado — mesma pelagem, mesmos acessórios
-// comprados — em vez de duas ilustrações parecidas envelhecendo em paralelo.
+// Mora fora de `perfil/Pet.js` porque o mascote deixou de ser exclusivo do perfil:
+// a tela de sono e a faixa de todas as seções também o desenham. Um único arquivo
+// de arte é o que garante que o bicho da cama é o MESMO do cercado — mesma espécie,
+// mesma pelagem, mesmos acessórios — em vez de ilustrações parecidas envelhecendo
+// em paralelo.
+//
+// Espécie troca ORELHA, FOCINHO e RABO; o resto do corpo é o mesmo (ver
+// SPECIES_PARTS mais abaixo, e o contrato da cabeça em raio 16).
 //
 // SVG paramétrico, não sprite. Três razões: (1) não existe asset externo pra
 // carregar — o app é auto-contido e a CSP não deixaria; (2) o mesmo desenho serve
 // os cinco tamanhos só mudando números, então "crescer" muda PROPORÇÃO (filhote
 // tem cabeça grande) e não só escala, que pareceria zoom; (3) acessório é código,
-// então o MESMO desenho serve pro gato e pra vitrine da loja — a peça que aparece
-// no card é a peça que vai pro bicho.
+// então o MESMO desenho serve pro bicho e pra vitrine da loja — a peça que aparece
+// no card é a peça que vai pro mascote.
 //
 // A ordem de desenho não é detalhe: cabeça/rosto/pescoço vêm DEPOIS da cabeça e
 // DENTRO do grupo dela, pra herdarem o `headScale` — assim o chapéu do filhote é
-// grande junto com a cabeça dele, de graça. Brinquedo e cenário NÃO moram no gato:
+// grande junto com a cabeça dele, de graça. Brinquedo e cenário NÃO moram no bicho:
 // são do cercado, senão o novelo sairia andando junto quando ele passeia.
 // ============================================================================
 
@@ -44,7 +48,7 @@ const T = {
 
 // ---------------------------------------------------------------- acessórios
 // Cada um em coordenadas LOCAIS do grupo onde entra, então nenhum precisa saber o
-// tamanho do gato.
+// tamanho do bicho.
 
 // cabeça e rosto: origem = centro da cabeça, raio 16, olhos em (-6,-1) e (6,-2)
 function HeadGear({ id }) {
@@ -398,7 +402,106 @@ function Scene({ id }) {
 
 // ---------------------------------------------------------------- o gato
 
-function Cat({ stage, coat, act, gear }) {
+// ---------------------------------------------------------------- espécies
+// O que muda de um bicho pro outro é ORELHA, FOCINHO e RABO — e só. Sombra, patas,
+// corpo, olhos, respiração e as âncoras de acessório são compartilhados, porque a
+// cabeça de TODA espécie é o mesmo círculo de raio 16 com os olhos em (-6,-1) e
+// (6,-2). É esse contrato que faz os 31 acessórios servirem em qualquer bicho sem
+// uma linha nova; mexer no raio é redesenhar 31 peças, uma por uma.
+//
+// Coordenadas: orelha e focinho vivem no sistema LOCAL da cabeça (origem no centro).
+// O rabo vive no sistema do corpo, já transladado pelo chamador.
+
+function CatEars({ c, tip }) {
+  return (
+    <g>
+      <path d="M-15 -7 L-19 -23 L-4 -14 Z" fill={tip} />
+      <path d="M1 -14 L9 -25 L15 -7 Z" fill={tip} />
+      <path d="M-13.5 -9.5 L-16 -19 L-6.5 -13.5 Z" fill={c.ear} />
+      <path d="M3 -13 L8.5 -21 L13 -9 Z" fill={c.ear} />
+    </g>
+  );
+}
+
+// Orelha de rato é disco, não triângulo — e fica bem alta e aberta pros lados, de
+// propósito: gorro e cartola ocupam a calota do meio, então a orelha só sobrevive
+// visualmente se passar da borda do chapéu.
+function RatEars({ c, tip }) {
+  return (
+    <g>
+      <circle cx="-14.5" cy="-12.5" r="8.6" fill={tip} />
+      <circle cx="10.5" cy="-15" r="9.2" fill={tip} />
+      <circle cx="-14" cy="-12" r="5.2" fill={c.ear} />
+      <circle cx="11" cy="-14.5" r="5.7" fill={c.ear} />
+    </g>
+  );
+}
+
+function CatMuzzle({ c }) {
+  return (
+    <g>
+      <ellipse cx="10" cy="5.5" rx="7.5" ry="5.5" fill={c.belly} opacity="0.95" />
+      <path d="M13.6 2.6 h4.4 l-2.2 2.8 z" fill={c.ear} />
+      <path d="M15.8 5.6 q-1.6 2.8 -4.2 1.4" stroke={c.dark} strokeWidth="1" strokeLinecap="round" fill="none" />
+      <g stroke={c.belly} strokeWidth="0.9" strokeLinecap="round" opacity="0.75">
+        <path d="M17 4.5 l9 -2.4" />
+        <path d="M17 6.5 l9 0.8" />
+        <path d="M16.5 8 l8 3.4" />
+      </g>
+    </g>
+  );
+}
+
+// Focinho de rato: mais comprido, nariz redondo em vez de triângulo e os dois
+// incisivos. O dentão é a assinatura do bicho — sem ele vira hamster.
+function RatMuzzle({ c }) {
+  return (
+    <g>
+      <ellipse cx="12.5" cy="5.8" rx="10" ry="4.9" fill={c.belly} opacity="0.95" />
+      <circle cx="21.6" cy="5.4" r="2.1" fill={c.ear} />
+      {/* dentão: nasce 1,5px DENTRO da elipse do focinho de propósito. Encostado na
+          borda ele lê como peça solta flutuando embaixo do bicho. */}
+      <path d="M15.6 8.4 h4.6 l-0.7 4.2 h-3.2 z" fill="#fdfdfb" />
+      <path d="M17.9 8.4 v4.2" stroke={c.dark} strokeWidth="0.6" opacity="0.4" />
+      {/* bigode para em x=26, igual ao do gato: além disso ele sai do viewBox da
+          vitrine (-26 -34 52 62) e aparece cortado no card da loja. */}
+      <g stroke={c.belly} strokeWidth="0.9" strokeLinecap="round" opacity="0.75">
+        <path d="M20.5 2.6 l5.5 -2.2" />
+        <path d="M21.4 4.6 l4.6 0.2" />
+        <path d="M20.6 7.6 l5.2 2.4" />
+      </g>
+    </g>
+  );
+}
+
+function CatTail({ tip }) {
+  return <path d="M0 0 C-15 -3 -21 -19 -10 -29" stroke={tip} strokeWidth="7" strokeLinecap="round" fill="none" />;
+}
+
+// Rabo de rato: comprido, fino e pelado — por isso sai na cor da orelha, não na da
+// pelagem. Traço fino também é o que impede que ele leia como rabo de gato magro.
+function RatTail({ c }) {
+  return (
+    <path
+      d="M2 2 C-16 7 -28 -3 -23 -14 C-20 -21 -12 -22 -8 -17"
+      stroke={c.ear}
+      strokeWidth="3"
+      strokeLinecap="round"
+      fill="none"
+      opacity="0.95"
+    />
+  );
+}
+
+// `stripes: false` no rato VETA a listra mesmo em pelagem listrada: laranja
+// malhado é padrão de gato, e um rato tigrado parece bug, não variação.
+const SPECIES_PARTS = {
+  gato: { Ears: CatEars, Muzzle: CatMuzzle, Tail: CatTail, stripes: true },
+  rato: { Ears: RatEars, Muzzle: RatMuzzle, Tail: RatTail, stripes: false },
+};
+const partsOf = (id) => SPECIES_PARTS[id] || SPECIES_PARTS.gato;
+
+function Bicho({ stage, coat, act, gear, species }) {
   const c = coat;
   const low = act === "sit" || act === "sleep"; // sentado: corpo desce, patas dobram
   const walking = act === "walk";
@@ -406,6 +509,8 @@ function Cat({ stage, coat, act, gear }) {
   const sleeping = act === "sleep";
   const tip = c.points ? c.dark : c.fur; // siamês: extremidades escuras
   const dy = low ? 5 : 0;
+  const P = partsOf(species);
+  const stripes = c.stripes && P.stripes;
   // a coleira automática dos degraus altos sai de cena quando há acessório de
   // pescoço: dois colares no mesmo pescoço é bug, não estilo
   const stageCollar = stage.collar && !gear.neck;
@@ -419,7 +524,7 @@ function Cat({ stage, coat, act, gear }) {
           animação (CSS). Juntos no mesmo <g>, o CSS apagaria o translate. */}
       <g transform={`translate(31,${57 + dy})`}>
         <g className={`pet-tail ${walking || happy ? "pet-tail-fast" : ""}`}>
-          <path d="M0 0 C-15 -3 -21 -19 -10 -29" stroke={tip} strokeWidth="7" strokeLinecap="round" fill="none" />
+          <P.Tail c={c} tip={tip} />
         </g>
       </g>
 
@@ -470,7 +575,7 @@ function Cat({ stage, coat, act, gear }) {
         <g className="pet-breathe">
           <ellipse cx="56" cy={56 + dy} rx="28" ry={low ? 19 : 17} fill={c.fur} />
           <ellipse cx="59" cy={64 + dy} rx="20" ry="8" fill={c.belly} opacity="0.85" />
-          {c.stripes && (
+          {stripes && (
             <g stroke={c.dark} strokeWidth="2.6" strokeLinecap="round" fill="none" opacity="0.8">
               <path d={`M44 ${43 + dy} q3 5 1 9`} />
               <path d={`M53 ${41 + dy} q3 5 1 10`} />
@@ -484,14 +589,11 @@ function Cat({ stage, coat, act, gear }) {
         <g transform={`translate(87,${37 + dy}) scale(${stage.headScale})`}>
           {stage.fluff && <ellipse cx="-2" cy="4" rx="19" ry="15" fill={c.fur} opacity="0.5" />}
 
-          {/* orelhas */}
-          <path d="M-15 -7 L-19 -23 L-4 -14 Z" fill={tip} />
-          <path d="M1 -14 L9 -25 L15 -7 Z" fill={tip} />
-          <path d="M-13.5 -9.5 L-16 -19 L-6.5 -13.5 Z" fill={c.ear} />
-          <path d="M3 -13 L8.5 -21 L13 -9 Z" fill={c.ear} />
+          {/* orelhas — antes do círculo da cabeça, pra a base ficar por baixo */}
+          <P.Ears c={c} tip={tip} />
 
           <circle r="16" fill={c.fur} />
-          {c.stripes && (
+          {stripes && (
             <g stroke={c.dark} strokeWidth="2.2" strokeLinecap="round" fill="none" opacity="0.75">
               <path d="M-6 -13 l1.5 5" />
               <path d="M0 -14.5 l0 5" />
@@ -520,14 +622,7 @@ function Cat({ stage, coat, act, gear }) {
           )}
 
           {/* focinho, nariz, boca */}
-          <ellipse cx="10" cy="5.5" rx="7.5" ry="5.5" fill={c.belly} opacity="0.95" />
-          <path d="M13.6 2.6 h4.4 l-2.2 2.8 z" fill={c.ear} />
-          <path d="M15.8 5.6 q-1.6 2.8 -4.2 1.4" stroke={c.dark} strokeWidth="1" strokeLinecap="round" fill="none" />
-          <g stroke={c.belly} strokeWidth="0.9" strokeLinecap="round" opacity="0.75">
-            <path d="M17 4.5 l9 -2.4" />
-            <path d="M17 6.5 l9 0.8" />
-            <path d="M16.5 8 l8 3.4" />
-          </g>
+          <P.Muzzle c={c} tip={tip} />
 
           <FaceGear id={gear.face} />
           {stageCollar && (
@@ -557,9 +652,36 @@ function Cat({ stage, coat, act, gear }) {
 // A peça do card é a MESMA que vai pro gato: o preview só monta uma cabeça (ou um
 // dorso) de mentira em volta pra dar contexto. Ilustração separada por item seria
 // uma segunda verdade pra manter em dia.
-function GearPreview({ item, coat, small = false }) {
+// A cabeça de mentira que serve as duas vitrines: a do acessório e a da espécie.
+// Mesmas peças do bicho de verdade — nada de ilustração paralela pra manter em dia.
+function FakeHead({ coat, species, children }) {
   const c = coat;
   const tip = c.points ? c.dark : c.fur;
+  const P = partsOf(species);
+  return (
+    <>
+      <P.Ears c={c} tip={tip} />
+      <circle r="16" fill={c.fur} />
+      <ellipse cx="-6" cy="-1" rx="2.7" ry="3.7" fill={c.eye} />
+      <ellipse cx="6" cy="-2" rx="3.5" ry="4.3" fill={c.eye} />
+      <P.Muzzle c={c} tip={tip} />
+      {children}
+    </>
+  );
+}
+
+// Vitrine da espécie: só o bicho, sem acessório nenhum, porque o que está à venda
+// aqui é o bicho.
+function SpeciesPreview({ species, coat, small = false }) {
+  return (
+    <svg viewBox="-26 -34 52 62" className={`${small ? "h-11" : "h-16"} w-full`} aria-hidden="true">
+      <FakeHead coat={coat} species={species} />
+    </svg>
+  );
+}
+
+function GearPreview({ item, coat, species, small = false }) {
+  const c = coat;
   const h = small ? "h-11" : "h-16";
   if (item.slot === "toy")
     return (
@@ -575,18 +697,13 @@ function GearPreview({ item, coat, small = false }) {
     );
   return (
     <svg viewBox="-26 -34 52 62" className={`${h} w-full`} aria-hidden="true">
-      <path d="M-15 -7 L-19 -23 L-4 -14 Z" fill={tip} />
-      <path d="M1 -14 L9 -25 L15 -7 Z" fill={tip} />
-      <circle r="16" fill={c.fur} />
-      <ellipse cx="-6" cy="-1" rx="2.7" ry="3.7" fill={c.eye} />
-      <ellipse cx="6" cy="-2" rx="3.5" ry="4.3" fill={c.eye} />
-      <ellipse cx="10" cy="5.5" rx="7.5" ry="5.5" fill={c.belly} opacity="0.95" />
-      <path d="M13.6 2.6 h4.4 l-2.2 2.8 z" fill={c.ear} />
-      <FaceGear id={item.slot === "face" ? item.id : null} />
-      <NeckGear id={item.slot === "neck" ? item.id : null} />
-      <HeadGear id={item.slot === "head" ? item.id : null} />
+      <FakeHead coat={c} species={species}>
+        <FaceGear id={item.slot === "face" ? item.id : null} />
+        <NeckGear id={item.slot === "neck" ? item.id : null} />
+        <HeadGear id={item.slot === "head" ? item.id : null} />
+      </FakeHead>
     </svg>
   );
 }
 
-export { T, HeadGear, FaceGear, NeckGear, Toy, Scene, Cat, GearPreview };
+export { T, HeadGear, FaceGear, NeckGear, Toy, Scene, Bicho, GearPreview, SpeciesPreview };

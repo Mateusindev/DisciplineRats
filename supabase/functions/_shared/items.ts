@@ -9,12 +9,20 @@
 // A regra que mantém os dois em dia: scripts/check-item-prices.mjs lê ESTE arquivo
 // com regex e compara com PET_ITEMS. Divergiu, `bun run check:pet` quebra.
 
-// Preço único de qualquer acessório, em reais.
+// Preço único de qualquer coisa vendável, em reais. Espécie custa o mesmo que uma
+// bandana de propósito: preço único é o que dispensa o usuário de comparar valores.
 export const ITEM_PRICE = 0.99;
 
 // Ids vendáveis. Item que não está aqui não gera cobrança — vale tanto pros grátis
 // (que ninguém deveria pagar) quanto pra id inventado no request.
+//
+// ESPÉCIE ENTRA AQUI. Do ponto de vista da cobrança não há diferença entre virar
+// rato e comprar um chapéu: mesma preferência, mesmo webhook, mesma linha em
+// `pet_entitlements`. A distinção entre bicho e acessório é só do cliente, que
+// precisa dela pra desenhar; o servidor não tem por que saber.
 export const PAID_ITEMS = new Set([
+  // espécie
+  "rato",
   // cabeça
   "cap",
   "tophat",

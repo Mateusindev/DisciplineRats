@@ -16,6 +16,13 @@ navegador vai pro Mercado Pago → usuário paga (Pix / cartão / boleto)
 cliente volta em /perfil?compra=ok → pergunta os entitlements de novo
 ```
 
+
+> **Espécie também é vendida por aqui.** O rato é um `item_id` em `pet_entitlements`
+> igual a um chapéu — mesmo preço, mesma preferência, mesmo webhook. Do lado do
+> servidor não há distinção entre "virar rato" e "comprar cartola"; a diferença é só
+> do cliente, que precisa dela pra desenhar. Consequência prática: **id novo em
+> `_shared/items.ts` só passa a vender depois de `supabase functions deploy`.**
+
 ## A regra
 
 **`pet_entitlements` é a única tabela do projeto que o cliente não escreve.** Isso

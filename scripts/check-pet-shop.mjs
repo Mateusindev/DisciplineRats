@@ -7,11 +7,21 @@
 // O par deste script é scripts/check-item-prices.mjs, que garante que o catálogo da
 // tela e o da cobrança não divergem.
 
+import { readFileSync } from "node:fs";
 import {
   normalizePet,
   defaultPet,
   togglePetGear,
+  setPetSpecies,
   petOwns,
+  petSku,
+  petSkuIsPaid,
+  petSpecies,
+  petSpeciesIsPaid,
+  petCoatLabel,
+  PET_SPECIES,
+  PET_PAID_SPECIES,
+  PET_COATS,
   mergeWithDefaults,
   gamify,
   xpToReachLevel,
@@ -89,11 +99,16 @@ console.log("=== merge/carga ===");
 {
   const m = mergeWithDefaults({ entitlements: ["crown", "crown", "beanie", "id_falso"] });
   ok(m.entitlements.length === 1 && m.entitlements[0] === "crown", "merge dedup, e descarta grátis e id inexistente da lista de entitlements");
+  // Regressão cara: o filtro do merge já foi só de acessório. Espécie paga cairia
+  // fora no carregamento e a pessoa perderia o que comprou, em silêncio.
+  const mr = mergeWithDefaults({ entitlements: ["rato"], pet: { species: "rato" } });
+  ok(mr.entitlements.includes("rato"), "entitlement de ESPÉCIE sobrevive ao merge");
+  ok(mr.pet.species === "rato", "espécie paga com entitlement fica de pé no carregamento");
   ok(Array.isArray(mergeWithDefaults({}).entitlements), "entitlements sempre array");
   const mig = mergeWithDefaults({ settings: { petName: "Mingau", petCoat: "siames" } });
   ok(mig.pet.name === "Mingau" && mig.pet.coat === "siames", "nome/pelagem migram de settings pro pet");
   ok(mig.settings.petName === undefined, "campo antigo sai de settings");
-  ok(JSON.stringify(Object.keys(mig.pet)) === '["name","coat","gear"]', "ordem de chaves do pet estável (diff-sync)");
+  ok(JSON.stringify(Object.keys(mig.pet)) === '["species","name","coat","gear"]', "ordem de chaves do pet estável (diff-sync)");
   ok(JSON.stringify(normalizePet(mig.pet, null, [])) === JSON.stringify(mig.pet), "normalizador idempotente");
 }
 
@@ -115,8 +130,56 @@ for (const sl of PET_SLOTS) {
 ok(PET_STAGES.length === 5, "5 degraus de crescimento");
 
 console.log(
-  `\n${PET_SLOTS.length} categorias · ${PET_FREE_ITEMS.length} grátis · ${PET_PAID_ITEMS.length} pagos a ${petPriceLabel()} ` +
-    `(${petPriceLabel(PET_PAID_ITEMS.length * PET_ITEM_PRICE)} por tudo)`,
+  `\n${PET_SPECIES.length} espécies · ${PET_SLOTS.length} categorias · ${PET_FREE_ITEMS.length + 1} grátis · ` +
+    `${PET_PAID_ITEMS.length + PET_PAID_SPECIES.length} pagos a ${petPriceLabel()} ` +
+    `(${petPriceLabel((PET_PAID_ITEMS.length + PET_PAID_SPECIES.length) * PET_ITEM_PRICE)} por tudo)`,
 );
+
+console.log("=== espécie ===");
+{
+  ok(PET_SPECIES[0].id === "gato" && PET_SPECIES[0].source === "free", "gato é o padrão e é grátis");
+  ok(petSpeciesIsPaid("rato") && PET_PAID_SPECIES.length === 1, "rato é pago");
+  ok(petSpecies("nao_existe").id === "gato", "espécie desconhecida cai no gato");
+  ok(petSku("rato") && petSkuIsPaid("rato"), "petSku enxerga espécie, não só acessório");
+  ok(petSku("crown") && petSkuIsPaid("crown"), "petSku continua enxergando acessório");
+  ok(!petSku("nada"), "petSku não inventa sku");
+
+  // fronteira de confiança, agora também pro corpo do bicho
+  ok(petOwns(st(999999, null, []), "gato"), "gato é de todos");
+  ok(!petOwns(st(999999, null, []), "rato"), "rato não é de ninguém sem entitlement, nem com XP infinito");
+  ok(petOwns(st(0, null, ["rato"]), "rato"), "entitlement libera o rato");
+
+  const forjado = normalizePet({ ...defaultPet(), species: "rato" }, null, []);
+  ok(forjado.species === "gato", "espécie paga escrita no profiles sem compra volta pro gato");
+  ok(normalizePet({ ...defaultPet(), species: "rato" }, null, ["rato"]).species === "rato", "com entitlement, o rato fica");
+
+  const semEnt = st(0);
+  ok(setPetSpecies(semEnt, "rato") === semEnt, "não vira rato sem entitlement");
+  const virou = setPetSpecies(st(0, null, ["rato"]), "rato");
+  ok(virou.pet.species === "rato", "vira rato com entitlement");
+  ok(setPetSpecies(virou, "rato") === virou, "trocar pela espécie atual não cria estado novo");
+  ok(setPetSpecies(virou, "gato").pet.species === "gato", "sempre dá pra voltar pro gato (é grátis)");
+
+  // espécie NÃO é slot: togglePetGear não pode deixar o bicho sem corpo
+  ok(togglePetGear(virou, "rato") === virou, "togglePetGear ignora espécie — bicho não se desequipa");
+
+  ok(petCoatLabel(PET_COATS.find((c) => c.id === "siames"), "gato") === "SIAMÊS", "pelagem mantém o nome de raça no gato");
+  ok(petCoatLabel(PET_COATS.find((c) => c.id === "siames"), "rato") === "PONTAS ESCURAS", "e troca por nome de cor no rato");
+  ok(petCoatLabel(PET_COATS.find((c) => c.id === "laranja"), "rato") === "LARANJA", "cor sem nome de raça não muda");
+}
+
+console.log("=== arte por espécie ===");
+{
+  // PetArt.js é JSX: não dá pra importar aqui. Mas dá pra garantir que ninguém
+  // acrescentou espécie ao catálogo sem desenhar o bicho — o sintoma seria um rato
+  // com cara de gato, silencioso.
+  const art = readFileSync(new URL("../components/PetArt.js", import.meta.url), "utf8");
+  const bloco = art.match(/SPECIES_PARTS\s*=\s*\{([\s\S]*?)\n\};/);
+  ok(!!bloco, "achou SPECIES_PARTS em components/PetArt.js");
+  for (const sp of PET_SPECIES) ok(new RegExp(`\\b${sp.id}:\\s*\\{`).test(bloco?.[1] ?? ""), `espécie "${sp.id}" tem peças desenhadas`);
+  // o contrato que faz os 31 acessórios servirem em qualquer bicho
+  ok(/<circle r="16" fill=\{c\.fur\} \/>/.test(art), "cabeça continua em raio 16 (âncora dos acessórios)");
+}
+
 console.log(fail ? `${fail} FALHA(S)` : "todas as checagens passaram");
 process.exit(fail ? 1 : 0);

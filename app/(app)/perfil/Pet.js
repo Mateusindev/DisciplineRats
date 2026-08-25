@@ -1,13 +1,13 @@
 "use client";
 
 // ============================================================================
-// MASCOTE — o cercado do perfil: um gato que cresce com o XP e se veste na lojinha.
+// MASCOTE — o cercado do perfil: um bicho que cresce com o XP e se veste na lojinha.
 //
 // O DESENHO não mora aqui — está em `components/PetArt.js`, porque a tela de sono
 // também põe o bicho na cama. Aqui fica só o que é do cercado: a vagabundagem, o
-// carinho, o nome, a pelagem e a compra.
+// carinho, o nome, a espécie, a pelagem e a compra.
 //
-// Quem pede menos movimento (prefers-reduced-motion) recebe um gato parado: as
+// Quem pede menos movimento (prefers-reduced-motion) recebe um bicho parado: as
 // keyframes morrem no CSS e a vagabundagem nem começa aqui.
 // ============================================================================
 
@@ -28,13 +28,21 @@ import {
   PET_ITEMS,
   PET_ITEM_BY_ID,
   PET_NAME_LEN,
+  PET_SPECIES,
+  petSpecies,
+  petCoatLabel,
+  setPetSpecies,
   petOwns,
   petPriceLabel,
 } from "@/lib/state";
-import { Toy, Scene, Cat, GearPreview } from "@/components/PetArt";
+import { Toy, Scene, Bicho, GearPreview, SpeciesPreview } from "@/components/PetArt";
 
-function Shop({ pet, coat, entitlements, buying, onBuy, onToggle, onClose }) {
-  const [slot, setSlot] = useState(PET_SLOTS[0].id);
+// A espécie ganha uma aba própria em vez de virar um slot: slot é "onde a peça fica
+// no corpo", e o bicho não fica em lugar nenhum — ele É o corpo. Ver PET_SPECIES.
+const SHOP_TABS = [{ id: "species", label: "ESPÉCIE", icon: "pets" }, ...PET_SLOTS];
+
+function Shop({ pet, coat, entitlements, buying, onBuy, onToggle, onSpecies, onClose }) {
+  const [slot, setSlot] = useState(SHOP_TABS[0].id);
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -43,10 +51,12 @@ function Shop({ pet, coat, entitlements, buying, onBuy, onToggle, onClose }) {
 
   const items = PET_ITEMS.filter((i) => i.slot === slot);
   // grátis é de todos; pago é de quem tem o entitlement. Nenhum dos dois consulta
-  // dado que o navegador possa editar.
+  // dado que o navegador possa editar. Vale igual pra acessório e pra espécie.
   const ownsItem = (it) => it.source === "free" || entitlements.includes(it.id);
-  const total = PET_ITEMS.length;
-  const have = PET_ITEMS.filter(ownsItem).length;
+  const catalogo = [...PET_SPECIES, ...PET_ITEMS];
+  const total = catalogo.length;
+  const have = catalogo.filter(ownsItem).length;
+  const especie = pet.species || PET_SPECIES[0].id;
 
   return (
     <div
@@ -67,8 +77,9 @@ function Shop({ pet, coat, entitlements, buying, onBuy, onToggle, onClose }) {
             {/* O que a pessoa merece saber ANTES de pagar, e o que a lei manda dizer:
                 é cosmético, é compra única e não mexe em progresso nenhum. */}
             <p className="text-[11px] text-on-surface-variant">
-              Um item grátis por categoria. Os outros custam <strong className="text-on-surface">{petPriceLabel()}</strong> cada, compra única, sem assinatura. São
-              acessórios <strong className="text-on-surface">cosméticos</strong>: não dão XP, não sobem nível e não mexem no ranking — XP serve só pra o gato crescer.
+              O gato e um item de cada categoria são grátis. O resto — inclusive a outra espécie — custa{" "}
+              <strong className="text-on-surface">{petPriceLabel()}</strong> cada, compra única, sem assinatura. É tudo{" "}
+              <strong className="text-on-surface">cosmético</strong>: não dá XP, não sobe nível e não mexe no ranking — XP serve só pra o bicho crescer.
             </p>
           </div>
           <button onClick={onClose} aria-label="Fechar" className="shrink-0 p-1 text-outline hover:text-on-surface transition">
@@ -81,7 +92,7 @@ function Shop({ pet, coat, entitlements, buying, onBuy, onToggle, onClose }) {
             <span className="text-[13px] text-on-surface-variant tabular-nums">
               {have}/{total}
             </span>
-            <Caps className="text-outline text-[10px]">ITENS SEUS</Caps>
+            <Caps className="text-outline text-[10px]">DO CATÁLOGO É SEU</Caps>
           </span>
           <span className="ml-auto flex items-center gap-1.5">
             <MI name="pix" className="text-sm text-outline" />
@@ -90,9 +101,9 @@ function Shop({ pet, coat, entitlements, buying, onBuy, onToggle, onClose }) {
         </div>
 
         <div className="flex gap-1 overflow-x-auto ff-scroll border-b border-outline-variant/50 px-4 sm:px-5 py-2">
-          {PET_SLOTS.map((sl) => {
+          {SHOP_TABS.map((sl) => {
             const on = sl.id === slot;
-            const all = PET_ITEMS.filter((i) => i.slot === sl.id);
+            const all = sl.id === "species" ? PET_SPECIES : PET_ITEMS.filter((i) => i.slot === sl.id);
             return (
               <button
                 key={sl.id}
@@ -115,6 +126,56 @@ function Shop({ pet, coat, entitlements, buying, onBuy, onToggle, onClose }) {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 sm:p-5">
+          {slot === "species" &&
+            PET_SPECIES.map((sp) => {
+              const owned = ownsItem(sp);
+              const atual = sp.id === especie;
+              return (
+                <div
+                  key={sp.id}
+                  className={`flex flex-col rounded-xl border p-3 transition ${
+                    atual ? "border-primary-container bg-primary-container/10" : "border-outline-variant/60 bg-surface-container-high/40"
+                  }`}
+                >
+                  <div className="relative">
+                    <SpeciesPreview species={sp.id} coat={coat} />
+                    {sp.source === "free" && (
+                      <span className="absolute right-0 top-0 rounded-full bg-surface-container px-1.5 py-0.5 font-label-caps text-[9px] text-primary-container">
+                        GRÁTIS
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2 min-w-0 flex-1">
+                    <div className="text-[13px] leading-tight text-on-surface">{sp.label}</div>
+                    <div className="text-[10px] leading-tight text-outline">{sp.desc}</div>
+                  </div>
+                  <div className="mt-2">
+                    {owned ? (
+                      <button
+                        onClick={() => onSpecies(sp.id)}
+                        disabled={atual}
+                        className={`w-full rounded-lg py-1.5 font-label-caps text-[10px] transition active:scale-[.98] ${
+                          atual
+                            ? "bg-primary-container text-on-primary-container disabled:opacity-100"
+                            : "border border-primary-container/50 text-primary-container hover:bg-primary-container/10"
+                        }`}
+                      >
+                        {atual ? "É ESSE AÍ" : "VIRAR ESTE"}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => onBuy(sp.id)}
+                        disabled={buying === sp.id}
+                        title={`Comprar por ${petPriceLabel()}`}
+                        className="w-full rounded-lg border border-primary py-1.5 font-label-caps text-[10px] tabular-nums text-primary transition hover:bg-primary/10 active:scale-[.98] disabled:opacity-50"
+                      >
+                        {buying === sp.id ? "ABRINDO..." : petPriceLabel()}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           {items.map((item) => {
             const free = item.source === "free";
             const owned = ownsItem(item);
@@ -127,7 +188,7 @@ function Shop({ pet, coat, entitlements, buying, onBuy, onToggle, onClose }) {
                 }`}
               >
                 <div className="relative">
-                  <GearPreview item={item} coat={coat} />
+                  <GearPreview item={item} coat={coat} species={especie} />
                   {free && (
                     <span className="absolute right-0 top-0 rounded-full bg-surface-container px-1.5 py-0.5 font-label-caps text-[9px] text-primary-container">
                       GRÁTIS
@@ -182,6 +243,7 @@ export default function Pet() {
   const stage = growth.cur;
   const pet = state.pet || defaultPet();
   const coat = petCoat(pet.coat);
+  const bicho = petSpecies(pet.species);
   const gear = pet.gear || {};
   const name = (pet.name || "").trim();
   const entitlements = state.entitlements || [];
@@ -337,7 +399,7 @@ export default function Pet() {
             style={{ left: `${walk.x}%`, transform: "translateX(-50%)", transition: walk.dur ? `left ${walk.dur}ms linear` : "none" }}
           >
             <span className="relative block" style={{ transform: `scaleX(${walk.dir})` }}>
-              <Cat stage={stage} coat={coat} act={walk.act} gear={gear} />
+              <Bicho stage={stage} coat={coat} act={walk.act} gear={gear} species={pet.species} />
             </span>
             {hearts.map((h) => (
               <span
@@ -362,7 +424,7 @@ export default function Pet() {
                   onKeyDown={(e) => (e.key === "Enter" ? saveName() : e.key === "Escape" ? setEditing(false) : null)}
                   autoFocus
                   maxLength={PET_NAME_LEN}
-                  placeholder="Nome do gato"
+                  placeholder={`Nome do ${bicho.label.toLowerCase()}`}
                   aria-label="Nome do mascote"
                   className={`${inputCls} font-headline-md text-headline-md max-w-[220px]`}
                 />
@@ -430,6 +492,36 @@ export default function Pet() {
             </div>
           </div>
 
+          {/* Espécie e pelagem lado a lado: são a mesma pergunta ("que bicho é esse?"),
+              e separá-las em telas diferentes só faria procurar. O que não é seu
+              manda pra loja em vez de ficar inerte — cadeado sem porta é frustração. */}
+          <div>
+            <Caps className="text-outline text-[10px] mb-1.5 block">ESPÉCIE</Caps>
+            <div className="flex flex-wrap gap-1.5">
+              {PET_SPECIES.map((sp) => {
+                const on = sp.id === bicho.id;
+                const owned = petOwns(state, sp.id);
+                return (
+                  <button
+                    key={sp.id}
+                    onClick={() => (owned ? setState((prev) => setPetSpecies(prev, sp.id)) : setShop(true))}
+                    aria-pressed={on}
+                    title={owned ? sp.desc : `${sp.label} — ${petPriceLabel()} na lojinha`}
+                    className={`flex items-center gap-1.5 rounded-full border px-2 py-1 font-label-caps text-[9px] transition ${
+                      on
+                        ? "border-primary-container bg-primary-container/10 text-primary-container"
+                        : "border-outline-variant text-outline hover:border-outline"
+                    }`}
+                  >
+                    <MI name={owned ? "pets" : "lock"} className="text-[13px]" />
+                    {sp.label}
+                    {!owned && <span className="tabular-nums text-outline">{petPriceLabel()}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div>
             <Caps className="text-outline text-[10px] mb-1.5 block">PELAGEM</Caps>
             <div className="flex flex-wrap gap-1.5">
@@ -440,13 +532,13 @@ export default function Pet() {
                     key={k.id}
                     onClick={() => patchPet({ coat: k.id })}
                     aria-pressed={on}
-                    title={k.label}
+                    title={petCoatLabel(k, bicho.id)}
                     className={`flex items-center gap-1.5 rounded-full border px-2 py-1 font-label-caps text-[9px] transition ${
                       on ? "border-primary-container bg-primary-container/10 text-primary-container" : "border-outline-variant text-outline hover:border-outline"
                     }`}
                   >
                     <span className="h-3.5 w-3.5 rounded-full border border-black/20" style={{ background: k.fur }} />
-                    {k.label}
+                    {petCoatLabel(k, bicho.id)}
                   </button>
                 );
               })}
@@ -463,6 +555,7 @@ export default function Pet() {
           buying={buying}
           onBuy={buyItem}
           onToggle={(id) => setState((prev) => togglePetGear(prev, id))}
+          onSpecies={(id) => setState((prev) => setPetSpecies(prev, id))}
           onClose={() => setShop(false)}
         />
       )}

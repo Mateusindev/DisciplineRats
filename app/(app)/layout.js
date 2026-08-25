@@ -96,13 +96,13 @@ function Chrome({ children }) {
       {/* ações de canto: ajuda da página atual + atalho do mascote + toggle de tema */}
       <div className="fixed top-3 right-3 z-[60] flex items-center gap-1">
         <HelpButton pathname={pathname} />
-        {/* O gato mora no perfil, que é fundo de menu — sem um atalho ninguém passa
-            por lá pra ver o bicho crescer. Aponta pra âncora da seção, não só pra
+        {/* O mascote mora no perfil, que é fundo de menu — sem um atalho ninguém
+            passa por lá pra ver o bicho crescer. Aponta pra âncora da seção, não só pra
             página, senão cairia no topo do perfil e o gato ficaria fora da tela. */}
         <Link
           href="/perfil#mascote"
-          aria-label="Ver meu gato"
-          title="Meu gato"
+          aria-label="Ver meu mascote"
+          title="Meu mascote"
           className={`w-8 h-8 rounded-full grid place-items-center transition hover:bg-surface-variant/50 ${
             pathname === "/perfil" ? "text-primary-container" : "text-on-surface-variant/50 hover:text-on-surface"
           }`}
