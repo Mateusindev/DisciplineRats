@@ -66,30 +66,28 @@ drop policy if exists "own xp events select" on public.xp_events;
 create policy "own xp events select" on public.xp_events for select using (auth.uid() = user_id);
 -- de propósito SEM policy de escrita: só `apply_xp_delta` (security definer) grava aqui
 
--- Teto do dia. Conta feita sobre as fontes de XP QUE EXISTEM HOJE — o Foco está
--- desativado (comentado em TABS + DISABLED_ROUTES, e o TimerWidget só aparece com
--- timer ativo, que só começa em /foco), então as sessões não entram. Dieta, Leitura,
--- Missões e Agenda não pagam XP. Sobram hábitos, rotina, sono, treino e diário.
+-- Teto do dia. Conta feita sobre as fontes de XP QUE EXISTEM HOJE. Dieta, Leitura,
+-- Missões e Agenda não pagam XP. Pagam foco, hábitos, rotina, sono, treino e diário.
 --
 -- Perfil pesado, tudo no talo (multiplicador de streak 1.5 e prioridade alta):
+--   8 sessões de foco de 25min ......... 600
 --   12 hábitos de prioridade alta ...... 450
 --   rotina de 12 itens + bônus de fechar  112
 --   2 treinos .......................... 120
 --   sono na meta de 9h .................  90
 --   diário ............................. .22
---   ------------------------------------ ~794
+--   ------------------------------------ ~1394
 --   + marco de 90 dias limpos de um vício (+750, uma vez por hábito na vida)
---   ------------------------------------ ~1544
+--   ------------------------------------ ~2144
 --
--- Daí 1600: cobre o dia mais gordo que as regras permitem e não sobra pra trapaça.
+-- Daí 2200: cobre o dia mais gordo que as regras permitem e não sobra pra trapaça.
 -- É `create or replace`, então dá pra mexer só no SQL editor, sem redeploy do app —
 -- mas mexa também em XP_DAILY_CAP (lib/state.js), que é o que a UI usa pra avisar.
 --
--- REATIVAR O FOCO PEDE SUBIR ESTE TETO: 8 sessões de 25min valem ~600, e sem isso o
--- usuário que voltar a usar o timer bate no teto no meio da tarde. Ver a checklist
--- de reativação em TABS (lib/state.js).
+-- Desativar uma fonte de XP pede BAIXAR este teto de volta: um teto calculado com
+-- algo que não existe mais deixa de limitar o que sobrou.
 create or replace function public.xp_daily_cap() returns integer
-  language sql immutable as $$ select 1600 $$;
+  language sql immutable as $$ select 2200 $$;
 create or replace function public.xp_ceiling() returns integer
   language sql immutable as $$ select 2000000000 $$;  -- abaixo do teto do int4
 

@@ -15,12 +15,10 @@ import { DEFAULT_MODE } from "@/lib/themes";
 // 4 slots + "Mais": mais que isso e o rótulo não cabe em tela de 360px.
 // Agenda entra na frente (é onde o dia começa) e Sono vai pro sheet — é o
 // registro de uma vez ao acordar, não algo que se abre o dia todo.
-// Missões ocupa o slot que era do Foco enquanto ele está desativado: id que não
-// existe em TABS não vira slot nenhum, e a pill ficaria com um buraco.
-const MOBILE_PRIMARY = ["calendario", "missoes", "habitos", "exercicio"];
+const MOBILE_PRIMARY = ["calendario", "foco", "habitos", "exercicio"];
 
 // rotas desativadas: fora do menu, mas acessíveis por URL — bloqueadas aqui
-const DISABLED_ROUTES = ["/foco", "/home", "/carteira", "/analise", "/grupos", "/mapa"];
+const DISABLED_ROUTES = ["/home", "/carteira", "/analise", "/grupos", "/mapa"];
 
 function DisabledScreen() {
   return (
@@ -33,7 +31,7 @@ function DisabledScreen() {
         Esta parte está temporariamente indisponível. Volte mais tarde.
       </p>
       <Link href={HOME_ROUTE} className="px-5 py-2.5 rounded-lg bg-primary-container text-on-primary-container font-label-caps text-[11px] active:scale-95 transition">
-        VOLTAR PRA AGENDA
+        VOLTAR PRO FOCO
       </Link>
     </div>
   );
