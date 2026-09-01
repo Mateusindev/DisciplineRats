@@ -938,9 +938,10 @@ function QuitCard({ h, i, ctx, bare = false }) {
 // (`primary-container` / `error`), que já carregam o ajuste de contraste de cada
 // tema — azul e vermelho não trocam de lado entre claro e escuro.
 //
-// O que NÃO ganha cor é tão importante quanto: dia de folga, dia de hábito sem
-// meta diária e o dia de hoje ainda em aberto ficam neutros. Pintar de vermelho
-// um dia que ainda dá tempo de cumprir seria acusar falha que não aconteceu.
+// O que NÃO ganha cor é tão importante quanto: dia de hábito sem meta diária
+// (meta semanal) e o dia de hoje ainda em aberto ficam neutros. Pintar de
+// vermelho um dia que ainda dá tempo de cumprir seria acusar falha que não
+// aconteceu.
 //
 // Clicar no nome do hábito abre o card cheio embaixo da matriz, com tudo que ele
 // sempre teve: editar, ícone, microatividades, dias da semana, prioridade, recaída.
@@ -967,7 +968,8 @@ const createdOn = (h) => {
 // Veredito de um dia. Devolve a classe de fundo ou null pra neutro.
 //
 // Cada tipo cobra de um jeito diferente, e é isso que decide a cor:
-//   diário  — só falha em dia AGENDADO que já passou (folga não é falha)
+//   diário  — só falha em dia AGENDADO que já passou; dia de folga é AZUL, igual
+//             a um dia feito (ver abaixo)
 //   semanal — a meta é da semana, então nenhum dia isolado é falha; só marcação
 //             pinta de azul
 //   largar  — todo dia sem recaída é dia cumprido; recaída pinta de vermelho
@@ -988,7 +990,11 @@ function dayVerdict(h, date, today) {
   // o calendário conta comparecimento, e um dia de mínimo é comparecimento.
   if (marked) return "done";
   if (kind === "weekly") return null;
-  if (!habitIsScheduled(h, date)) return null; // folga
+  // Folga é dia cumprido, e pinta do mesmo azul. Hábito de 3×/semana passava o mês
+  // com quatro bolinhas cinzas por semana no meio das azuis, e a linha lia como
+  // "quase sempre falho" quando o plano estava sendo seguido à risca. Dia em que
+  // nada era devido é dia em dia — a mesma regra que o vício já usava.
+  if (!habitIsScheduled(h, date)) return "done";
   return date === today ? null : "fail"; // hoje ainda dá tempo
 }
 
@@ -1595,7 +1601,7 @@ function MonthLayout({ habits, ctx }) {
           {[
             { c: DAY_CLS.done, t: "CUMPRIU" },
             { c: DAY_CLS.fail, t: "FALHOU / RECAÍDA" },
-            { c: "bg-surface-variant", t: "SEM COBRANÇA (FOLGA, META SEMANAL)" },
+            { c: "bg-surface-variant", t: "SEM COBRANÇA (META SEMANAL, HOJE EM ABERTO)" },
           ].map((l) => (
             <span key={l.t} className="flex items-center gap-1.5">
               <span className={`w-4 h-4 rounded-full ${l.c}`} />
