@@ -225,7 +225,7 @@ export function AppProvider({ children }) {
         const due = r.fireAt.getTime() <= now && r.eventAt.getTime() > now - 5 * 60_000;
         if (!due || notifiedRef.current.has(r.key)) continue;
         notifiedRef.current.add(r.key);
-        notify(r.title, r.body, { tag: `agenda-${r.key}`, url: "/calendario" });
+        notify(r.title, r.body, { tag: `agenda-${r.key}`, url: r.url });
       }
       try {
         // guarda só as chaves recentes: a lista não pode crescer pra sempre

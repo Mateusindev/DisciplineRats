@@ -66,28 +66,29 @@ drop policy if exists "own xp events select" on public.xp_events;
 create policy "own xp events select" on public.xp_events for select using (auth.uid() = user_id);
 -- de propósito SEM policy de escrita: só `apply_xp_delta` (security definer) grava aqui
 
--- Teto do dia. Conta feita sobre as fontes de XP QUE EXISTEM HOJE. Dieta, Leitura,
--- Missões e Agenda não pagam XP. Pagam foco, hábitos, rotina, sono, treino e diário.
+-- Teto do dia. Conta feita sobre as fontes de XP QUE EXISTEM HOJE — Foco, Agenda e
+-- Missões estão desativados (comentados em TABS + DISABLED_ROUTES), e isso derruba
+-- duas fontes: as sessões de foco e a rotina, que só é marcada dentro da Agenda.
+-- Dieta, Leitura e Mapa não pagam XP. Sobram hábitos, sono, treino e diário.
 --
 -- Perfil pesado, tudo no talo (multiplicador de streak 1.5 e prioridade alta):
---   8 sessões de foco de 25min ......... 600
 --   12 hábitos de prioridade alta ...... 450
---   rotina de 12 itens + bônus de fechar  112
 --   2 treinos .......................... 120
 --   sono na meta de 9h .................  90
 --   diário ............................. .22
---   ------------------------------------ ~1394
+--   ------------------------------------ ~682
 --   + marco de 90 dias limpos de um vício (+750, uma vez por hábito na vida)
---   ------------------------------------ ~2144
+--   ------------------------------------ ~1432
 --
--- Daí 2200: cobre o dia mais gordo que as regras permitem e não sobra pra trapaça.
+-- Daí 1500: cobre o dia mais gordo que as regras permitem e não sobra pra trapaça.
 -- É `create or replace`, então dá pra mexer só no SQL editor, sem redeploy do app —
 -- mas mexa também em XP_DAILY_CAP (lib/state.js), que é o que a UI usa pra avisar.
 --
--- Desativar uma fonte de XP pede BAIXAR este teto de volta: um teto calculado com
--- algo que não existe mais deixa de limitar o que sobrou.
+-- REATIVAR FOCO OU AGENDA PEDE SUBIR ESTE TETO: as sessões valem ~600/dia e a
+-- rotina ~112, e sem isso quem voltar a usá-las bate no teto no meio da tarde.
+-- Ver a checklist de reativação em TABS (lib/state.js).
 create or replace function public.xp_daily_cap() returns integer
-  language sql immutable as $$ select 2200 $$;
+  language sql immutable as $$ select 1500 $$;
 create or replace function public.xp_ceiling() returns integer
   language sql immutable as $$ select 2000000000 $$;  -- abaixo do teto do int4
 

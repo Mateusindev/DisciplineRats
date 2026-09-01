@@ -13,12 +13,14 @@ import { DEFAULT_MODE } from "@/lib/themes";
 
 // bottom nav mobile: 4 destinos fixos + MAIS (bottom sheet com o resto)
 // 4 slots + "Mais": mais que isso e o rótulo não cabe em tela de 360px.
-// Agenda entra na frente (é onde o dia começa) e Sono vai pro sheet — é o
-// registro de uma vez ao acordar, não algo que se abre o dia todo.
-const MOBILE_PRIMARY = ["calendario", "foco", "habitos", "exercicio"];
+// São os quatro registros do dia; Diário, Leitura e Mapa vão pro sheet — leitura
+// e planejamento não se abrem no meio da correria.
+const MOBILE_PRIMARY = ["habitos", "sono", "exercicio", "dieta"];
 
-// rotas desativadas: fora do menu, mas acessíveis por URL — bloqueadas aqui
-const DISABLED_ROUTES = ["/home", "/carteira", "/analise", "/grupos"];
+// rotas desativadas: fora do menu, mas acessíveis por URL — bloqueadas aqui.
+// /rotina entra junto com a Agenda: ela é só um redirect pra lá (ver rotina/page.js),
+// e sem isto o usuário veria o loader antes de bater na mesma parede.
+const DISABLED_ROUTES = ["/foco", "/calendario", "/missoes", "/rotina", "/home", "/carteira", "/analise", "/grupos"];
 
 function DisabledScreen() {
   return (
@@ -31,7 +33,7 @@ function DisabledScreen() {
         Esta parte está temporariamente indisponível. Volte mais tarde.
       </p>
       <Link href={HOME_ROUTE} className="px-5 py-2.5 rounded-lg bg-primary-container text-on-primary-container font-label-caps text-[11px] active:scale-95 transition">
-        VOLTAR PRO FOCO
+        VOLTAR PROS HÁBITOS
       </Link>
     </div>
   );

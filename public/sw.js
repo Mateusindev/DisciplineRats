@@ -24,7 +24,7 @@ self.addEventListener("push", (e) => {
       tag: d.tag || "agenda",
       renotify: true,
       vibrate: [200, 100, 200],
-      data: { url: d.url || "/foco" },
+      data: { url: d.url || "/habitos" },
     })
   );
 });
@@ -33,7 +33,7 @@ self.addEventListener("notificationclick", (e) => {
   e.notification.close();
   // Fallback quando o payload não trouxe url. Service worker não importa do bundle,
   // então isto é a única cópia de HOME_ROUTE (lib/state.js) que precisa ser mudada à mão.
-  const url = e.notification.data?.url || "/foco";
+  const url = e.notification.data?.url || "/habitos";
   e.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
       for (const c of list) {
