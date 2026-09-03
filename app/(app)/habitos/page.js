@@ -965,6 +965,18 @@ const createdOn = (h) => {
   return Number.isNaN(d.getTime()) ? null : `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 };
 
+const ddmm = (d) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+
+// Dias que aceitam clique. Do nascimento do hábito até hoje: o registro é
+// retroativo de propósito — quem esqueceu de marcar ontem marca hoje, e o
+// calendário É o formulário disso. O que não se registra é o futuro (não
+// aconteceu) e o período anterior ao hábito (não havia o que cumprir).
+function dayEditable(h, date, today) {
+  if (date > today) return false;
+  const born = createdOn(h);
+  return !born || date >= born;
+}
+
 // Veredito de um dia. Devolve a classe de fundo ou null pra neutro.
 //
 // Cada tipo cobra de um jeito diferente, e é isso que decide a cor:
@@ -1017,8 +1029,9 @@ const dayWord = (verdict, kind, future) =>
 // parece botão. Aqui a barra fica na própria linha do calendário, do lado do
 // nome, e cada segmento é o alvo do seu passo.
 //
-// Age sobre HOJE, porque passo é registro diário (stepChecks[data]) — mesma
-// regra da única célula clicável do calendário. Hábito sem microatividade não
+// Age sobre HOJE, porque passo é registro diário (stepChecks[data]) e a checklist
+// de um dia que já fechou não é editável — as bolinhas do calendário aceitam
+// qualquer dia vivido, a barra de passos não. Hábito sem microatividade não
 // mostra barra nenhuma. A lista com o texto de cada passo continua no card
 // cheio (StepChecklist); aqui o texto vive no title/aria de cada segmento.
 // ============================================================================
@@ -1302,9 +1315,9 @@ function OrderList({ habits, ctx }) {
 // dia de hoje exigia rolar até achá-lo.
 //
 // Aqui cada hábito é um cartão e o mês vira grade de 7 colunas — o formato de
-// calendário que todo mundo já lê. Veredito, cores e a regra de "só hoje é
-// clicável" saem das MESMAS funções do desktop (dayVerdict), então não existem
-// duas versões da verdade. O que muda é só o arranjo e o tamanho do alvo.
+// calendário que todo mundo já lê. Veredito, cores e a regra de que dia se pode
+// clicar saem das MESMAS funções do desktop (dayVerdict/dayEditable), então não
+// existem duas versões da verdade. O que muda é só o arranjo e o tamanho do alvo.
 // ============================================================================
 function MiniMonth({ h, ctx, y, m, dim }) {
   const today = ctx.today;
@@ -1327,10 +1340,11 @@ function MiniMonth({ h, ctx, y, m, dim }) {
         const future = date > today;
         const marked = h.doneDates.includes(date);
         const verdict = dayVerdict(h, date, today);
+        const editable = dayEditable(h, date, today);
         const act = () => {
-          if (!isToday) return;
-          if (kind !== "quit") return ctx.toggleHabit(h.id);
-          return marked ? ctx.undoRelapse(h.id) : ctx.logRelapse(h);
+          if (!editable) return;
+          if (kind !== "quit") return ctx.toggleHabit(h.id, date);
+          return marked ? ctx.undoRelapse(h.id, date) : ctx.logRelapse(h, date);
         };
         const what = dayWord(verdict, kind, future);
         // o número do dia cabe nesse tamanho de célula, então ele fica: com 31
@@ -1341,12 +1355,12 @@ function MiniMonth({ h, ctx, y, m, dim }) {
           <button
             key={d}
             onClick={act}
-            disabled={!isToday}
-            aria-label={`${h.name} em ${d}/${pad2(m)}${what ? `: ${what}` : ""}`}
-            title={`${d}/${pad2(m)}${isToday ? " — hoje, toque pra marcar" : what ? ` — ${what}` : ""}`}
+            disabled={!editable}
+            aria-label={`${h.name} em ${d}/${pad2(m)}${what ? `: ${what}` : ""}${editable ? ", toque pra registrar" : ""}`}
+            title={`${d}/${pad2(m)}${isToday ? " — hoje, toque pra marcar" : what ? ` — ${what}` : ""}${editable && !isToday ? " · toque pra registrar" : ""}`}
             className={`aspect-square rounded-full grid place-items-center text-[11px] tabular-nums ${
               verdict ? DAY_CLS[verdict] : future ? "bg-surface-variant/30" : "bg-surface-variant"
-            } ${text} ${isToday ? "ring-2 ring-on-surface" : ""} ${isToday ? "cursor-pointer" : "cursor-default"}`}
+            } ${text} ${isToday ? "ring-2 ring-on-surface" : ""} ${editable ? "cursor-pointer" : "cursor-default"}`}
           >
             {d}
           </button>
@@ -1561,24 +1575,25 @@ function MonthLayout({ habits, ctx }) {
                       const future = date > today;
                       const marked = h.doneDates.includes(date);
                       const verdict = dayVerdict(h, date, today);
+                      const editable = dayEditable(h, date, today);
                       const act = () => {
-                        if (!isToday) return;
-                        if (kind !== "quit") return ctx.toggleHabit(h.id);
-                        return marked ? ctx.undoRelapse(h.id) : ctx.logRelapse(h);
+                        if (!editable) return;
+                        if (kind !== "quit") return ctx.toggleHabit(h.id, date);
+                        return marked ? ctx.undoRelapse(h.id, date) : ctx.logRelapse(h, date);
                       };
                     const what = dayWord(verdict, kind, future);
                       return (
                         <td key={d} className="px-[3px] py-1">
                           <button
                             onClick={act}
-                            disabled={!isToday}
-                            aria-label={`${h.name} em ${d}/${pad2(m)}${what ? `: ${what}` : ""}`}
-                            title={`${d}/${pad2(m)}${isToday ? " — hoje, clique pra marcar" : what ? ` — ${what}` : ""}`}
+                            disabled={!editable}
+                            aria-label={`${h.name} em ${d}/${pad2(m)}${what ? `: ${what}` : ""}${editable ? ", clique pra registrar" : ""}`}
+                            title={`${d}/${pad2(m)}${isToday ? " — hoje, clique pra marcar" : what ? ` — ${what}` : ""}${editable && !isToday ? " · clique pra registrar" : ""}`}
                             // anel neutro (não colorido) pra marcar HOJE: um terceiro tom
                             // aqui competiria com as duas cores que carregam o significado
                             className={`block w-5 h-5 rounded-full ${
                               verdict ? DAY_CLS[verdict] : future ? "bg-surface-variant/30" : "bg-surface-variant"
-                            } ${isToday ? "ring-2 ring-on-surface" : ""} ${isToday ? "cursor-pointer" : "cursor-default"}`}
+                            } ${isToday ? "ring-2 ring-on-surface" : ""} ${editable ? "cursor-pointer" : "cursor-default"}`}
                           />
                         </td>
                       );
@@ -1610,7 +1625,11 @@ function MonthLayout({ habits, ctx }) {
           ))}
           <span className="flex items-center gap-1.5">
             <span className="w-4 h-4 rounded-full bg-surface-variant ring-2 ring-on-surface" />
-            <Caps className="text-outline text-[10px]">HOJE — CLIQUE PRA MARCAR</Caps>
+            <Caps className="text-outline text-[10px]">HOJE</Caps>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <MI name="history" className="text-base text-outline" />
+            <Caps className="text-outline text-[10px]">CLIQUE EM QUALQUER DIA JÁ VIVIDO PRA REGISTRAR ATRASADO</Caps>
           </span>
           <span className="flex items-center gap-1.5">
             <MI name="flag" className="text-base text-outline" />
@@ -1760,14 +1779,26 @@ export default function HabitosPage() {
   }
 
   // ===== build/weekly: check concede XP por prioridade (weekly-max não premia — marcar = consumir) =====
-  function toggleHabit(id) {
+  // `date` default hoje; o calendário passa qualquer dia já vivido (registro
+  // retroativo). Dia passado ganha toast porque o clique acontece longe de onde o
+  // olho está — sem confirmação em texto, marcar 12/08 por engano passa batido.
+  function toggleHabit(id, date = today) {
     const h = state.habits.find((x) => x.id === id);
-    // o reducer também recusa; aqui é só pra dizer POR QUE nada aconteceu
-    if (h && !h.doneDates.includes(today) && habitStepsBlock(h, today)) {
+    const marked = !!h && h.doneDates.includes(date);
+    // A trava de microatividade só vale HOJE (idem toggleHabitState). Aqui o
+    // reducer também recusa; este toast é só pra dizer POR QUE nada aconteceu.
+    if (h && !marked && date === today && habitStepsBlock(h, today)) {
       const p = habitStepProgress(h, today);
       return toast(`Faltam ${p.pending} microatividade(s) em "${h.name}"`, { type: "error" });
     }
-    setState((prev) => toggleHabitState(prev, id, today));
+    setState((prev) => toggleHabitState(prev, id, date));
+    if (h && date !== today) {
+      const xp = (h.kind || "build") === "weekly" && h.direction === "max" ? 0 : habitPriority(h).xp;
+      toast(`"${h.name}" ${marked ? "desmarcado" : "registrado"} em ${ddmm(date)}`, {
+        sub: xp ? (marked ? `−${xp} XP estornados` : `+${xp} XP`) : undefined,
+        icon: "history",
+      });
+    }
   }
 
   // ===== mínimo executável =====
@@ -1844,26 +1875,29 @@ export default function HabitosPage() {
   }
 
   // ===== quit: registrar/desfazer recaída =====
-  async function logRelapse(h) {
-    if (h.doneDates.includes(today)) return;
+  // `date` default hoje; o calendário passa o dia clicado. Recaída antiga também
+  // se registra: a contagem de dias limpo só é verdade se o dia ruim couber nela.
+  async function logRelapse(h, date = today) {
+    if (h.doneDates.includes(date)) return;
+    const quando = date === today ? "" : ` em ${ddmm(date)}`;
     // o porquê entra aqui de propósito: é o momento exato em que ele tem função
     const ok = await confirm({
-      title: `Registrar recaída em "${h.name}"?`,
+      title: `Registrar recaída em "${h.name}"${quando}?`,
       body: h.why
         ? `Você largou porque: “${h.why}”. Registrar zera a contagem de dias limpo — sem julgamento, recomeça agora.`
         : "Zera a contagem de dias limpo. Sem julgamento — recomeça agora.",
-      confirmLabel: "RECAÍ HOJE",
+      confirmLabel: date === today ? "RECAÍ HOJE" : `RECAÍ EM ${ddmm(date)}`,
     });
     if (!ok) return;
     setState((prev) => ({
       ...prev,
-      habits: prev.habits.map((x) => (x.id === h.id ? { ...x, doneDates: [...x.doneDates, today] } : x)),
+      habits: prev.habits.map((x) => (x.id === h.id ? { ...x, doneDates: [...x.doneDates, date] } : x)),
     }));
   }
-  function undoRelapse(id) {
+  function undoRelapse(id, date = today) {
     setState((prev) => ({
       ...prev,
-      habits: prev.habits.map((x) => (x.id === id ? { ...x, doneDates: x.doneDates.filter((d) => d !== today) } : x)),
+      habits: prev.habits.map((x) => (x.id === id ? { ...x, doneDates: x.doneDates.filter((d) => d !== date) } : x)),
     }));
   }
 

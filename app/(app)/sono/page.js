@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useApp } from "../AppContext";
 import { MI, Caps, StarRating, inputCls } from "@/components/ui";
 import MetasEditor from "@/components/MetasEditor";
-import { sleepXp, sleepMissXp, computeSleepXp, bedtimeLateness, SLEEP_LIMIT_DEFAULT, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX, award, getDateStr, minutesToHm, weekdayShort, last7Dates } from "@/lib/state";
+import { sleepXp, sleepMissXp, computeSleepXp, bedtimeLateness, SLEEP_LIMIT_DEFAULT, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX, award, getDateStr, shiftDate, minutesToHm, weekdayShort, last7Dates } from "@/lib/state";
 import { LineChart } from "@/components/charts";
 import BichoDaNoite from "./BichoDaNoite";
 
@@ -16,16 +16,50 @@ function hm(min) {
 function pad2(n) {
   return String(n).padStart(2, "0");
 }
+const ddmm = (d) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+
+// Até onde o registro atrasado alcança. Um mês cobre "esqueci a semana passada"
+// sem transformar o campo numa máquina do tempo: noite de três meses atrás
+// ninguém lembra a que horas deitou, e o palpite entraria no placar como fato.
+const RETRO_DAYS = 30;
 
 export default function SonoPage() {
   const { state, setState, toast, setSetting } = useApp();
   const today = getDateStr(0);
-  const existing = state.sleep[today];
+  // Qual noite o formulário está editando. Começa em hoje — o caso de 99% das
+  // aberturas — e aceita voltar até RETRO_DAYS: sono é registro, e registro que
+  // só aceita o dia corrente vira buraco permanente quando o app não foi aberto.
+  const [date, setDate] = useState(today);
+  const minDate = shiftDate(today, -RETRO_DAYS);
+  const existing = state.sleep[date];
   const [bedtime, setBedtime] = useState(existing?.bedtime || "23:00");
   const [wake, setWake] = useState(existing?.wake || "07:00");
   const [quality, setQuality] = useState(existing?.quality || 3);
   const [note, setNote] = useState(existing?.note || "");
   const [lateReason, setLateReason] = useState(existing?.lateReason || "");
+
+  // Trocar de noite recarrega o formulário com o que estiver salvo nela (ou os
+  // padrões). Sem isto, escolher ontem manteria na tela os campos de hoje e o
+  // salvar gravaria a noite errada com os dados da outra.
+  useEffect(() => {
+    const e = state.sleep[date];
+    setBedtime(e?.bedtime || "23:00");
+    setWake(e?.wake || "07:00");
+    setQuality(e?.quality || 3);
+    setNote(e?.note || "");
+    setLateReason(e?.lateReason || "");
+    // de propósito só `date`: salvar não pode reescrever o que está sendo digitado
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date]);
+
+  // clamp na mão: input[type=date] deixa DIGITAR fora do min/max, só bloqueia o
+  // seletor — sem isto dava pra registrar sono em 2019 ou no ano que vem
+  const pickDate = (v) => {
+    if (!v) return setDate(today);
+    setDate(v > today ? today : v < minDate ? minDate : v);
+  };
+  const isToday = date === today;
+  const dayLabel = isToday ? "HOJE" : date === shiftDate(today, -1) ? "ONTEM" : `${weekdayShort(date)} ${ddmm(date)}`;
 
   function computeDuration(bt, wk) {
     const [bh, bm] = bt.split(":").map(Number);
@@ -50,7 +84,7 @@ export default function SonoPage() {
       return;
     }
     setState((prev) => {
-      const prevEntry = prev.sleep[today];
+      const prevEntry = prev.sleep[date];
       // net anterior (assinado): prêmio − penalidade; fallback p/ entradas legadas
       const prevNet =
         (prevEntry?.awardedXp || 0) - (prevEntry?.penaltyXp || 0) ||
@@ -67,11 +101,11 @@ export default function SonoPage() {
         awardedXp: net > 0 ? net : 0,
         penaltyXp: net < 0 ? -net : 0,
       };
-      return { ...prev, sleep: { ...prev.sleep, [today]: entry }, stats: { ...prev.stats, xp } };
+      return { ...prev, sleep: { ...prev.sleep, [date]: entry }, stats: { ...prev.stats, xp } };
     });
     const sign = previewNet >= 0 ? "+" : "−";
     const reason = !hitsGoal ? "ABAIXO DA META" : onTime ? "META BATIDA · CEDO" : "META BATIDA · DEITOU TARDE";
-    toast("Sono salvo", {
+    toast(isToday ? "Sono salvo" : `Sono de ${ddmm(date)} salvo`, {
       sub: `${reason} · ${sign}${Math.abs(previewNet)} XP`,
       icon: previewNet >= 0 ? "check_circle" : "warning",
       type: previewNet >= 0 ? undefined : "error",
@@ -121,9 +155,9 @@ export default function SonoPage() {
             <MI name="nights_stay" className="text-[120px] text-primary" />
           </div>
 
-          <div className="flex justify-between items-start">
+          <div className="flex justify-between items-start gap-4 flex-wrap">
             <div>
-              <h3 className="font-headline-md text-headline-md text-on-surface mb-1">SONO DE HOJE</h3>
+              <h3 className="font-headline-md text-headline-md text-on-surface mb-1">SONO DE {dayLabel}</h3>
               <div className="flex items-center gap-2">
                 <MI name={previewNet >= 0 ? "stars" : "warning"} fill className={`text-sm ${previewNet >= 0 ? "text-primary" : "text-error"}`} />
                 <Caps className={previewNet >= 0 ? "text-primary" : "text-error"}>
@@ -131,6 +165,29 @@ export default function SonoPage() {
                 </Caps>
               </div>
               <Caps className="text-[10px] text-outline mt-1 block">DEITAR ATÉ {limit} RENDE XP CHEIO</Caps>
+            </div>
+
+            {/* Seletor da noite. Fica no cabeçalho do formulário, não escondido num
+                menu: é o campo que diz o que os outros campos significam. */}
+            <div className="flex flex-col items-end gap-1.5 relative z-10">
+              <Caps className="text-[10px] text-outline">NOITE DE</Caps>
+              <input
+                type="date"
+                value={date}
+                min={minDate}
+                max={today}
+                onChange={(e) => pickDate(e.target.value)}
+                aria-label="Noite que está sendo registrada"
+                className="bg-surface-container-highest px-3 py-2 rounded-lg border border-white/5 hover:border-primary/30 focus:border-primary/50 outline-none transition-colors text-[13px] text-on-surface"
+              />
+              {!isToday && (
+                <button
+                  onClick={() => setDate(today)}
+                  className="flex items-center gap-1 font-label-caps text-[10px] text-primary hover:brightness-125 transition"
+                >
+                  <MI name="history" className="text-sm" /> REGISTRO ATRASADO · VOLTAR PRA HOJE
+                </button>
+              )}
             </div>
           </div>
 
@@ -240,7 +297,7 @@ export default function SonoPage() {
             disabled={needsReason}
             className="w-full bg-primary-container py-4 rounded-lg text-on-primary-container font-headline-md text-headline-md tracking-widest hover:brightness-110 hover:scale-[0.99] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
           >
-            SALVAR REGISTRO
+            {existing ? "ATUALIZAR REGISTRO" : "SALVAR REGISTRO"}
           </button>
           {needsReason && <p className="text-[11px] text-error text-center -mt-2">Justifique por que deitou tarde pra registrar.</p>}
         </div>
