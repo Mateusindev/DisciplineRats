@@ -132,7 +132,7 @@ function Chrome({ children }) {
       >
         <div className="px-6 mb-6 flex items-center justify-between shrink-0">
           <div className="font-headline-md text-headline-md font-black text-primary tracking-tighter flex items-center gap-2 leading-none">
-            <MI name="fitness_center" className="text-primary-container" /> DISCIPLINE<br />RATS
+            <img src="/logo.jpg" alt="" width={36} height={36} className="rounded-lg shrink-0" /> DISCIPLINE<br />RATS
           </div>
           <div className="flex items-center gap-1">
             <Link

@@ -19,8 +19,8 @@ self.addEventListener("push", (e) => {
   e.waitUntil(
     self.registration.showNotification(title, {
       body: d.body || "",
-      icon: "/icon.svg",
-      badge: "/icon.svg",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
       tag: d.tag || "agenda",
       renotify: true,
       vibrate: [200, 100, 200],

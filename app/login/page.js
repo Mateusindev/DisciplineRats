@@ -67,7 +67,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <div className="w-full max-w-md glass-card rounded-xl p-8 flex flex-col gap-6">
         <div className="flex items-center gap-2 justify-center">
-          <MI name="fitness_center" className="text-primary-container text-3xl" />
+          <img src="/logo.jpg" alt="" width={44} height={44} className="rounded-xl shrink-0" />
           <h1 className="font-headline-lg text-headline-lg font-black text-primary tracking-tighter">DISCIPLINE RATS</h1>
         </div>
         <p className="text-center text-on-surface-variant text-body-md -mt-2">
