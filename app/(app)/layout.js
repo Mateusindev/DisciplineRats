@@ -13,14 +13,14 @@ import { DEFAULT_MODE } from "@/lib/themes";
 
 // bottom nav mobile: 4 destinos fixos + MAIS (bottom sheet com o resto)
 // 4 slots + "Mais": mais que isso e o rótulo não cabe em tela de 360px.
-// São os quatro registros do dia; Diário, Leitura e Mapa vão pro sheet — leitura
-// e planejamento não se abrem no meio da correria.
-const MOBILE_PRIMARY = ["habitos", "sono", "exercicio", "dieta"];
+// São os quatro registros do dia (o Diário ocupa a vaga da Dieta, desativada);
+// Leitura e Mapa vão pro sheet — leitura e planejamento não se abrem no meio da correria.
+const MOBILE_PRIMARY = ["habitos", "sono", "exercicio", "diario"];
 
 // rotas desativadas: fora do menu, mas acessíveis por URL — bloqueadas aqui.
 // /rotina entra junto com a Agenda: ela é só um redirect pra lá (ver rotina/page.js),
 // e sem isto o usuário veria o loader antes de bater na mesma parede.
-const DISABLED_ROUTES = ["/foco", "/calendario", "/missoes", "/rotina", "/home", "/carteira", "/analise", "/grupos"];
+const DISABLED_ROUTES = ["/dieta", "/foco", "/calendario", "/missoes", "/rotina", "/home", "/carteira", "/analise", "/grupos"];
 
 function DisabledScreen() {
   return (
