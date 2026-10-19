@@ -1017,7 +1017,6 @@ const DAY_CLS = {
   done: "bg-primary-container",
   fail: "bg-error",
 };
-const DAY_TEXT = { done: "text-on-primary-container", fail: "text-on-error" };
 const dayWord = (verdict, kind, future) =>
   verdict === "fail" ? (kind === "quit" ? "recaída" : "falhou") : verdict === "done" ? "cumpriu" : future ? "" : "sem cobrança";
 
@@ -1308,68 +1307,6 @@ function OrderList({ habits, ctx }) {
   );
 }
 
-// ============================================================================
-// CELULAR — o mesmo mês, empilhado. A matriz de 31 colunas só se justifica em
-// tela larga, onde o mês inteiro cabe numa linha; no celular ela virava rolagem
-// horizontal com metade da largura tomada pela coluna fixa do nome, e marcar o
-// dia de hoje exigia rolar até achá-lo.
-//
-// Aqui cada hábito é um cartão e o mês vira grade de 7 colunas — o formato de
-// calendário que todo mundo já lê. Veredito, cores e a regra de que dia se pode
-// clicar saem das MESMAS funções do desktop (dayVerdict/dayEditable), então não
-// existem duas versões da verdade. O que muda é só o arranjo e o tamanho do alvo.
-// ============================================================================
-function MiniMonth({ h, ctx, y, m, dim }) {
-  const today = ctx.today;
-  const kind = h.kind || "build";
-  const dstr = (d) => `${y}-${pad2(m)}-${pad2(d)}`;
-  const lead = (new Date(y, m - 1, 1).getDay() + 6) % 7; // 0=Seg, igual DOW_SHORT
-  return (
-    <div className="grid grid-cols-7 gap-1">
-      {DOW_SHORT.map((l) => (
-        <Caps key={l} className="text-outline text-[9px] text-center">
-          {l.slice(0, 1)}
-        </Caps>
-      ))}
-      {Array.from({ length: lead }, (_, i) => (
-        <span key={`lead-${i}`} />
-      ))}
-      {Array.from({ length: dim }, (_, i) => i + 1).map((d) => {
-        const date = dstr(d);
-        const isToday = date === today;
-        const future = date > today;
-        const marked = h.doneDates.includes(date);
-        const verdict = dayVerdict(h, date, today);
-        const editable = dayEditable(h, date, today);
-        const act = () => {
-          if (!editable) return;
-          if (kind !== "quit") return ctx.toggleHabit(h.id, date);
-          return marked ? ctx.undoRelapse(h.id, date) : ctx.logRelapse(h, date);
-        };
-        const what = dayWord(verdict, kind, future);
-        // o número do dia cabe nesse tamanho de célula, então ele fica: com 31
-        // bolinhas iguais e sem eixo por cima, contar dia a dia era o único jeito
-        // de saber qual é qual
-        const text = verdict ? DAY_TEXT[verdict] : future ? "text-outline/50" : "text-on-surface-variant";
-        return (
-          <button
-            key={d}
-            onClick={act}
-            disabled={!editable}
-            aria-label={`${h.name} em ${d}/${pad2(m)}${what ? `: ${what}` : ""}${editable ? ", toque pra registrar" : ""}`}
-            title={`${d}/${pad2(m)}${isToday ? " — hoje, toque pra marcar" : what ? ` — ${what}` : ""}${editable && !isToday ? " · toque pra registrar" : ""}`}
-            className={`aspect-square rounded-full grid place-items-center text-[11px] tabular-nums ${
-              verdict ? DAY_CLS[verdict] : future ? "bg-surface-variant/30" : "bg-surface-variant"
-            } ${text} ${isToday ? "ring-2 ring-on-surface" : ""} ${editable ? "cursor-pointer" : "cursor-default"}`}
-          >
-            {d}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 // Número que resume o hábito no cabeçalho do cartão. Cada tipo tem o seu: o
 // diário vive de sequência, o semanal de contagem na semana, o vício de dias
 // limpo. Um "12" solto não diria de qual dos três se trata.
@@ -1408,87 +1345,68 @@ function HabitBadge({ h }) {
   );
 }
 
-// Ação de hoje no cartão: botão largo, porque no toque o alvo é o dedo e não o
-// pixel. Mesmas regras do desktop — passo em aberto trava diário/semanal, e
-// largar registra ou desfaz recaída (com a confirmação de sempre).
-function TodayAction({ h, ctx }) {
-  const kind = h.kind || "build";
-  const today = ctx.today;
-  const marked = h.doneDates.includes(today);
-  const prog = habitStepProgress(h, today);
-  const blocked = habitStepsBlock(h, today);
-
-  if (kind === "quit")
-    return marked ? (
-      <div className="flex gap-2">
-        <div className="flex-1 py-2.5 text-center font-label-caps text-[10px] rounded-lg bg-error/15 text-error">RECAÍDA HOJE</div>
-        <button
-          onClick={() => ctx.undoRelapse(h.id)}
-          className="px-3 py-2.5 rounded-lg font-label-caps text-[10px] border border-white/15 text-on-surface-variant active:scale-[.98] transition"
-        >
-          DESFAZER
-        </button>
-      </div>
-    ) : (
-      <button
-        onClick={() => ctx.logRelapse(h)}
-        className="w-full py-2.5 font-label-caps text-[10px] rounded-lg border border-error/40 text-error active:scale-[.98] transition"
-      >
-        RECAÍ HOJE
-      </button>
-    );
-
-  // no semanal de LIMITE marcar é consumir, não cumprir — o rótulo e a cor
-  // seguem o card grande, senão o botão pareceria premiar o estouro
-  const isMax = kind === "weekly" && (h.direction || "min") === "max";
-  const due = kind === "weekly" || habitIsScheduled(h, today);
-  const label = blocked
-    ? `FALTAM ${prog.pending} MICROATIVIDADE${prog.pending > 1 ? "S" : ""}`
-    : isMax
-      ? marked
-        ? "CONSUMIDO HOJE · DESFAZER"
-        : "CONSUMI HOJE"
-      : marked
-        ? "FEITO HOJE ✓"
-        : due
-          ? "MARCAR HOJE"
-          : "FOLGA HOJE — MARCAR MESMO";
+// ============================================================================
+// CELULAR — o dia de hoje, em blocos. A matriz de 31 colunas só se justifica em
+// tela larga; no celular o que importa é marcar hoje, então cada hábito vira um
+// bloco numa grade 2×N e o bloco inteiro é o alvo do toque. O histórico (e o
+// registro retroativo) fica com a matriz do desktop.
+//
+// Mesmas regras de sempre: passo em aberto trava diário/semanal (o toque segue
+// vivo, é ele que dispara o aviso), vício registra/desfaz recaída com a
+// confirmação de sempre, e o mínimo executável aparece só onde existe.
+// ============================================================================
+function HabitBlocks({ habits, ctx }) {
   return (
-    <button
-      onClick={() => ctx.toggleHabit(h.id)}
-      role="switch"
-      aria-checked={marked}
-      aria-disabled={blocked}
-      className={`w-full py-2.5 font-label-caps text-[10px] rounded-lg border active:scale-[.98] transition ${
-        blocked
-          ? "border-white/10 text-outline"
-          : isMax
-            ? marked
-              ? "bg-error/15 text-error border-error/40"
-              : "border-error/40 text-error"
-            : marked
-              ? "bg-primary-container text-on-primary-container border-primary-container"
-              : "border-primary text-primary"
-      }`}
-    >
-      {blocked ? <MI name="lock" className="text-sm align-middle mr-1" /> : null}
-      {label}
-    </button>
-  );
-}
-
-function MobileHabitCard({ h, i, ctx, y, m, dim }) {
-  const hasSteps = habitSteps(h).length > 0;
-  return (
-    <div className="glass-card rounded-xl p-3 space-y-2.5">
-      <div className="flex items-center justify-between gap-2">
-        <HabitName h={h} i={i} ctx={ctx} />
-        <HabitBadge h={h} />
-      </div>
-      {hasSteps && <StepSegments h={h} ctx={ctx} wide />}
-      <MiniMonth h={h} ctx={ctx} y={y} m={m} dim={dim} />
-      <MinimumBar h={h} ctx={ctx} />
-      <TodayAction h={h} ctx={ctx} />
+    <div className="grid grid-cols-2 gap-2">
+      {habits.map((h, i) => {
+        const kind = h.kind || "build";
+        const marked = h.doneDates.includes(ctx.today);
+        const blocked = kind !== "quit" && habitStepsBlock(h, ctx.today);
+        const hasSteps = habitSteps(h).length > 0;
+        const filled = marked && kind !== "quit";
+        const minText = habitMinAllowed(h) ? habitMinimum(h) : "";
+        const tap = () => (kind === "quit" ? (marked ? ctx.undoRelapse(h.id) : ctx.logRelapse(h)) : ctx.toggleHabit(h.id));
+        return (
+          <div
+            key={h.id}
+            className={`relative rounded-xl p-3 flex flex-col gap-2 min-h-[118px] border transition ${
+              filled ? "bg-primary-container text-on-primary-container border-primary-container" : kind === "quit" && marked ? "bg-error/15 border-error/40" : "glass-card border-white/5"
+            }`}
+          >
+            <button onClick={() => ctx.toggleOpen(h.id)} aria-label={`Abrir ${h.name}`} className={`absolute top-1.5 right-1.5 w-7 h-7 grid place-items-center rounded-md ${filled ? "text-on-primary-container/70" : "text-outline"}`}>
+              <MI name="more_horiz" className="text-base" />
+            </button>
+            <button
+              onClick={tap}
+              aria-label={`${h.name}: ${kind === "quit" ? (marked ? "desfazer recaída" : "registrar recaída") : marked ? "desmarcar hoje" : "marcar hoje"}`}
+              className="flex-1 flex flex-col items-start gap-1.5 text-left active:scale-[.98] transition"
+            >
+              <MI
+                name={blocked ? "lock" : h.icon || HABIT_ICONS[i % HABIT_ICONS.length]}
+                fill={filled}
+                className={`text-2xl ${filled ? "" : kind === "quit" ? "text-error" : blocked ? "text-outline" : "text-primary-container"}`}
+              />
+              <span className={`text-[13px] leading-tight line-clamp-2 pr-5 ${filled ? "" : "text-on-surface"}`}>{h.name}</span>
+              <span className={`mt-auto ${filled ? "[&_*]:!text-on-primary-container" : ""}`}>
+                <HabitBadge h={h} />
+              </span>
+            </button>
+            {hasSteps && !filled && <StepSegments h={h} ctx={ctx} wide />}
+            {minText && !marked && (
+              <button
+                onClick={() => ctx.markMinimum(h.id)}
+                aria-label={`Marcar ${h.name} pelo mínimo: ${minText}`}
+                className="w-full rounded-lg border border-dashed border-primary-container/40 px-2 py-1.5 text-left active:scale-[.98] transition"
+              >
+                <span className="flex items-center gap-1 font-label-caps text-[9px] text-primary-container">
+                  <MI name="flag" className="text-sm" /> SÓ O MÍNIMO · +{habitPriority(h).xp} XP
+                </span>
+                <span className="block text-[11px] text-on-surface-variant line-clamp-2 mt-0.5">{minText}</span>
+              </button>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1496,6 +1414,8 @@ function MobileHabitCard({ h, i, ctx, y, m, dim }) {
 function MonthLayout({ habits, ctx }) {
   const [off, setOff] = useState(0);
   const [ordering, setOrdering] = useState(false);
+  // no celular a tela é o dia de hoje (HabitBlocks): a navegação de mês é só do desktop
+  const noMonth = "max-md:hidden";
   const today = ctx.today;
   const base = new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1 + off, 1);
   const y = base.getFullYear();
@@ -1509,15 +1429,15 @@ function MonthLayout({ habits, ctx }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <button onClick={() => setOff((o) => o - 1)} aria-label="Mês anterior" className="w-9 h-9 shrink-0 rounded-full bg-surface-container-high grid place-items-center active:scale-95 transition">
+        <button onClick={() => setOff((o) => o - 1)} aria-label="Mês anterior" className={`${noMonth} w-9 h-9 shrink-0 rounded-full bg-surface-container-high grid place-items-center active:scale-95 transition`}>
           <MI name="chevron_left" />
         </button>
-        <Caps className="text-primary text-[13px] capitalize flex-1 text-center">{label}</Caps>
+        <Caps className={`${noMonth} text-primary text-[13px] capitalize flex-1 text-center`}>{label}</Caps>
         <button
           onClick={() => setOff((o) => Math.min(0, o + 1))}
           disabled={off >= 0}
           aria-label="Próximo mês"
-          className="w-9 h-9 shrink-0 rounded-full bg-surface-container-high grid place-items-center active:scale-95 transition disabled:opacity-30"
+          className={`${noMonth} w-9 h-9 shrink-0 rounded-full bg-surface-container-high grid place-items-center active:scale-95 transition disabled:opacity-30`}
         >
           <MI name="chevron_right" />
         </button>
@@ -1526,7 +1446,7 @@ function MonthLayout({ habits, ctx }) {
             onClick={() => setOrdering((v) => !v)}
             aria-pressed={ordering}
             title={ordering ? "Terminar de ordenar" : "Escolher a ordem dos hábitos"}
-            className={`h-9 px-3 shrink-0 rounded-full font-label-caps text-[10px] flex items-center gap-1.5 border transition active:scale-95 ${
+            className={`ml-auto h-9 px-3 shrink-0 rounded-full font-label-caps text-[10px] flex items-center gap-1.5 border transition active:scale-95 ${
               ordering ? "bg-primary-container text-on-primary-container border-primary-container" : "border-white/10 text-on-surface-variant hover:border-white/25"
             }`}
           >
@@ -1606,13 +1526,11 @@ function MonthLayout({ habits, ctx }) {
         </div>
 
         {/* celular: um cartão por hábito, mês em grade de 7 colunas */}
-        <div className="md:hidden space-y-3">
-          {habits.map((h, i) => (
-            <MobileHabitCard key={h.id} h={h} i={i} ctx={ctx} y={y} m={m} dim={dim} />
-          ))}
+        <div className="md:hidden">
+          <HabitBlocks habits={habits} ctx={ctx} />
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+        <div className="hidden md:flex flex-wrap items-center gap-x-4 gap-y-1.5">
           {[
             { c: DAY_CLS.done, t: "CUMPRIU" },
             { c: DAY_CLS.fail, t: "FALHOU / RECAÍDA" },

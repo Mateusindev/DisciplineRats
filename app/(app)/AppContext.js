@@ -20,6 +20,7 @@ import {
   computeActivityStreak,
   agendaReminders,
   HOME_ROUTE,
+  TABS,
 } from "@/lib/state";
 import { applyMode } from "@/lib/themes";
 import { registerServiceWorker, ensureNotifyPermission, notify } from "@/lib/notify";
@@ -101,11 +102,16 @@ function ConfirmDialog() {
   );
 }
 
+// Foco desativado (fora de TABS): o cronômetro não pode sobreviver nem como widget
+// nem como sessão restaurada — um snapshot salvo antes de desativar mostraria o
+// botão de start e, se rodasse, pagaria XP de foco que o teto diário já não conta.
+const FOCO_ON = TABS.some((t) => t.id === "foco");
+
 function TimerWidget() {
   const { timer } = useApp();
   const pathname = usePathname();
   const router = useRouter();
-  if (!timer || !timer.active || pathname === "/foco") return null;
+  if (!FOCO_ON || !timer || !timer.active || pathname === "/foco") return null;
   const { phase, secondsLeft, isRunning, pending, phaseTotal, toggleTimer } = timer;
   const label = pending ? (phase === "focus" ? "SESSÃO PRONTA" : "PAUSA PRONTA") : phase === "focus" ? "FOCO" : "PAUSA";
   const R = 18;
@@ -474,8 +480,10 @@ export function AppProvider({ children }) {
     const s = stateRef.current.settings;
     let snap = null;
     try {
-      const v = localStorage.getItem(TIMER_KEY);
-      snap = v ? JSON.parse(v) : null;
+      if (FOCO_ON) {
+        const v = localStorage.getItem(TIMER_KEY);
+        snap = v ? JSON.parse(v) : null;
+      } else localStorage.removeItem(TIMER_KEY);
     } catch (e) {}
     if (snap && snap.phase) {
       const phase = snap.phase === "focus" ? "focus" : "break"; // migra "longBreak" salvo → "break"
