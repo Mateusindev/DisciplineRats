@@ -1,310 +1,271 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AppProvider, useApp } from "./AppContext";
-import { MI, Caps } from "@/components/ui";
+import { MI } from "@/components/ui";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarRail,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
 import { HelpButton } from "@/components/help";
 import BichoDaTela from "@/components/BichoDaTela";
 import { TABS, NAV_SECTIONS, HOME_ROUTE, gamify, fmtK } from "@/lib/state";
 import { hasSupabase } from "@/lib/persistence";
 import { DEFAULT_MODE } from "@/lib/themes";
 
-// bottom nav mobile: 4 destinos fixos + MAIS (bottom sheet com o resto)
-// 4 slots + "Mais": mais que isso e o rótulo não cabe em tela de 360px.
-// São os quatro registros do dia (o Diário ocupa a vaga da Dieta, desativada);
-// Leitura e Mapa vão pro sheet — leitura e planejamento não se abrem no meio da correria.
-const MOBILE_PRIMARY = ["habitos", "sono", "exercicio", "diario"];
-
-// rotas desativadas: fora do menu, mas acessíveis por URL — bloqueadas aqui.
+// Rotas desativadas: fora do menu, mas acessíveis por URL — bloqueadas aqui.
 // /rotina entra junto com a Agenda: ela é só um redirect pra lá (ver rotina/page.js),
 // e sem isto o usuário veria o loader antes de bater na mesma parede.
-const DISABLED_ROUTES = ["/dieta", "/foco", "/calendario", "/missoes", "/rotina", "/home", "/carteira", "/analise", "/grupos"];
+// /exercicio e /mapa saíram da navegação junto (dados intactos — ver TABS).
+const DISABLED_ROUTES = ["/dieta", "/foco", "/calendario", "/missoes", "/rotina", "/home", "/carteira", "/analise", "/grupos", "/exercicio", "/mapa"];
+
+// Rótulo curto pra barra de baixo do celular: 5 destinos em 360px não cabem
+// "Habit Tracker" inteiro sem quebrar a linha.
+const SHORT = { habitos: "Habits", sono: "Sleep", diario: "Journal", leitura: "Reading" };
 
 function DisabledScreen() {
   return (
-    <div className="flex flex-col items-center justify-center text-center min-h-[60vh] gap-4">
-      <div className="w-16 h-16 rounded-full bg-surface-variant grid place-items-center text-outline">
-        <MI name="do_not_disturb_on" className="text-4xl" />
-      </div>
-      <h2 className="font-headline-lg text-headline-lg text-primary uppercase">Seção desativada</h2>
-      <p className="text-on-surface-variant text-body-md max-w-sm">
-        Esta parte está temporariamente indisponível. Volte mais tarde.
-      </p>
-      <Link href={HOME_ROUTE} className="px-5 py-2.5 rounded-lg bg-primary-container text-on-primary-container font-label-caps text-[11px] active:scale-95 transition">
-        VOLTAR PROS HÁBITOS
-      </Link>
+    <div className="flex flex-col items-center justify-center text-center min-h-[60vh] gap-3">
+      <MI name="do_not_disturb_on" className="text-[32px] text-outline" />
+      <h1 className="text-xl font-semibold tracking-tight text-on-surface">Seção desativada</h1>
+      <p className="text-on-surface-variant text-sm max-w-sm">Esta parte está temporariamente indisponível.</p>
+      <Button asChild size="sm" className="mt-2">
+        <Link href={HOME_ROUTE}>Voltar pros hábitos</Link>
+      </Button>
     </div>
+  );
+}
+
+// Marca: o rato do logo + nome. Some o nome quando a sidebar vira trilho de ícones.
+function Brand() {
+  return (
+    <Link href={HOME_ROUTE} className="flex items-center gap-2.5 min-w-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <img src="/logo.jpg" alt="" width={32} height={32} className="size-8 rounded-md shrink-0 object-cover" />
+      <span className="truncate text-sm font-semibold tracking-tight text-on-surface group-data-[collapsible=icon]:hidden">Discipline Rats</span>
+    </Link>
+  );
+}
+
+function NavSidebar({ pathname, g, mode, toggleMode, onLogout }) {
+  const { isMobile, setOpenMobile } = useSidebar();
+  const close = () => isMobile && setOpenMobile(false);
+  return (
+    <Sidebar collapsible="icon">
+      <SidebarHeader className="h-14 justify-center px-3 group-data-[collapsible=icon]:px-2">
+        <Brand />
+      </SidebarHeader>
+
+      <SidebarContent className="ff-scroll">
+        {NAV_SECTIONS.map((s) => (
+          <SidebarGroup key={s.id}>
+            {s.label && <SidebarGroupLabel>{s.label}</SidebarGroupLabel>}
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-0.5">
+                {s.items.map((t) => {
+                  const active = pathname === t.path;
+                  return (
+                    <SidebarMenuItem key={t.id}>
+                      <SidebarMenuButton asChild isActive={active} tooltip={t.label} className="h-9 gap-2.5 text-[14px]">
+                        <Link href={t.path} onClick={close} aria-current={active ? "page" : undefined}>
+                          <MI name={t.icon} fill={active} className="text-[18px] shrink-0" />
+                          <span>{t.label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
+      </SidebarContent>
+
+      <SidebarFooter className="gap-3 p-3 group-data-[collapsible=icon]:p-2">
+        {/* nível em uma linha: o tier e a barra completa estão no Perfil */}
+        <div className="px-1 group-data-[collapsible=icon]:hidden">
+          <div className="flex items-baseline justify-between text-xs">
+            <span className="font-medium text-on-surface">Nível {g.level}</span>
+            <span className="tabular text-outline">{fmtK(g.xp)} XP</span>
+          </div>
+          <div className="mt-1.5 h-1 rounded-full bg-surface-variant overflow-hidden">
+            <div className="h-full rounded-full bg-primary-container transition-all" style={{ width: `${g.pct}%` }} />
+          </div>
+        </div>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton size="lg" tooltip="Conta" className="data-[state=open]:bg-sidebar-accent">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-md bg-surface-variant text-on-surface">
+                    <MI name="person" className="text-[18px]" />
+                  </span>
+                  <span className="grid flex-1 text-left leading-tight">
+                    <span className="truncate text-sm font-medium text-on-surface">Minha conta</span>
+                    <span className="truncate text-xs text-outline">{g.tier}</span>
+                  </span>
+                  <MI name="unfold_more" className="text-[18px] text-outline" />
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side={isMobile ? "bottom" : "right"} align="end" sideOffset={8} className="w-56">
+                <DropdownMenuItem asChild>
+                  <Link href="/perfil" onClick={close}><MI name="account_circle" className="text-[18px]" /> Perfil</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/perfil#mascote" onClick={close}><MI name="pets" className="text-[18px]" /> Meu mascote</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={toggleMode}>
+                  <MI name={mode === "light" ? "dark_mode" : "light_mode"} className="text-[18px]" />
+                  {mode === "light" ? "Modo escuro" : "Modo claro"}
+                </DropdownMenuItem>
+                {hasSupabase() && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem variant="destructive" onSelect={onLogout}>
+                      <MI name="logout" className="text-[18px]" /> Sair
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+      <SidebarRail />
+    </Sidebar>
   );
 }
 
 function Chrome({ children }) {
   const { loaded, state, handleLogout, setSetting } = useApp();
   const pathname = usePathname();
-  const [moreOpen, setMoreOpen] = useState(false);
-
-  // Recolher a sidebar é preferência, não estado de tela: mora em settings pra
-  // sobreviver ao reload e seguir a pessoa entre aparelhos. Só afeta o desktop —
-  // no mobile a navegação é a pill de baixo, que não tem o que recolher.
-  const collapsed = !!state?.settings?.sidebarCollapsed;
-  const toggleSidebar = () => setSetting("sidebarCollapsed", !collapsed);
-
-  // Ctrl/Cmd+B: mesma tecla que todo editor usa pra esconder painel lateral.
-  // Ignora quando o foco está num campo de texto — lá a tecla é do usuário.
-  useEffect(() => {
-    const onKey = (e) => {
-      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "b" || e.altKey) return;
-      const t = e.target;
-      const tag = t?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t?.isContentEditable) return;
-      e.preventDefault();
-      setSetting("sidebarCollapsed", !collapsed);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [collapsed, setSetting]);
 
   if (!loaded) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background text-outline">
-        <p className="font-label-caps text-label-caps">CARREGANDO PAINEL...</p>
+      <div className="flex flex-col items-center justify-center gap-3 min-h-screen bg-background">
+        <img src="/logo.jpg" alt="" width={40} height={40} className="size-10 rounded-lg opacity-90" />
+        <p className="text-sm text-outline">Carregando…</p>
       </div>
     );
   }
 
   const g = gamify(state.stats);
-
   const mode = state.settings.mode || DEFAULT_MODE;
+  const toggleMode = () => setSetting("mode", mode === "light" ? "dark" : "light");
+  // Recolher a sidebar é preferência, não estado de tela: mora em settings pra
+  // sobreviver ao reload e seguir a pessoa entre aparelhos. Ctrl/Cmd+B vem do
+  // SidebarProvider e passa por aqui (onOpenChange).
+  const open = !state.settings.sidebarCollapsed;
+  const tab = TABS.find((t) => t.path === pathname);
+  const title = tab?.label || (pathname === "/perfil" ? "Perfil" : "Discipline Rats");
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Reabrir a sidebar recolhida. Vive fora do aside de propósito: o aside sai da
-          tela inteiro, então o botão que o traz de volta não pode morar dentro dele. */}
-      {collapsed && (
-        <button
-          onClick={toggleSidebar}
-          aria-label="Mostrar menu"
-          aria-expanded={false}
-          title="Mostrar menu (Ctrl+B)"
-          className="hidden md:grid fixed top-3 left-3 z-[60] w-9 h-9 place-items-center rounded-lg bg-surface-container/90 backdrop-blur border border-outline-variant text-on-surface-variant hover:text-on-surface hover:border-white/30 transition"
-        >
-          <MI name="left_panel_open" className="text-[20px]" />
-        </button>
-      )}
+    <SidebarProvider open={open} onOpenChange={(o) => setSetting("sidebarCollapsed", !o)}>
+      <NavSidebar pathname={pathname} g={g} mode={mode} toggleMode={toggleMode} onLogout={handleLogout} />
 
-      {/* ações de canto: ajuda da página atual + atalho do mascote + toggle de tema */}
-      <div className="fixed top-3 right-3 z-[60] flex items-center gap-1">
-        <HelpButton pathname={pathname} />
-        {/* O mascote mora no perfil, que é fundo de menu — sem um atalho ninguém
-            passa por lá pra ver o bicho crescer. Aponta pra âncora da seção, não só pra
-            página, senão cairia no topo do perfil e o gato ficaria fora da tela. */}
-        <Link
-          href="/perfil#mascote"
-          aria-label="Ver meu mascote"
-          title="Meu mascote"
-          className={`w-8 h-8 rounded-full grid place-items-center transition hover:bg-surface-variant/50 ${
-            pathname === "/perfil" ? "text-primary-container" : "text-on-surface-variant/50 hover:text-on-surface"
-          }`}
-        >
-          <MI name="pets" className="text-[18px]" fill={pathname === "/perfil"} />
-        </Link>
-        <button
-          onClick={() => setSetting("mode", mode === "light" ? "dark" : "light")}
-          aria-label={mode === "light" ? "Ativar modo escuro" : "Ativar modo claro"}
-          title="Alternar tema"
-          className="w-8 h-8 rounded-full grid place-items-center text-on-surface-variant/50 hover:text-on-surface hover:bg-surface-variant/50 transition"
-        >
-          <MI name={mode === "light" ? "dark_mode" : "light_mode"} className="text-[18px]" />
-        </button>
-      </div>
-
-      {/* Side nav (desktop) — clássica */}
-      {/* Recolhida ela sai da tela, mas continuaria no tab order: `inert` tira do foco
-          junto. React 19 trata inert como booleano de verdade — só emite o atributo
-          quando true, então `inert={collapsed}` basta (string vazia virava false). */}
-      <aside
-        aria-hidden={collapsed}
-        inert={collapsed}
-        className={`hidden md:flex flex-col bg-surface-container border-r border-outline-variant w-64 fixed left-0 top-0 bottom-0 pt-6 pb-6 z-40 transition-transform duration-200 ${
-          collapsed ? "-translate-x-full" : "translate-x-0"
-        }`}
-      >
-        <div className="px-6 mb-6 flex items-center justify-between shrink-0">
-          <div className="font-headline-md text-headline-md font-black text-primary tracking-tighter flex items-center gap-2 leading-none">
-            <img src="/logo.jpg" alt="" width={36} height={36} className="rounded-lg shrink-0" /> DISCIPLINE<br />RATS
-          </div>
-          <div className="flex items-center gap-1">
-            <Link
-              href="/perfil"
-              aria-label="Perfil"
-              className={`p-1 transition active:opacity-80 ${pathname === "/perfil" ? "text-primary-container" : "text-primary"}`}
-            >
-              <MI name="account_circle" fill={pathname === "/perfil"} />
-            </Link>
-            <button
-              onClick={toggleSidebar}
-              aria-label="Recolher menu"
-              aria-expanded
-              title="Recolher menu (Ctrl+B)"
-              className="p-1 text-outline hover:text-on-surface transition active:opacity-80"
-            >
-              <MI name="left_panel_close" />
-            </button>
-          </div>
-        </div>
-        {/* XP em uma linha: o tier e a barra completa já estão na Home e no Perfil */}
-        <div className="px-6 mb-4 flex items-center gap-2 shrink-0">
-          <span className="font-label-caps text-[10px] leading-[12px] text-outline shrink-0">NV {g.level}</span>
-          <div className="flex-1 h-1 rounded-full bg-surface-variant overflow-hidden">
-            <div className="h-full rounded-full bg-primary-container transition-all" style={{ width: `${g.pct}%` }} />
-          </div>
-          <span className="font-label-caps text-[10px] leading-[12px] text-outline shrink-0">{fmtK(g.xp)} XP</span>
-        </div>
-
-        {/* overflow-y-auto é o que conserta o bug: sem ele, min-height:auto impede o nav de
-            encolher e os últimos itens + SAIR caem fora do aside fixed, sem scrollbar. */}
-        <nav aria-label="Navegação principal" className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden ff-scroll">
-          {NAV_SECTIONS.map((s) => (
-            <div key={s.id}>
-              {s.label && (
-                <div id={`navsec-${s.id}`} className="px-4 pt-3 pb-1 font-label-caps text-[10px] leading-[12px] tracking-[0.18em] text-outline/80 select-none">
-                  {s.label}
-                </div>
-              )}
-              <ul aria-labelledby={s.label ? `navsec-${s.id}` : undefined} className="flex flex-col gap-0.5">
-                {s.items.map((t) => {
-                  const active = pathname === t.path;
-                  return (
-                    <li key={t.id}>
-                      <Link
-                        href={t.path}
-                        aria-current={active ? "page" : undefined}
-                        className={`mx-2 px-3 py-2 flex items-center gap-2.5 font-label-caps text-label-caps rounded-lg active:scale-95 duration-150 transition ${
-                          active ? "bg-primary text-on-primary" : "text-on-surface-variant hover:text-on-surface hover:bg-surface-variant"
-                        }`}
-                      >
-                        {/* 16px casa com a caixa de linha: sem isso o ícone herda 12px e vira borrão */}
-                        <MI name={t.icon} fill={active} className="text-[16px]" /> {t.label.toUpperCase()}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </nav>
-
-        <div className="px-4 mt-auto space-y-2 shrink-0">
-          {hasSupabase() && (
-            <button
-              onClick={handleLogout}
-              className="w-full py-2 flex items-center justify-center gap-2 text-outline hover:text-error font-label-caps text-[10px] transition"
-            >
-              <MI name="logout" className="text-sm" /> SAIR
-            </button>
-          )}
-        </div>
-      </aside>
-
-      {/* Main */}
-      {/* o padding acompanha o aside: recolhido, o conteúdo usa a largura inteira */}
-      <main className={`pt-8 pb-32 md:pb-12 min-h-screen transition-[padding] duration-200 ${collapsed ? "md:pl-0" : "md:pl-64"}`}>
-        <div className="max-w-6xl mx-auto px-4 sm:px-container-padding py-8">
-          {DISABLED_ROUTES.includes(pathname) ? (
-            <DisabledScreen />
-          ) : (
-            <>
-              {/* o mascote comentando a seção atual — ele mesmo decide onde não aparecer */}
-              <BichoDaTela state={state} pathname={pathname} />
-              {children}
-            </>
-          )}
-        </div>
-      </main>
-
-      {/* Bottom sheet MAIS (mobile) */}
-      {moreOpen && (
-        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-label="Mais seções">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setMoreOpen(false)} />
-          <div className="absolute bottom-0 left-0 w-full bg-surface-container-highest rounded-t-2xl border-t border-white/10 shadow-2xl px-4 pt-3 pb-28 max-h-[85vh] overflow-y-auto overscroll-contain ff-scroll">
-            <div className="w-10 h-1 rounded-full bg-outline-variant mx-auto mb-4" />
-            <div className="grid grid-cols-4 gap-2">
-              {TABS.filter((t) => !MOBILE_PRIMARY.includes(t.id)).map((t) => {
-                const active = pathname === t.path;
-                return (
-                  <Link
-                    key={t.id}
-                    href={t.path}
-                    onClick={() => setMoreOpen(false)}
-                    aria-current={active ? "page" : undefined}
-                    className={`flex flex-col items-center gap-1.5 py-3 rounded-xl transition active:scale-95 ${
-                      active ? "bg-primary-container/20 text-primary" : "text-on-surface-variant hover:bg-surface-variant/40"
-                    }`}
-                  >
-                    <MI name={t.icon} fill={active} />
-                    <Caps className="text-[10px]">{t.label}</Caps>
+      <SidebarInset className="min-w-0 bg-background">
+        {/* Barra do topo: onde estou + ações de canto. No celular a marca entra no
+            lugar do botão de recolher (lá a navegação é a barra de baixo). */}
+        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-outline-variant bg-background px-4 md:px-6">
+          <SidebarTrigger className="-ml-1.5 hidden md:inline-flex text-on-surface-variant" />
+          <Separator orientation="vertical" className="mx-1 hidden md:block data-[orientation=vertical]:h-4" />
+          <img src="/logo.jpg" alt="" width={24} height={24} className="size-6 rounded md:hidden" />
+          <span className="truncate text-sm font-medium text-on-surface">{title}</span>
+          <div className="ml-auto flex items-center gap-0.5">
+            <HelpButton pathname={pathname} />
+            {/* O mascote mora no perfil, que é fundo de menu — sem um atalho ninguém
+                passa por lá pra ver o bicho crescer. Aponta pra âncora da seção. */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button asChild variant="ghost" size="icon-sm" className={pathname === "/perfil" ? "text-on-surface" : "text-on-surface-variant"}>
+                  <Link href="/perfil#mascote" aria-label="Ver meu mascote">
+                    <MI name="pets" className="text-[18px]" fill={pathname === "/perfil"} />
                   </Link>
-                );
-              })}
-              <Link
-                href="/perfil"
-                onClick={() => setMoreOpen(false)}
-                className={`flex flex-col items-center gap-1.5 py-3 rounded-xl transition active:scale-95 ${
-                  pathname === "/perfil" ? "bg-primary-container/20 text-primary" : "text-on-surface-variant hover:bg-surface-variant/40"
-                }`}
-              >
-                <MI name="account_circle" fill={pathname === "/perfil"} />
-                <Caps className="text-[10px]">Perfil</Caps>
-              </Link>
-              {hasSupabase() && (
-                <button
-                  onClick={handleLogout}
-                  className="flex flex-col items-center gap-1.5 py-3 rounded-xl transition active:scale-95 text-on-surface-variant hover:bg-surface-variant/40 hover:text-error"
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Meu mascote</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={toggleMode}
+                  aria-label={mode === "light" ? "Ativar modo escuro" : "Ativar modo claro"}
+                  className="text-on-surface-variant"
                 >
-                  <MI name="logout" />
-                  <Caps className="text-[10px]">Sair</Caps>
-                </button>
-              )}
-            </div>
+                  <MI name={mode === "light" ? "dark_mode" : "light_mode"} className="text-[18px]" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Alternar tema</TooltipContent>
+            </Tooltip>
           </div>
-        </div>
-      )}
+        </header>
 
-      {/* Bottom nav (mobile): pill flutuante — 4 fixos + MAIS */}
-      <nav aria-label="Navegação rápida" className="fixed bottom-5 left-4 right-4 z-50 flex justify-around items-center px-2 py-2 md:hidden bg-surface-container-highest/90 backdrop-blur-xl rounded-full shadow-2xl border border-white/10">
-        {TABS.filter((t) => MOBILE_PRIMARY.includes(t.id)).map((t) => {
-          const active = pathname === t.path && !moreOpen;
+        <main className="flex-1 pb-28 md:pb-12">
+          <div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-8 md:py-8">
+            {DISABLED_ROUTES.includes(pathname) ? (
+              <DisabledScreen />
+            ) : (
+              <>
+                {/* o mascote comentando a seção atual — ele mesmo decide onde não aparecer */}
+                <BichoDaTela state={state} pathname={pathname} />
+                {children}
+              </>
+            )}
+          </div>
+        </main>
+      </SidebarInset>
+
+      {/* Barra de baixo (celular): os quatro registros + Perfil. Barra lisa presa à
+          borda, não pílula flutuante — mesma superfície do resto do chrome. */}
+      <nav
+        aria-label="Navegação"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-outline-variant bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
+      >
+        {[...TABS.map((t) => ({ ...t, short: SHORT[t.id] || t.label })), { id: "perfil", short: "Perfil", icon: "account_circle", path: "/perfil" }].map((t) => {
+          const active = pathname === t.path;
           return (
             <Link
               key={t.id}
               href={t.path}
-              onClick={() => setMoreOpen(false)}
               aria-current={active ? "page" : undefined}
-              className={`flex flex-col items-center justify-center flex-1 py-1 transition ${active ? "text-primary scale-110 font-bold" : "text-on-surface-variant"}`}
+              className={`flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${
+                active ? "text-on-surface" : "text-outline hover:text-on-surface-variant"
+              }`}
             >
-              <MI name={t.icon} fill={active} />
-              <Caps className="text-[10px] mt-0.5">{t.label}</Caps>
+              <span className={`grid h-7 w-12 place-items-center rounded-full transition-colors ${active ? "bg-surface-variant" : ""}`}>
+                <MI name={t.icon} fill={active} className="text-[20px]" />
+              </span>
+              {t.short}
             </Link>
           );
         })}
-        {(() => {
-          const overflowActive = moreOpen || !TABS.some((t) => MOBILE_PRIMARY.includes(t.id) && t.path === pathname);
-          return (
-            <button
-              onClick={() => setMoreOpen((v) => !v)}
-              aria-expanded={moreOpen}
-              aria-label="Mais seções"
-              className={`flex flex-col items-center justify-center flex-1 py-1 transition ${overflowActive ? "text-primary scale-110 font-bold" : "text-on-surface-variant"}`}
-            >
-              <MI name="apps" fill={moreOpen} />
-              <Caps className="text-[10px] mt-0.5">Mais</Caps>
-            </button>
-          );
-        })()}
       </nav>
-
-    </div>
+    </SidebarProvider>
   );
 }
 

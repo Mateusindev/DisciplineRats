@@ -20,7 +20,7 @@
 // ============================================================================
 
 import Link from "next/link";
-import { MI, Caps } from "@/components/ui";
+import { MI } from "@/components/ui";
 import { Bicho } from "@/components/PetArt";
 import { petCoat, petGrowth, defaultPet, bedtimeLateness, minutesToHm } from "@/lib/state";
 
@@ -39,21 +39,21 @@ export default function BichoDaNoite({ state, bedtime, wake, durationMin, goalMi
   const pctGoal = Math.min(100, Math.round((durationMin / Math.max(1, goalMin)) * 100));
 
   const mood = !onTime
-    ? { icon: "visibility", txt: `AINDA ACORDADO ÀS ${bedtime}`, bad: true }
+    ? { icon: "visibility", txt: `Ainda acordado às ${bedtime}`, bad: true }
     : hitsGoal
-      ? { icon: "bedtime", txt: quality >= 4 ? "NOITE LIMPA · RONRONANDO" : "NOITE LIMPA", bad: false }
-      : { icon: "hourglass_bottom", txt: `COCHILO — ${minutesToHm(durationMin)} DE ${minutesToHm(goalMin)}`, bad: true };
+      ? { icon: "bedtime", txt: quality >= 4 ? "Noite limpa · ronronando" : "Noite limpa", bad: false }
+      : { icon: "hourglass_bottom", txt: `Cochilo — ${minutesToHm(durationMin)} de ${minutesToHm(goalMin)}`, bad: true };
 
   return (
-    <div className="glass-card flex items-center gap-3 rounded-xl p-3">
-      <div className="relative grid h-[92px] w-[112px] shrink-0 place-items-end justify-center rounded-lg bg-surface-container-high/60 pb-3">
-        <span className="absolute inset-x-3 bottom-[10px] h-px bg-outline-variant/60" />
+    <div className="flex items-center gap-4 rounded-xl border border-outline-variant bg-surface-container p-3">
+      <div className="relative grid h-[92px] w-[112px] shrink-0 place-items-end justify-center rounded-lg bg-surface-container-high pb-3">
+        <span className="absolute inset-x-3 bottom-[10px] h-px bg-outline-variant" />
         <div className="relative">
           <Bicho stage={mini} coat={petCoat(pet.coat)} act={act} gear={pet.gear || {}} species={pet.species} />
           {Array.from({ length: zzz }, (_, i) => (
             <span
               key={i}
-              className="pet-zzz pointer-events-none absolute right-1 top-0 font-headline-md text-[11px] text-on-surface-variant"
+              className="pet-zzz pointer-events-none absolute right-1 top-0 text-[11px] font-medium text-on-surface-variant"
               style={{ animationDelay: `${i * 650}ms` }}
               aria-hidden="true"
             >
@@ -63,12 +63,12 @@ export default function BichoDaNoite({ state, bedtime, wake, durationMin, goalMi
         </div>
       </div>
 
-      <div className="min-w-0 flex-1 space-y-1.5">
-        <Caps className="text-outline block text-[9px]">{name ? `${name.toUpperCase()} DIZ` : "A SUA NOITE"}</Caps>
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className="text-xs text-outline">{name ? `${name} diz` : "Sua noite"}</div>
 
-        <div className="flex items-center gap-2">
-          <MI name={mood.icon} fill className={`text-base ${mood.bad ? "text-error" : "text-primary"}`} />
-          <Caps className={`text-[10px] ${mood.bad ? "text-error" : "text-primary"}`}>{mood.txt}</Caps>
+        <div className={`flex items-center gap-1.5 text-sm font-medium ${mood.bad ? "text-error" : "text-on-surface"}`}>
+          <MI name={mood.icon} className={`shrink-0 text-[18px] ${mood.bad ? "text-error" : "text-on-surface-variant"}`} />
+          <span className="leading-snug">{mood.txt}</span>
         </div>
 
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-variant">
@@ -78,13 +78,12 @@ export default function BichoDaNoite({ state, bedtime, wake, durationMin, goalMi
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-label-caps text-[9px] text-outline">
-          <span>DEITOU {bedtime}</span>
-          <span>ACORDOU {wake}</span>
-          <span className={hitsGoal ? "text-primary" : "text-error"}>{minutesToHm(durationMin)}</span>
-          <span>META {minutesToHm(goalMin)}</span>
-          <span className="flex items-center gap-1">
-            <MI name="star" fill className="text-[11px] text-[#f7c948]" />
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums text-outline">
+          <span>{bedtime} → {wake}</span>
+          <span className={hitsGoal ? "text-on-surface" : "text-error"}>{minutesToHm(durationMin)}</span>
+          <span>Meta {minutesToHm(goalMin)}</span>
+          <span className="flex items-center gap-0.5">
+            <MI name="star" className="text-[14px]" />
             {quality}/5
           </span>
         </div>
@@ -92,10 +91,10 @@ export default function BichoDaNoite({ state, bedtime, wake, durationMin, goalMi
 
       <Link
         href="/perfil#mascote"
-        className="shrink-0 self-start p-1 text-outline transition hover:text-primary-container"
+        className="grid size-8 shrink-0 place-items-center self-start rounded-md text-outline transition-colors hover:bg-surface-variant hover:text-on-surface focus-visible:ring-[3px] focus-visible:ring-ring/50 outline-none"
         aria-label="Ver o mascote no perfil"
       >
-        <MI name="open_in_new" className="text-base" />
+        <MI name="open_in_new" className="text-[16px]" />
       </Link>
     </div>
   );

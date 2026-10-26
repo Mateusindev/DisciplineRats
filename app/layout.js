@@ -1,4 +1,9 @@
 import "./globals.css";
+import { Geist } from "next/font/google";
+import { TooltipProvider } from "@/components/ui/tooltip";
+
+// Uma família só no app inteiro. A variável alimenta --font-sans em globals.css.
+const geist = Geist({ subsets: ["latin"], variable: "--font-geist", display: "swap" });
 
 export const metadata = {
   title: "Discipline Rats",
@@ -13,14 +18,14 @@ export const metadata = {
 };
 
 export const viewport = {
-  themeColor: "#0b0e17",
+  themeColor: "#09090b",
 };
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="pt-BR" className="dark">
-      <body className="bg-background text-on-background font-body-md selection:bg-primary-container selection:text-on-primary-container">
-        {children}
+    <html lang="pt-BR" className={`dark ${geist.variable}`}>
+      <body className="bg-background text-on-background font-sans antialiased selection:bg-primary-container selection:text-on-primary-container">
+        <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
       </body>
     </html>
   );

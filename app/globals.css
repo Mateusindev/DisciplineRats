@@ -1,42 +1,43 @@
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Hanken+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@600&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0..1,0&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,300..400,0..1,0&display=swap');
 @import "tailwindcss";
+@import "tw-animate-css";
+
+/* o tema vive em <html class="dark|light"> (lib/themes.js). shadcn usa `dark:` */
+@custom-variant dark (&:is(.dark *));
 
 @theme {
   /* ============================================================
-     BRAND — DARK MODE default (navy/slate + verde de ação).
-     Light mode overrides these under `html.light` (see below).
-     Every --color-primary* token derives from these; JS inline
-     styles read them too (var(--brand-glow) etc.).
-
-     O acento é azul royal, em dois tons por função:
-       · PREENCHIMENTO (--brand-accent → primary-container) = #3B82F6.
-         Aba ativa, barra de progresso, botão de salvar, chip marcado.
-       · TEXTO (--brand-pale → primary) = #60A5FA, um tom acima: títulos,
-         item ativo do menu, links, valores em destaque.
-       Texto SOBRE o preenchimento é o próprio navy #0B0E17 (5.2:1) —
-       branco no #3B82F6 daria 3.7:1, abaixo do mínimo de 4.5:1.
+     PALETA — escuro neutro de verdade (sem navy/slate) + azul royal
+     como único acento. Regra de uso:
+       · o azul (--brand-accent → primary-container) vai em DADO:
+         hábito feito, barra de progresso, anel de sono, dia marcado.
+         Nunca em chrome (menu, cabeçalho, borda de card).
+       · primary é a TINTA (quase branco no escuro, quase preto no
+         claro): título, botão principal, item ativo. Botão primário
+         é tinta invertida, padrão shadcn — não azul.
+     Light mode sobrescreve em `html.light` (abaixo). Os nomes M3
+     (surface-container, on-surface-variant…) continuam valendo pras
+     páginas; os nomes shadcn (card, muted, border…) apontam pra eles,
+     então existe UMA paleta com dois vocabulários.
      ============================================================ */
-  --brand-accent:          #3b82f6;                 /* azul royal — preenchimento (abas, barras, botões) */
-  --brand-accent-dim:      #60a5fa;                 /* azul claro / tint */
-  --brand-pale:            #60a5fa;                 /* azul de destaque — TEXTO sobre fundo escuro */
-  --brand-deep:            #1d4ed8;                 /* azul fundo (bordas em tints) */
-  --brand-deepest:         #0b2a6b;                 /* azul mais fundo */
-  --brand-on-accent:       #0b0e17;                 /* texto/ícone SOBRE o azul royal (5.2:1) */
-  --brand-inverse:         #2563eb;                 /* inverse primary */
-  --brand-glow:            rgba(59, 130, 246, 0.28);/* focus glow shadow */
-  --brand-outline:         #7d8ca3;                 /* label pequeno — 5.2:1 no card */
-  --brand-outline-variant: #334155;                 /* traços fracos: grade de gráfico, estrela vazia, borda pontilhada */
-  --brand-text-variant:    #94a3b8;                 /* texto secundário (7.5:1 no fundo) */
+  --brand-accent:          #3b82f6;                 /* azul royal — preenchimento de dado */
+  --brand-accent-dim:      #60a5fa;
+  --brand-pale:            #f4f4f5;                 /* tinta (texto primário/títulos) */
+  --brand-deep:            #1d4ed8;
+  --brand-deepest:         #0b2a6b;
+  --brand-on-accent:       #0a0a0b;                 /* texto SOBRE o azul (5.5:1; branco daria 3.7:1) */
+  --brand-inverse:         #2563eb;
+  --brand-glow:            rgba(59, 130, 246, 0.2);
+  --brand-outline:         #8b8b92;                 /* meta/label — 5.4:1 no card */
+  --brand-outline-variant: #27272a;                 /* linhas: borda de card, trilho, grade */
+  --brand-text-variant:    #a8a8b0;                 /* texto secundário */
 
-  /* colors — primary family maps to the brand vars above */
   --color-primary:                  var(--brand-pale);
   --color-primary-container:        var(--brand-accent);
-  --color-primary-fixed:            var(--brand-pale);
+  --color-primary-fixed:            var(--brand-accent);
   --color-primary-fixed-dim:        var(--brand-accent-dim);
   --color-surface-tint:             var(--brand-accent-dim);
-  /* on-primary é o texto SOBRE o azul-claro (fill) → precisa ser escuro */
-  --color-on-primary:               #0b0e17;
+  --color-on-primary:               #0a0a0b;
   --color-on-primary-container:     var(--brand-on-accent);
   --color-on-primary-fixed:         var(--brand-deepest);
   --color-on-primary-fixed-variant: var(--brand-deep);
@@ -45,172 +46,219 @@
   --color-outline-variant:          var(--brand-outline-variant);
   --color-on-surface-variant:       var(--brand-text-variant);
 
-  /* badge secundária (roxo). Fundo sólido com texto branco: 7.1:1, vale
-     igual no claro e no escuro, então não tem override em html.light. */
-  --color-badge:    #6d28d9;
-  --color-on-badge: #ffffff;
+  --color-badge:    #3f3f46;
+  --color-on-badge: #fafafa;
 
-  /* colors — neutral / semantic (brand-independent) */
-  --color-tertiary-container: #1e293b;
-  --color-on-error-container: #fecaca;
-  --color-secondary: #94a3b8;
-  --color-error: #f87171;
-  --color-on-secondary: #0b0e17;
-  --color-on-tertiary-container: #cbd5e1;
-  --color-surface-container-low: #0f1422;
-  --color-on-surface: #ffffff;
-  --color-on-tertiary-fixed-variant: #cbd5e1;
-  --color-tertiary-fixed-dim: #94a3b8;
-  --color-on-tertiary: #0b0e17;
-  --color-surface-container-lowest: #070a11;
-  --color-on-error: #0b0e17;
-  --color-surface-variant: #1e293b;
-  --color-error-container: #7f1d1d;
-  --color-on-secondary-container: #e2e8f0;
-  --color-secondary-fixed: #e2e8f0;
-  --color-on-background: #ffffff;
-  --color-inverse-on-surface: #0f1422;
-  --color-surface-bright: #2a3550;
-  --color-surface-dim: #0b0e17;
-  --color-on-tertiary-fixed: #0b0e17;
-  --color-surface-container-high: #171e33;
-  --color-background: #0b0e17;
-  --color-secondary-container: #1e293b;
-  --color-tertiary: #cbd5e1;
-  --color-on-secondary-fixed-variant: #cbd5e1;
-  --color-surface-container-highest: #1e293b;
-  --color-tertiary-fixed: #e2e8f0;
-  --color-surface: #0b0e17;
-  --color-inverse-surface: #e2e8f0;
-  --color-on-secondary-fixed: #0b0e17;
-  --color-surface-container: #121829;
-  --color-secondary-fixed-dim: #94a3b8;
+  /* neutros — passos de luminosidade, sem matiz */
+  --color-background:               #09090b;
+  --color-surface:                  #09090b;
+  --color-surface-dim:              #09090b;
+  --color-surface-bright:           #2c2c30;
+  --color-surface-container-lowest: #060607;
+  --color-surface-container-low:    #0e0e10;
+  --color-surface-container:        #121214;
+  --color-surface-container-high:   #19191c;
+  --color-surface-container-highest:#1f1f23;
+  --color-surface-variant:          #222226;
+  --color-on-surface:               #f4f4f5;
+  --color-on-background:            #f4f4f5;
+  --color-inverse-surface:          #e4e4e7;
+  --color-inverse-on-surface:       #121214;
 
-  /* radius — cantos suaves: card 12px, botão/input 8px, chip 4px */
-  --radius: 0.25rem;
+  --color-secondary:                #1f1f23;
+  --color-on-secondary:             #f4f4f5;
+  --color-secondary-container:      #1f1f23;
+  --color-on-secondary-container:   #e4e4e7;
+  --color-secondary-fixed:          #e4e4e7;
+  --color-secondary-fixed-dim:      #a1a1aa;
+  --color-on-secondary-fixed:       #09090b;
+  --color-on-secondary-fixed-variant: #d4d4d8;
+  --color-tertiary:                 #d4d4d8;
+  --color-on-tertiary:              #09090b;
+  --color-tertiary-container:       #1f1f23;
+  --color-on-tertiary-container:    #d4d4d8;
+  --color-tertiary-fixed:           #e4e4e7;
+  --color-tertiary-fixed-dim:       #a1a1aa;
+  --color-on-tertiary-fixed:        #09090b;
+  --color-on-tertiary-fixed-variant: #d4d4d8;
+
+  --color-error:                    #f87171;
+  --color-on-error:                 #09090b;
+  --color-error-container:          #3a1515;
+  --color-on-error-container:       #fecaca;
+
+  /* vocabulário shadcn → mesma paleta */
+  --color-foreground:               var(--color-on-surface);
+  --color-card:                     var(--color-surface-container);
+  --color-card-foreground:          var(--color-on-surface);
+  --color-popover:                  var(--color-surface-container-highest);
+  --color-popover-foreground:       var(--color-on-surface);
+  --color-primary-foreground:       var(--color-on-primary);
+  --color-secondary-foreground:     var(--color-on-secondary);
+  --color-muted:                    var(--color-surface-container-high);
+  --color-muted-foreground:         var(--color-on-surface-variant);
+  --color-accent:                   var(--color-surface-variant);
+  --color-accent-foreground:        var(--color-on-surface);
+  --color-destructive:              var(--color-error);
+  --color-border:                   var(--color-outline-variant);
+  --color-input:                    #2e2e33;
+  --color-ring:                     #71717a;
+  --color-chart-1:                  var(--brand-accent);
+  --color-chart-2:                  #a1a1aa;
+  --color-chart-3:                  #52525b;
+  --color-chart-4:                  #f87171;
+  --color-chart-5:                  #e4e4e7;
+
+  --color-sidebar:                    var(--color-background);
+  --color-sidebar-foreground:         var(--color-on-surface-variant);
+  --color-sidebar-primary:            var(--color-primary);
+  --color-sidebar-primary-foreground: var(--color-on-primary);
+  --color-sidebar-accent:             var(--color-surface-container-high);
+  --color-sidebar-accent-foreground:  var(--color-on-surface);
+  --color-sidebar-border:             var(--color-outline-variant);
+  --color-sidebar-ring:               var(--color-ring);
+
+  /* radius — apertado: card 12, controle 8, chip 6 */
+  --radius: 0.5rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
   --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
 
-  /* spacing */
   --spacing-container-padding: 2rem;
   --spacing-unit: 8px;
   --spacing-gutter: 1.5rem;
   --spacing-card-gap: 1rem;
-  --spacing-section-margin: 4rem;
+  --spacing-section-margin: 3rem;
 
-  /* fonts */
-  --font-body-lg: "Hanken Grotesk", sans-serif;
-  --font-body-md: "Hanken Grotesk", sans-serif;
-  --font-metric-mobile: "Bebas Neue", sans-serif;
-  --font-label-caps: "JetBrains Mono", monospace;
-  --font-display-timer: "Bebas Neue", sans-serif;
-  --font-headline-md: "Bebas Neue", sans-serif;
-  --font-headline-lg: "Bebas Neue", sans-serif;
+  /* uma família só (Geist, carregada por next/font em app/layout.js).
+     Os nomes antigos (headline/label-caps/display-timer) continuam existindo
+     pra não quebrar as páginas — agora todos apontam pro mesmo grotesco. */
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-body-lg: var(--font-sans);
+  --font-body-md: var(--font-sans);
+  --font-metric-mobile: var(--font-sans);
+  --font-label-caps: var(--font-sans);
+  --font-display-timer: var(--font-sans);
+  --font-headline-md: var(--font-sans);
+  --font-headline-lg: var(--font-sans);
 
-  /* font sizes */
-  --text-body-lg: 18px;
-  --text-body-lg--line-height: 28px;
+  --text-body-lg: 16px;
+  --text-body-lg--line-height: 24px;
   --text-body-lg--font-weight: 400;
 
-  --text-body-md: 16px;
-  --text-body-md--line-height: 24px;
+  --text-body-md: 14px;
+  --text-body-md--line-height: 20px;
   --text-body-md--font-weight: 400;
 
-  --text-metric-mobile: 64px;
-  --text-metric-mobile--line-height: 64px;
-  --text-metric-mobile--font-weight: 400;
+  --text-metric-mobile: 40px;
+  --text-metric-mobile--line-height: 44px;
+  --text-metric-mobile--font-weight: 600;
 
+  /* era rótulo mono em caixa alta espaçada; virou rótulo 12px normal */
   --text-label-caps: 12px;
   --text-label-caps--line-height: 16px;
-  --text-label-caps--letter-spacing: 0.1em;
-  --text-label-caps--font-weight: 600;
+  --text-label-caps--letter-spacing: 0;
+  --text-label-caps--font-weight: 500;
 
-  --text-display-timer: 120px;
-  --text-display-timer--line-height: 110px;
-  --text-display-timer--letter-spacing: 0.05em;
-  --text-display-timer--font-weight: 400;
+  --text-display-timer: 72px;
+  --text-display-timer--line-height: 76px;
+  --text-display-timer--letter-spacing: -0.03em;
+  --text-display-timer--font-weight: 600;
 
-  --text-headline-md: 24px;
-  --text-headline-md--line-height: 32px;
-  --text-headline-md--font-weight: 400;
+  --text-headline-md: 18px;
+  --text-headline-md--line-height: 26px;
+  --text-headline-md--letter-spacing: -0.01em;
+  --text-headline-md--font-weight: 600;
 
-  --text-headline-lg: 32px;
-  --text-headline-lg--line-height: 40px;
-  --text-headline-lg--letter-spacing: 0.02em;
-  --text-headline-lg--font-weight: 400;
+  --text-headline-lg: 24px;
+  --text-headline-lg--line-height: 32px;
+  --text-headline-lg--letter-spacing: -0.02em;
+  --text-headline-lg--font-weight: 600;
 }
 
 /* ============================================================
-   LIGHT MODE — light-blue accent (#2B88F5) on cool light surfaces.
-   Overrides the brand vars + neutral surface/text tokens.
-   Toggled by adding class `light` to <html> (see lib/themes.js).
-   Texto sobre o accent = azul-marinho escuro (contraste ~4.6:1,
-   branco daria só ~3.5:1 no #2B88F5).
+   LIGHT MODE — chão quase branco, cards brancos, tinta quase preta.
+   No claro o azul desce um tom pro #2563eb (5.2:1 no branco): legível
+   como texto E como preenchimento, com texto branco por cima — o
+   #3b82f6 do escuro daria só 3.7:1 com branco.
    ============================================================ */
 html.light {
-  /* brand → azul */
-  --brand-accent:          #2b88f5;
-  --brand-accent-dim:      #6bb0fa;
-  --brand-pale:            #0b5cc2;   /* accent TEXT on light bg (must be dark) */
-  --brand-deep:            #0a4a9e;
-  --brand-deepest:         #04203f;
-  --brand-on-accent:       #0a2540;   /* text ON the vivid blue (escuro p/ contraste) */
-  --brand-inverse:         #6bb0fa;
-  --brand-glow:            rgba(43, 136, 245, 0.22);
-  --brand-outline:         #6f7a89;
-  --brand-outline-variant: #c1c9d4;
-  --brand-text-variant:    #414954;   /* secondary text (dark on light) */
+  --brand-accent:          #2563eb;
+  --brand-accent-dim:      #3b82f6;
+  --brand-pale:            #111113;
+  --brand-deep:            #1d4ed8;
+  --brand-deepest:         #172554;
+  --brand-on-accent:       #ffffff;
+  --brand-inverse:         #60a5fa;
+  --brand-glow:            rgba(37, 99, 235, 0.16);
+  --brand-outline:         #6b6b72;
+  --brand-outline-variant: #e4e4e7;
+  --brand-text-variant:    #52525b;
 
-  /* neutral surfaces + text → light (frias, casam com azul) */
-  --color-background: #f5f8fd;
-  --color-surface: #f5f8fd;
-  --color-surface-dim: #d6dce6;
-  --color-surface-bright: #f5f8fd;
+  --color-background: #fafafa;
+  --color-surface: #fafafa;
+  --color-surface-dim: #e4e4e7;
+  --color-surface-bright: #ffffff;
   --color-surface-container-lowest: #ffffff;
-  --color-surface-container-low: #eef2f9;
-  --color-surface-container: #e8edf6;
-  --color-surface-container-high: #e2e8f2;
-  --color-surface-container-highest: #dce3ee;
-  --color-surface-variant: #dde3ee;
-  --color-on-surface: #171c22;
-  --color-on-background: #171c22;
-  --color-inverse-surface: #2c313a;
-  --color-inverse-on-surface: #eef1f7;
-  /* primary aqui é azul escuro (usado como TEXTO); quando vira FUNDO
-     (bg-primary) o texto sobre ele precisa ser branco */
+  --color-surface-container-low: #f6f6f7;
+  --color-surface-container: #ffffff;
+  --color-surface-container-high: #f4f4f5;
+  --color-surface-container-highest: #ffffff;
+  --color-surface-variant: #ededef;
+  --color-on-surface: #111113;
+  --color-on-background: #111113;
+  --color-inverse-surface: #27272a;
+  --color-inverse-on-surface: #f4f4f5;
   --color-on-primary: #ffffff;
 
-  --color-secondary: #4d5a6b;
-  --color-on-secondary: #ffffff;
-  --color-secondary-container: #d5e2f2;
-  --color-on-secondary-container: #0f1d2b;
-  --color-tertiary: #4a607a;
+  --color-secondary: #f1f1f3;
+  --color-on-secondary: #111113;
+  --color-secondary-container: #f1f1f3;
+  --color-on-secondary-container: #18181b;
+  --color-tertiary: #3f3f46;
   --color-on-tertiary: #ffffff;
-  --color-tertiary-container: #d3e3ff;
-  --color-on-tertiary-container: #001d36;
+  --color-tertiary-container: #f1f1f3;
+  --color-on-tertiary-container: #27272a;
 
-  /* error → readable on light */
-  --color-error: #ba1a1a;
+  --color-error: #b91c1c;
   --color-on-error: #ffffff;
-  --color-error-container: #ffdad6;
-  --color-on-error-container: #410002;
+  --color-error-container: #fee2e2;
+  --color-on-error-container: #7f1d1d;
+
+  --color-input: #d4d4d8;
+  --color-ring: #a1a1aa;
+  --color-chart-2: #71717a;
+  --color-chart-3: #d4d4d8;
+  --color-chart-4: #b91c1c;
+  --color-chart-5: #27272a;
+  --color-badge: #e4e4e7;
+  --color-on-badge: #18181b;
 }
 
-/* glass card + form controls adapt to light */
-html.light .glass-card {
-  background: rgba(0, 0, 0, 0.02);
-  border-color: rgba(0, 0, 0, 0.08);
-}
-/* bordas sutis brancas (tabs, divisores, chips) somem no claro → escurece */
-html.light .border-white\/10 {
-  border-color: rgba(0, 0, 0, 0.14);
-}
-html.light .border-white\/5 {
-  border-color: rgba(0, 0, 0, 0.08);
-}
 html.light input[type="time"]::-webkit-calendar-picker-indicator,
 html.light input[type="date"]::-webkit-calendar-picker-indicator {
   filter: none;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-feature-settings: "ss01", "cv11";
+  }
+  /* número que muda ou se alinha em coluna: dígitos de largura fixa */
+  .tabular, time, input[type="time"], input[type="number"] {
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 html,
@@ -222,7 +270,7 @@ body {
 
 .material-symbols-outlined {
   font-family: "Material Symbols Outlined";
-  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 20;
   display: inline-block;
   line-height: 1;
   text-transform: none;
@@ -234,23 +282,23 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Card sólido: no fundo #0B0E17 um véu de 3% de branco praticamente
-   desaparece. O card agora é a própria cor de container da paleta. */
+/* Card: superfície um degrau acima do chão + borda de 1px. Sem blur,
+   sem sombra — vidro e brilho saíram junto com o navy. O nome ficou
+   porque está em ~90 lugares. */
 .glass-card {
-  backdrop-filter: blur(12px);
   background: var(--color-surface-container);
-  border: 1px solid #1e293b;
+  border: 1px solid var(--color-outline-variant);
 }
-/* bordas escritas à mão como branco translúcido: no escuro viram a cor
-   de divisor da paleta, pra não existirem dois cinzas de borda */
-html:not(.light) .border-white\/10 {
-  border-color: #1e293b;
+/* bordas escritas à mão como branco translúcido viram a cor de linha
+   da paleta, nos dois temas — um cinza de borda só */
+.border-white\/10 {
+  border-color: var(--color-outline-variant);
 }
-html:not(.light) .border-white\/5 {
-  border-color: rgba(30, 41, 59, 0.7);
+.border-white\/5 {
+  border-color: color-mix(in srgb, var(--color-outline-variant) 70%, transparent);
 }
-html:not(.light) .bg-white\/5 {
-  background-color: rgba(30, 41, 59, 0.7);
+.bg-white\/5 {
+  background-color: color-mix(in srgb, var(--color-surface-variant) 70%, transparent);
 }
 
 .timer-glow {
@@ -357,4 +405,16 @@ html:not(.light) .bg-white\/5 {
 
 .ff-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
 .ff-scroll::-webkit-scrollbar-thumb { background: var(--color-outline-variant); border-radius: 4px; }
+.ff-scroll { scrollbar-width: thin; scrollbar-color: var(--color-outline-variant) transparent; }
 input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(0.7); }
+
+/* hábito marcado: o check entra com um "pop" curto (Habit Tracker, HabitBlocks) */
+@keyframes habit-pop {
+  0% { transform: scale(0.6); opacity: 0.4; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.habit-pop { animation: habit-pop 0.32s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@media (prefers-reduced-motion: reduce) {
+  .habit-pop { animation: none; }
+}

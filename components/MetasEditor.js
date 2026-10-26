@@ -13,7 +13,7 @@ const timeInput = (f, cls = "") => (
     value={f.value}
     onChange={(e) => e.target.value && f.onChange(e.target.value)}
     aria-label={f.label}
-    className={`bg-surface-container-highest px-3 py-1.5 rounded-lg border border-white/10 focus:border-primary/50 outline-none text-on-surface font-headline-md text-headline-md ${cls}`}
+    className={`h-9 bg-transparent dark:bg-input/30 px-3 rounded-md border border-input shadow-xs outline-none text-on-surface text-sm tabular-nums focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 ${cls}`}
   />
 );
 
@@ -23,8 +23,8 @@ export default function MetasEditor({ fields }) {
       {fields.map((f) => (
         <div key={f.key} className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
-            <span className="font-body-md text-on-surface-variant">{f.label}</span>
-            <span className="font-label-caps text-primary tabular-nums">
+            <span className="text-sm text-on-surface-variant">{f.label}</span>
+            <span className="text-sm font-medium text-on-surface tabular-nums">
               {f.format ? f.format(f.value) : `${f.value}${f.type === "number" && f.unit ? ` ${f.unit}` : ""}`}
             </span>
           </div>

@@ -23,6 +23,16 @@ import {
   TABS,
 } from "@/lib/state";
 import { applyMode } from "@/lib/themes";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { registerServiceWorker, ensureNotifyPermission, notify } from "@/lib/notify";
 import { MI, Loader } from "@/components/ui";
 
@@ -40,18 +50,16 @@ function Toaster() {
       {toasts.map((t) => (
         <div
           key={t.id}
-          className={`toast-in glass-card rounded-xl px-4 py-3 flex items-center gap-3 shadow-2xl border-l-4 ${
-            t.type === "error" ? "border-l-error" : "border-l-primary-container"
-          }`}
+          className="toast-in rounded-lg border border-outline-variant bg-popover px-4 py-3 flex items-center gap-3 shadow-lg"
         >
           <MI
             name={t.icon || (t.type === "error" ? "error" : "check_circle")}
             fill
-            className={t.type === "error" ? "text-error" : "text-primary-container"}
+            className={`text-[20px] ${t.type === "error" ? "text-error" : "text-primary-container"}`}
           />
           <div className="flex-1 min-w-0">
-            <p className="font-body-md text-body-md text-on-surface leading-tight">{t.title}</p>
-            {t.sub && <p className="font-label-caps text-[10px] text-on-surface-variant">{t.sub}</p>}
+            <p className="text-sm font-medium text-on-surface leading-tight">{t.title}</p>
+            {t.sub && <p className="mt-0.5 text-xs text-on-surface-variant">{t.sub}</p>}
           </div>
         </div>
       ))}
@@ -59,46 +67,38 @@ function Toaster() {
   );
 }
 
+// Radix AlertDialog: empilha certo por cima de um Dialog shadcn já aberto (o
+// overlay feito à mão ficava atrás do foco preso do Dialog). Esc/clique fora
+// cancelam; o foco abre no botão de confirmar, então Enter confirma como antes.
 function ConfirmDialog() {
   const { confirmState, resolveConfirm } = useApp();
-  useEffect(() => {
-    if (!confirmState) return;
-    const onKey = (e) => {
-      if (e.key === "Escape") resolveConfirm(false);
-      if (e.key === "Enter") resolveConfirm(true);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [confirmState, resolveConfirm]);
-  if (!confirmState) return null;
-  const { title, body, confirmLabel = "CONFIRMAR", danger = true } = confirmState;
+  const actionRef = useRef(null);
+  const { title, body, confirmLabel = "Confirmar", danger = true } = confirmState || {};
   return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 animate-[fadeIn_.1s_ease-out]" onClick={() => resolveConfirm(false)}>
-      {/* sólido, igual aos outros modais: glass-card é 3% de branco e some sobre o scrim */}
-      <div className="bg-surface-container-lowest rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-white/10" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start gap-3 mb-4">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${danger ? "bg-error/15 text-error" : "bg-primary-container/20 text-primary-container"}`}>
-            <MI name={danger ? "warning" : "help"} fill />
-          </div>
-          <div className="min-w-0">
-            <p className="font-headline-md text-headline-md text-on-surface">{title}</p>
-            {body && <p className="font-body-md text-body-md text-on-surface-variant mt-1">{body}</p>}
-          </div>
-        </div>
-        <div className="flex gap-2 justify-end">
-          <button onClick={() => resolveConfirm(false)} className="px-4 py-2 rounded-lg text-on-surface-variant font-label-caps text-[11px] hover:bg-surface-variant/40 active:scale-95 transition">
-            CANCELAR
-          </button>
-          <button
+    <AlertDialog open={!!confirmState} onOpenChange={(o) => !o && resolveConfirm(false)}>
+      <AlertDialogContent
+        className="max-w-sm sm:max-w-sm bg-popover border-outline-variant"
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          actionRef.current?.focus();
+        }}
+      >
+        <AlertDialogHeader>
+          <AlertDialogTitle className="text-base">{title}</AlertDialogTitle>
+          {body ? <AlertDialogDescription>{body}</AlertDialogDescription> : <AlertDialogDescription className="sr-only">{title}</AlertDialogDescription>}
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            ref={actionRef}
             onClick={() => resolveConfirm(true)}
-            autoFocus
-            className={`px-4 py-2 rounded-lg font-label-caps text-[11px] active:scale-95 transition ${danger ? "bg-error text-on-error" : "bg-primary-container text-on-primary-container"}`}
+            className={danger ? "bg-error text-on-error hover:bg-error/90" : undefined}
           >
             {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -649,7 +649,7 @@ export function AppProvider({ children }) {
     const ok = await confirm({
       title: "Reiniciar todos os dados?",
       body: "Apaga foco, hábitos, sono, treinos, dieta e XP. Não dá pra desfazer.",
-      confirmLabel: "APAGAR TUDO",
+      confirmLabel: "Apagar tudo",
     });
     if (!ok) return;
     setState(defaultState());
@@ -693,18 +693,18 @@ export function AppProvider({ children }) {
 function LoadErrorScreen() {
   return (
     <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center gap-4 bg-background px-6 text-center">
-      <MI name="cloud_off" className="text-error text-6xl" />
+      <MI name="cloud_off" className="text-error text-[40px]" />
       <div>
-        <p className="font-headline-md text-headline-md text-primary">Falha ao carregar seus dados</p>
-        <p className="font-body-md text-on-surface-variant mt-1 max-w-sm">
+        <h1 className="text-lg font-semibold text-on-surface">Falha ao carregar seus dados</h1>
+        <p className="text-sm text-on-surface-variant mt-1 max-w-sm">
           Não foi possível ler seu perfil. Para não sobrescrever nada, o app não salvou nada. Verifique a conexão e recarregue.
         </p>
       </div>
       <button
         onClick={() => window.location.reload()}
-        className="px-6 py-3 rounded-full bg-primary-container text-on-primary-container font-label-caps text-label-caps active:scale-95 transition"
+        className="h-9 px-4 rounded-md bg-primary text-on-primary text-sm font-medium hover:bg-primary/90 active:scale-[.98] transition"
       >
-        RECARREGAR
+        Recarregar
       </button>
     </div>
   );

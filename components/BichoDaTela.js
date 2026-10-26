@@ -19,15 +19,14 @@
 // ============================================================================
 
 import Link from "next/link";
-import { Caps } from "@/components/ui";
 import { Bicho } from "@/components/PetArt";
 import { petScene } from "@/lib/petMood";
 import { TABS, petCoat, petGrowth, petSpecies, defaultPet } from "@/lib/state";
 
 const TONE = {
-  good: "text-primary",
+  good: "text-on-surface",
   warn: "text-error",
-  idle: "text-on-surface-variant",
+  idle: "text-on-surface",
 };
 
 export default function BichoDaTela({ state, pathname }) {
@@ -38,24 +37,25 @@ export default function BichoDaTela({ state, pathname }) {
   const pet = state.pet || defaultPet();
   const stage = petGrowth(state.stats).cur;
   const mini = { ...stage, size: Math.round(stage.size * 0.62) };
-  const nome = (pet.name || "").trim().toUpperCase();
+  const nome = (pet.name || "").trim();
   const bicho = petSpecies(pet.species);
 
   return (
-    <div className="glass-card relative mb-6 flex items-center gap-3 overflow-hidden rounded-xl pr-4 sm:gap-4">
+    <div className="relative mb-6 flex items-center gap-3 overflow-hidden rounded-xl border border-outline-variant bg-surface-container pr-4 sm:gap-4">
       <Link
         href="/perfil#mascote"
         title={`Meu ${bicho.label.toLowerCase()}`}
         aria-label="Ver meu mascote no perfil"
-        className="relative grid h-[78px] w-[100px] shrink-0 place-items-end justify-center pb-3 transition active:scale-95 sm:w-[112px]"
+        className="relative grid h-[72px] w-[96px] shrink-0 place-items-end justify-center pb-2.5 transition active:scale-95 sm:w-[104px]"
       >
-        <span className="absolute inset-x-3 bottom-[10px] h-px bg-outline-variant/60" />
+        <span className="absolute inset-x-3 bottom-[9px] h-px bg-outline-variant" />
         <Bicho stage={mini} coat={petCoat(pet.coat)} act={sc.act} gear={pet.gear || {}} species={pet.species} />
       </Link>
 
       <div className="min-w-0 flex-1 py-3">
-        <Caps className="text-outline text-[9px] block">{nome ? `${nome} DIZ` : `O ${bicho.label} DIZ`}</Caps>
-        <p className={`font-label-caps text-[11px] leading-tight mt-0.5 ${TONE[sc.tone] || TONE.idle}`}>{sc.line}</p>
+        <p className="text-xs text-outline">{nome ? nome : `O ${bicho.label.toLowerCase()}`}</p>
+        {/* as falas vêm em caixa baixa de lib/petMood.js; a primeira letra sobe aqui */}
+        <p className={`mt-0.5 text-sm font-medium leading-snug first-letter:uppercase ${TONE[sc.tone] || TONE.idle}`}>{sc.line}</p>
         {sc.pct !== null && (
           <div className="mt-2 h-1 w-full max-w-[280px] overflow-hidden rounded-full bg-surface-variant">
             <div

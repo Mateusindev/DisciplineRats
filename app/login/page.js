@@ -4,14 +4,9 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { Spinner } from "@/components/ui";
-
-function MI({ name, className = "", fill = false }) {
-  return (
-    <span className={`material-symbols-outlined ${className}`} style={{ fontVariationSettings: fill ? "'FILL' 1" : undefined }}>
-      {name}
-    </span>
-  );
-}
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -60,45 +55,65 @@ export default function LoginPage() {
     }
   }
 
-  const inputCls =
-    "bg-surface-container-high text-on-surface border border-white/5 rounded-lg px-3 py-3 text-body-md outline-none focus:border-primary-container/50 transition-colors w-full";
-
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-4">
-      <div className="w-full max-w-md glass-card rounded-xl p-8 flex flex-col gap-6">
-        <div className="flex items-center gap-2 justify-center">
-          <img src="/logo.jpg" alt="" width={44} height={44} className="rounded-xl shrink-0" />
-          <h1 className="font-headline-lg text-headline-lg font-black text-primary tracking-tighter">DISCIPLINE RATS</h1>
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="flex w-full max-w-sm flex-col gap-6">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <img src="/logo.jpg" alt="" width={40} height={40} className="size-10 shrink-0 rounded-lg" />
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-on-surface">Discipline Rats</h1>
+            <p className="mt-1 text-sm text-on-surface-variant">
+              {mode === "signin" ? "Entre pra manter a disciplina." : "Crie sua conta e comece a forjar XP."}
+            </p>
+          </div>
         </div>
-        <p className="text-center text-on-surface-variant text-body-md -mt-2">
-          {mode === "signin" ? "Entre pra manter a disciplina." : "Crie sua conta e comece a forjar XP."}
-        </p>
 
-        <form onSubmit={submit} className="flex flex-col gap-4">
-          <label className="flex flex-col gap-1">
-            <span className="font-label-caps text-label-caps text-outline">EMAIL</span>
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} placeholder="voce@email.com" />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="font-label-caps text-label-caps text-outline">SENHA</span>
-            <input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} className={inputCls} placeholder="mínimo 6 caracteres" />
-          </label>
+        <div className="rounded-xl border border-outline-variant bg-surface-container p-6">
+          <form onSubmit={submit} className="flex flex-col gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="login-email">Email</Label>
+              <Input
+                id="login-email"
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="voce@email.com"
+                className="h-10"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="login-password">Senha</Label>
+              <Input
+                id="login-password"
+                type="password"
+                required
+                minLength={6}
+                autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Mínimo 6 caracteres"
+                className="h-10"
+              />
+            </div>
 
-          {error && <p className="text-[13px] text-error">{error}</p>}
-          {info && <p className="text-[13px] text-primary-container">{info}</p>}
+            {error && <p className="text-sm text-error">{error}</p>}
+            {info && <p className="text-sm text-on-surface-variant">{info}</p>}
 
-          <button
-            type="submit"
-            disabled={busy}
-            className="py-3 bg-primary-container text-on-primary-container font-label-caps rounded-full font-bold tracking-widest hover:brightness-110 active:scale-95 transition disabled:opacity-60 flex items-center justify-center gap-2"
-          >
-            {busy ? (
-              <>
-                <Spinner size={16} /> AGUARDE
-              </>
-            ) : mode === "signin" ? "ENTRAR" : "CRIAR CONTA"}
-          </button>
-        </form>
+            <Button type="submit" size="lg" disabled={busy} className="mt-1 w-full">
+              {busy ? (
+                <>
+                  <Spinner size={16} /> Aguarde
+                </>
+              ) : mode === "signin" ? (
+                "Entrar"
+              ) : (
+                "Criar conta"
+              )}
+            </Button>
+          </form>
+        </div>
 
         <button
           onClick={() => {
@@ -106,14 +121,12 @@ export default function LoginPage() {
             setError("");
             setInfo("");
           }}
-          className="text-center text-outline hover:text-primary transition text-[13px]"
+          className="text-center text-sm text-on-surface-variant transition-colors hover:text-on-surface"
         >
           {mode === "signin" ? "Não tem conta? Criar agora" : "Já tem conta? Entrar"}
         </button>
 
-        {!supabase && (
-          <p className="text-center text-[12px] text-error">.env.local ausente — auth desativado.</p>
-        )}
+        {!supabase && <p className="text-center text-xs text-error">.env.local ausente — auth desativado.</p>}
       </div>
     </div>
   );

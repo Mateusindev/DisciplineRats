@@ -49,64 +49,70 @@ export function smoothPath(pts) {
   return d;
 }
 
-// Gráfico de linha (estilo cotação): curva suave + área em gradiente + pontos.
+// Gráfico de linha: curva suave de 2px + pontos, sobre três linhas de grade
+// discretas. Sem área preenchida e sem legenda (é uma série só). A cor de
+// destaque fica na linha e no ponto de hoje; rótulos são cinza, 11px.
 // days: ["YYYY-MM-DD"]; values: number|null alinhado a days (null = sem registro).
 // goal: { value, label } opcional — linha tracejada horizontal.
 // format(v): label do ponto (texto ou emoji).
+// Sem nenhum valor, desenha só a moldura (grade + dias) — quem chama sobrepõe a frase.
 export function LineChart({ days, values, today, yMax, yMin = 0, goal = null, format = (v) => v, xLabel = weekdayShort, ariaLabel = "", height = 200, flags = null, reasons = null }) {
-  const gid = useId();
   const [wrapRef, W] = useWidth();
   const H = height;
   const PAD_X = 18;
-  const PAD_TOP = 28;
-  const PAD_BOT = 30;
+  const PAD_TOP = 24;
+  const PAD_BOT = 28;
   const span = yMax - yMin || 1;
   const xFor = (i) => PAD_X + (i * (W - PAD_X * 2)) / Math.max(1, days.length - 1);
   const yFor = (v) => PAD_TOP + (1 - (Math.min(v, yMax) - yMin) / span) * (H - PAD_TOP - PAD_BOT);
+  const txt = { fontFamily: "inherit", fontVariantNumeric: "tabular-nums" };
 
   const pts = days
     .map((d, i) => (values[i] != null ? { x: xFor(i), y: yFor(values[i]), date: d, v: values[i], flag: !!(flags && flags[i]), reason: (reasons && reasons[i]) || "" } : null))
     .filter(Boolean);
 
   const line = smoothPath(pts);
-  const area = pts.length >= 2 ? `${line} L ${pts[pts.length - 1].x} ${H - PAD_BOT} L ${pts[0].x} ${H - PAD_BOT} Z` : "";
+  // grade: base, meio e topo — só referência de altura, os pontos já trazem o valor
+  const grid = [0, 0.5, 1].map((f) => PAD_TOP + f * (H - PAD_TOP - PAD_BOT));
 
   return (
     <div ref={wrapRef} className="w-full">
       <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="w-full" role="img" aria-label={ariaLabel}>
-      <defs>
-        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--color-primary-container)" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="var(--color-primary-container)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
+      {grid.map((y, i) => (
+        <line key={i} x1={PAD_X} x2={W - PAD_X} y1={y} y2={y} stroke="var(--color-outline-variant)" strokeOpacity={i === 2 ? 1 : 0.6} strokeWidth="1" />
+      ))}
 
       {goal && (
         <>
-          <line x1={PAD_X} x2={W - PAD_X} y1={yFor(goal.value)} y2={yFor(goal.value)} stroke="currentColor" strokeDasharray="4 4" strokeWidth="1" className="text-outline-variant" />
+          <line x1={PAD_X} x2={W - PAD_X} y1={yFor(goal.value)} y2={yFor(goal.value)} stroke="var(--color-outline)" strokeOpacity="0.7" strokeDasharray="3 4" strokeWidth="1" />
           {goal.label && (
-            <text x={W - PAD_X} y={yFor(goal.value) - 5} textAnchor="end" className="fill-current text-outline" style={{ fontSize: 10, fontFamily: "inherit" }}>
+            // rótulo à esquerda e abaixo da linha: os valores dos pontos ficam acima deles
+            // e o ponto de hoje mora na ponta direita
+            <text x={PAD_X} y={yFor(goal.value) + 14} textAnchor="start" style={{ ...txt, fontSize: 11, fill: "var(--color-outline)" }}>
               {goal.label}
             </text>
           )}
         </>
       )}
 
-      {area && <path d={area} fill={`url(#${gid})`} />}
       {line && pts.length >= 2 && (
-        <path d={line} fill="none" stroke="var(--color-primary-container)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={line} fill="none" stroke="var(--color-primary-container)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       )}
 
       {pts.map((p) => {
         const isToday = p.date === today;
-        const color = p.flag ? "var(--color-error)" : "var(--color-primary-container)";
+        // noite suja (deitou tarde): ponto em vermelho; hoje: ponto cheio na cor de destaque
+        const stroke = p.flag ? "var(--color-error)" : "var(--color-primary-container)";
+        const fill = p.flag || isToday ? stroke : "var(--color-surface-container)";
         return (
           <g key={p.date} className="cursor-help">
-            {/* noite suja (deitou tarde): anel de alerta em volta do ponto */}
-            {p.flag && <circle cx={p.x} cy={p.y} r={isToday ? 8 : 7} fill="none" stroke="var(--color-error)" strokeOpacity="0.4" strokeWidth="2" />}
-            <circle cx={p.x} cy={p.y} r={isToday ? 5 : 4} fill={color} stroke="var(--color-background)" strokeWidth="1.5" />
-            {isToday && !p.flag && <circle cx={p.x} cy={p.y} r="9" fill="none" stroke="var(--color-primary-container)" strokeOpacity="0.35" strokeWidth="2" />}
-            <text x={p.x} y={p.y - 11} textAnchor="middle" className="fill-current" style={{ fontSize: 11, fontWeight: 700, fontFamily: "inherit", fill: p.flag ? "var(--color-error)" : "var(--color-on-surface)" }}>
+            <circle cx={p.x} cy={p.y} r={isToday ? 4.5 : 3.5} fill={fill} stroke={isToday ? "var(--color-surface-container)" : stroke} strokeWidth={isToday ? 2 : 1.5} />
+            <text
+              x={p.x}
+              y={p.y - 10}
+              textAnchor="middle"
+              style={{ ...txt, fontSize: 11, fontWeight: isToday ? 600 : 500, fill: p.flag ? "var(--color-error)" : isToday ? "var(--color-on-surface)" : "var(--color-on-surface-variant)" }}
+            >
               {format(p.v)}
             </text>
             <title>{`${xLabel(p.date)} · ${format(p.v)}${p.flag ? " · deitou tarde (suja)" : ""}${p.flag && p.reason ? `\nMotivo: ${p.reason}` : ""}`}</title>
@@ -120,8 +126,7 @@ export function LineChart({ days, values, today, yMax, yMin = 0, goal = null, fo
           x={xFor(i)}
           y={H - 8}
           textAnchor="middle"
-          className={`fill-current ${d === today ? "text-primary" : "text-secondary"}`}
-          style={{ fontSize: 10, fontWeight: d === today ? 800 : 500, textTransform: "uppercase", fontFamily: "inherit" }}
+          style={{ ...txt, fontSize: 11, fontWeight: d === today ? 600 : 400, fill: d === today ? "var(--color-on-surface)" : "var(--color-outline)" }}
         >
           {xLabel(d)}
         </text>

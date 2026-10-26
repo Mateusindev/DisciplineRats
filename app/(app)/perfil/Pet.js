@@ -14,7 +14,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "../AppContext";
 import { startItemCheckout } from "@/lib/persistence";
-import { MI, Caps, inputCls } from "@/components/ui";
+import { MI } from "@/components/ui";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   fmtK,
   gamify,
@@ -39,15 +44,61 @@ import { Toy, Scene, Bicho, GearPreview, SpeciesPreview } from "@/components/Pet
 
 // A espécie ganha uma aba própria em vez de virar um slot: slot é "onde a peça fica
 // no corpo", e o bicho não fica em lugar nenhum — ele É o corpo. Ver PET_SPECIES.
-const SHOP_TABS = [{ id: "species", label: "ESPÉCIE", icon: "pets" }, ...PET_SLOTS];
+const SHOP_TABS = [{ id: "species", label: "Espécie", icon: "pets" }, ...PET_SLOTS];
+
+// Os rótulos do catálogo (lib/state) vêm em caixa alta da época do mono. A tela é em
+// caixa normal, então converte só na hora de pintar — o dado não muda.
+const cap = (t) => (t ? t.charAt(0) + t.slice(1).toLowerCase() : t);
+
+// Cartão de uma opção da loja. Selecionado (vestido / espécie atual) = contorno de
+// tinta; o amarelo fica só nas barras de dado.
+function ShopCard({ selected, free, preview, title, desc, children }) {
+  return (
+    <div
+      className={`flex flex-col rounded-lg border p-3 transition-colors ${
+        selected ? "border-primary bg-surface-variant/40" : "border-outline-variant"
+      }`}
+    >
+      <div className="relative">
+        {preview}
+        {free && (
+          <Badge variant="secondary" className="absolute right-0 top-0">
+            Grátis
+          </Badge>
+        )}
+      </div>
+      <div className="mt-2 min-w-0 flex-1">
+        <div className="text-sm font-medium leading-tight text-on-surface">{title}</div>
+        <div className="mt-0.5 text-xs leading-snug text-outline">{desc}</div>
+      </div>
+      <div className="mt-3">{children}</div>
+    </div>
+  );
+}
+
+function BuyButton({ id, buying, onBuy }) {
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => onBuy(id)}
+      disabled={buying === id}
+      title={`Comprar por ${petPriceLabel()}`}
+      className="w-full"
+    >
+      {buying === id ? (
+        "Abrindo…"
+      ) : (
+        <>
+          Comprar <span className="tabular-nums text-outline">{petPriceLabel()}</span>
+        </>
+      )}
+    </Button>
+  );
+}
 
 function Shop({ pet, coat, entitlements, buying, onBuy, onToggle, onSpecies, onClose }) {
   const [slot, setSlot] = useState(SHOP_TABS[0].id);
-  useEffect(() => {
-    const onKey = (e) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   const items = PET_ITEMS.filter((i) => i.slot === slot);
   // grátis é de todos; pago é de quem tem o entitlement. Nenhum dos dois consulta
@@ -58,176 +109,116 @@ function Shop({ pet, coat, entitlements, buying, onBuy, onToggle, onSpecies, onC
   const have = catalogo.filter(ownsItem).length;
   const especie = pet.species || PET_SPECIES[0].id;
 
+  // Dialog do Radix cuida de Esc, clique fora e foco preso; fechar chama o mesmo onClose.
   return (
-    <div
-      className="fixed inset-0 z-[150] flex items-start justify-center overflow-y-auto ff-scroll bg-black/40 backdrop-blur-sm p-4 py-8 animate-[fadeIn_.1s_ease-out]"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Lojinha do mascote"
-    >
-      <div
-        className="w-full max-w-3xl rounded-2xl border border-outline-variant bg-surface-container shadow-2xl shadow-black/25"
-        onClick={(e) => e.stopPropagation()}
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent
+        showCloseButton={false}
+        aria-label="Lojinha do mascote"
+        className="flex max-h-[min(88vh,760px)] flex-col gap-0 overflow-hidden bg-surface-container p-0 sm:max-w-3xl"
       >
-        <div className="flex items-start gap-3 border-b border-outline-variant/50 p-4 sm:p-5">
-          <MI name="storefront" className="text-primary-container text-3xl shrink-0" />
-          <div className="flex-1 min-w-0">
-            <h3 className="font-headline-md text-headline-md text-primary uppercase">Lojinha</h3>
+        <div className="flex items-start gap-3 border-b border-outline-variant p-4 sm:p-5">
+          <DialogHeader className="min-w-0 flex-1 gap-1.5 text-left">
+            <DialogTitle className="text-base">Lojinha</DialogTitle>
             {/* O que a pessoa merece saber ANTES de pagar, e o que a lei manda dizer:
                 é cosmético, é compra única e não mexe em progresso nenhum. */}
-            <p className="text-[11px] text-on-surface-variant">
+            <DialogDescription className="text-xs leading-relaxed">
               O rato e um item de cada categoria são grátis. O resto — inclusive a outra espécie — custa{" "}
-              <strong className="text-on-surface">{petPriceLabel()}</strong> cada, compra única, sem assinatura. É tudo{" "}
-              <strong className="text-on-surface">cosmético</strong>: não dá XP, não sobe nível e não mexe no ranking — XP serve só pra o bicho crescer.
-            </p>
-          </div>
-          <button onClick={onClose} aria-label="Fechar" className="shrink-0 p-1 text-outline hover:text-on-surface transition">
-            <MI name="close" />
-          </button>
+              <strong className="font-medium text-on-surface">{petPriceLabel()}</strong> cada, compra única, sem assinatura. É tudo{" "}
+              <strong className="font-medium text-on-surface">cosmético</strong>: não dá XP, não sobe nível e não mexe no ranking — XP serve só pra o bicho crescer.
+            </DialogDescription>
+          </DialogHeader>
+          <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Fechar" className="-mr-1 -mt-1 text-outline">
+            <MI name="close" className="text-[18px]" />
+          </Button>
         </div>
 
-        <div className="flex items-center gap-x-5 border-b border-outline-variant/50 px-4 sm:px-5 py-2.5">
-          <span className="flex items-baseline gap-1.5">
-            <span className="text-[13px] text-on-surface-variant tabular-nums">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-outline-variant px-4 py-2.5 text-xs text-outline sm:px-5">
+          <span>
+            <span className="tabular-nums text-on-surface-variant">
               {have}/{total}
-            </span>
-            <Caps className="text-outline text-[10px]">DO CATÁLOGO É SEU</Caps>
+            </span>{" "}
+            do catálogo é seu
           </span>
-          <span className="ml-auto flex items-center gap-1.5">
-            <MI name="pix" className="text-sm text-outline" />
-            <Caps className="text-outline text-[10px]">PIX · CARTÃO · BOLETO</Caps>
-          </span>
+          <span className="ml-auto">Pix · cartão · boleto</span>
         </div>
 
-        <div className="flex gap-1 overflow-x-auto ff-scroll border-b border-outline-variant/50 px-4 sm:px-5 py-2">
-          {SHOP_TABS.map((sl) => {
-            const on = sl.id === slot;
-            const all = sl.id === "species" ? PET_SPECIES : PET_ITEMS.filter((i) => i.slot === sl.id);
-            return (
-              <button
-                key={sl.id}
-                onClick={() => setSlot(sl.id)}
-                aria-pressed={on}
-                className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 font-label-caps text-[10px] transition ${
-                  on
-                    ? "border-primary-container bg-primary-container/15 text-primary-container"
-                    : "border-outline-variant text-on-surface-variant hover:border-outline"
-                }`}
-              >
-                <MI name={sl.icon} className="text-base" />
-                {sl.label}
-                <span className="tabular-nums text-outline">
-                  {all.filter(ownsItem).length}/{all.length}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 sm:p-5">
-          {slot === "species" &&
-            PET_SPECIES.map((sp) => {
-              const owned = ownsItem(sp);
-              const atual = sp.id === especie;
-              return (
-                <div
-                  key={sp.id}
-                  className={`flex flex-col rounded-xl border p-3 transition ${
-                    atual ? "border-primary-container bg-primary-container/10" : "border-outline-variant/60 bg-surface-container-high/40"
-                  }`}
-                >
-                  <div className="relative">
-                    <SpeciesPreview species={sp.id} coat={coat} />
-                    {sp.source === "free" && (
-                      <span className="absolute right-0 top-0 rounded-full bg-surface-container px-1.5 py-0.5 font-label-caps text-[9px] text-primary-container">
-                        GRÁTIS
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-2 min-w-0 flex-1">
-                    <div className="text-[13px] leading-tight text-on-surface">{sp.label}</div>
-                    <div className="text-[10px] leading-tight text-outline">{sp.desc}</div>
-                  </div>
-                  <div className="mt-2">
-                    {owned ? (
-                      <button
-                        onClick={() => onSpecies(sp.id)}
-                        disabled={atual}
-                        className={`w-full rounded-lg py-1.5 font-label-caps text-[10px] transition active:scale-[.98] ${
-                          atual
-                            ? "bg-primary-container text-on-primary-container disabled:opacity-100"
-                            : "border border-primary-container/50 text-primary-container hover:bg-primary-container/10"
-                        }`}
-                      >
-                        {atual ? "É ESSE AÍ" : "VIRAR ESTE"}
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => onBuy(sp.id)}
-                        disabled={buying === sp.id}
-                        title={`Comprar por ${petPriceLabel()}`}
-                        className="w-full rounded-lg border border-primary py-1.5 font-label-caps text-[10px] tabular-nums text-primary transition hover:bg-primary/10 active:scale-[.98] disabled:opacity-50"
-                      >
-                        {buying === sp.id ? "ABRINDO..." : petPriceLabel()}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          {items.map((item) => {
-            const free = item.source === "free";
-            const owned = ownsItem(item);
-            const worn = pet.gear?.[item.slot] === item.id;
-            return (
-              <div
-                key={item.id}
-                className={`flex flex-col rounded-xl border p-3 transition ${
-                  worn ? "border-primary-container bg-primary-container/10" : "border-outline-variant/60 bg-surface-container-high/40"
-                }`}
-              >
-                <div className="relative">
-                  <GearPreview item={item} coat={coat} species={especie} />
-                  {free && (
-                    <span className="absolute right-0 top-0 rounded-full bg-surface-container px-1.5 py-0.5 font-label-caps text-[9px] text-primary-container">
-                      GRÁTIS
+        <Tabs value={slot} onValueChange={setSlot} className="min-h-0 flex-1 gap-0">
+          <div className="overflow-x-auto ff-scroll border-b border-outline-variant px-4 py-2.5 sm:px-5">
+            <TabsList className="w-max">
+              {SHOP_TABS.map((sl) => {
+                const all = sl.id === "species" ? PET_SPECIES : PET_ITEMS.filter((i) => i.slot === sl.id);
+                return (
+                  <TabsTrigger key={sl.id} value={sl.id} className="flex-none px-2.5 text-xs">
+                    {cap(sl.label)}
+                    <span className="tabular-nums text-outline">
+                      {all.filter(ownsItem).length}/{all.length}
                     </span>
-                  )}
-                </div>
-                <div className="mt-2 min-w-0 flex-1">
-                  <div className="text-[13px] leading-tight text-on-surface">{item.name}</div>
-                  <div className="text-[10px] leading-tight text-outline">{item.desc}</div>
-                </div>
-                <div className="mt-2">
-                  {owned ? (
-                    <button
-                      onClick={() => onToggle(item.id)}
-                      className={`w-full rounded-lg py-1.5 font-label-caps text-[10px] transition active:scale-[.98] ${
-                        worn
-                          ? "bg-primary-container text-on-primary-container"
-                          : "border border-primary-container/50 text-primary-container hover:bg-primary-container/10"
-                      }`}
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto ff-scroll">
+            <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 sm:p-5">
+              {slot === "species" &&
+                PET_SPECIES.map((sp) => {
+                  const owned = ownsItem(sp);
+                  const atual = sp.id === especie;
+                  return (
+                    <ShopCard
+                      key={sp.id}
+                      selected={atual}
+                      free={sp.source === "free"}
+                      preview={<SpeciesPreview species={sp.id} coat={coat} />}
+                      title={cap(sp.label)}
+                      desc={sp.desc}
                     >
-                      {worn ? "VESTIDO · TIRAR" : "VESTIR"}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => onBuy(item.id)}
-                      disabled={buying === item.id}
-                      title={`Comprar por ${petPriceLabel()}`}
-                      className="w-full rounded-lg border border-primary py-1.5 font-label-caps text-[10px] tabular-nums text-primary transition hover:bg-primary/10 active:scale-[.98] disabled:opacity-50"
-                    >
-                      {buying === item.id ? "ABRINDO..." : petPriceLabel()}
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
+                      {owned ? (
+                        <Button
+                          size="sm"
+                          variant={atual ? "default" : "outline"}
+                          onClick={() => onSpecies(sp.id)}
+                          disabled={atual}
+                          className="w-full disabled:opacity-100"
+                        >
+                          {atual ? "É esse aí" : "Virar este"}
+                        </Button>
+                      ) : (
+                        <BuyButton id={sp.id} buying={buying} onBuy={onBuy} />
+                      )}
+                    </ShopCard>
+                  );
+                })}
+              {items.map((item) => {
+                const free = item.source === "free";
+                const owned = ownsItem(item);
+                const worn = pet.gear?.[item.slot] === item.id;
+                return (
+                  <ShopCard
+                    key={item.id}
+                    selected={worn}
+                    free={free}
+                    preview={<GearPreview item={item} coat={coat} species={especie} />}
+                    title={item.name}
+                    desc={item.desc}
+                  >
+                    {owned ? (
+                      <Button size="sm" variant={worn ? "default" : "outline"} onClick={() => onToggle(item.id)} className="w-full">
+                        {worn ? "Vestido · tirar" : "Vestir"}
+                      </Button>
+                    ) : (
+                      <BuyButton id={item.id} buying={buying} onBuy={onBuy} />
+                    )}
+                  </ShopCard>
+                );
+              })}
+            </div>
+          </div>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -366,24 +357,30 @@ export default function Pet() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const label = name || "SEM NOME";
+  const label = name || "Sem nome";
   const stageIdx = PET_STAGES.indexOf(stage);
   const wornCount = PET_SLOTS.filter((sl) => gear[sl.id]).length;
 
+  // chip de escolha (espécie, pelagem): selecionado = contorno e texto de tinta
+  const chip = (on) =>
+    `inline-flex h-10 items-center sm:h-8 gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors active:scale-[.98] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 ${
+      on ? "border-primary bg-surface-variant text-on-surface" : "border-outline-variant text-on-surface-variant hover:bg-surface-variant/60"
+    }`;
+
   return (
     <section id="mascote" className="scroll-mt-16">
-      <div className="flex items-end justify-between mb-4">
-        <h3 className="font-headline-md text-headline-md text-primary uppercase">Mascote</h3>
-        <Caps className="text-outline">
-          {stage.name} · {stageIdx + 1} DE {PET_STAGES.length}
-        </Caps>
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <h2 className="text-base font-semibold text-on-surface">Mascote</h2>
+        <span className="text-xs text-outline tabular-nums">
+          {cap(stage.name)} · {stageIdx + 1} de {PET_STAGES.length}
+        </span>
       </div>
 
-      <div className="glass-card rounded-xl overflow-hidden">
+      <div className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
         {/* cercado */}
-        <div className="relative h-[190px] overflow-hidden bg-gradient-to-b from-surface-container-high/40 to-transparent">
+        <div className="relative h-[190px] overflow-hidden bg-surface-container-high/50">
           <Scene id={gear.scene} />
-          <div className="absolute inset-x-0 bottom-0 h-10 border-t border-outline-variant/40 bg-surface-variant/40" />
+          <div className="absolute inset-x-0 bottom-0 h-10 border-t border-outline-variant bg-surface-variant/50" />
 
           {gear.toy && (
             <div className="absolute bottom-7 left-4">
@@ -414,11 +411,11 @@ export default function Pet() {
         </div>
 
         {/* nome, loja, saldos, crescimento e pelagem */}
-        <div className="space-y-4 border-t border-outline-variant/40 p-4">
+        <div className="space-y-5 border-t border-outline-variant p-4 sm:p-5">
           <div className="flex flex-wrap items-center gap-2">
             {editing ? (
               <>
-                <input
+                <Input
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => (e.key === "Enter" ? saveName() : e.key === "Escape" ? setEditing(false) : null)}
@@ -426,122 +423,108 @@ export default function Pet() {
                   maxLength={PET_NAME_LEN}
                   placeholder={`Nome do ${bicho.label.toLowerCase()}`}
                   aria-label="Nome do mascote"
-                  className={`${inputCls} font-headline-md text-headline-md max-w-[220px]`}
+                  className="max-w-[220px]"
                 />
-                <button
-                  onClick={saveName}
-                  aria-label="Salvar nome"
-                  className="grid h-9 w-9 place-items-center rounded-lg bg-primary-container text-on-primary-container transition active:scale-95"
-                >
-                  <MI name="check" />
-                </button>
-                <button
-                  onClick={() => setEditing(false)}
-                  aria-label="Cancelar"
-                  className="grid h-9 w-9 place-items-center rounded-lg bg-surface-variant text-on-surface-variant transition active:scale-95"
-                >
-                  <MI name="close" />
-                </button>
+                <Button size="icon" onClick={saveName} aria-label="Salvar nome">
+                  <MI name="check" className="text-[18px]" />
+                </Button>
+                <Button size="icon" variant="ghost" onClick={() => setEditing(false)} aria-label="Cancelar">
+                  <MI name="close" className="text-[18px]" />
+                </Button>
               </>
             ) : (
               <>
-                <h4 className={`font-headline-md text-headline-md uppercase ${name ? "text-on-surface" : "text-outline"}`}>{label}</h4>
-                <button
+                <h3 className={`text-lg font-semibold tracking-tight ${name ? "text-on-surface" : "text-outline"}`}>{label}</h3>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
                   onClick={() => {
                     setDraft(name);
                     setEditing(true);
                   }}
                   aria-label="Dar um nome ao mascote"
-                  className="p-1 text-outline transition hover:text-primary-container"
+                  className="text-outline"
                 >
-                  <MI name="edit" className="text-lg" />
-                </button>
-                <button
-                  onClick={() => setShop(true)}
-                  className="ml-auto flex items-center gap-1.5 rounded-full bg-primary-container px-3 py-1.5 font-label-caps text-[10px] text-on-primary-container transition active:scale-95"
-                >
-                  <MI name="storefront" className="text-base" /> LOJINHA
-                </button>
+                  <MI name="edit" className="text-[16px]" />
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setShop(true)} className="ml-auto">
+                  <MI name="storefront" className="text-[16px]" /> Lojinha
+                </Button>
               </>
             )}
           </div>
 
           {/* XP tem UM papel só agora: fazer o gato crescer. Não há saldo pra
-              mostrar porque não há nada pra gastar com ele. */}
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
-            <span className="flex items-baseline gap-1.5">
-              <span className="text-[13px] text-primary tabular-nums">{fmtK(g.xp)}</span>
-              <Caps className="text-outline text-[10px]">XP · NÍVEL {g.level}</Caps>
-            </span>
-            <span className="flex items-baseline gap-1.5">
-              <span className="text-[13px] text-on-surface-variant tabular-nums">
-                {PET_ITEMS.filter((i) => petOwns(state, i.id)).length}/{PET_ITEMS.length}
-              </span>
-              <Caps className="text-outline text-[10px]">ITENS · {wornCount} VESTIDO(S)</Caps>
-            </span>
-          </div>
-
-          {/* crescimento sai do XP TOTAL: gastar na loja não mexe nesta barra */}
+              mostrar porque não há nada pra gastar com ele. Crescimento sai do XP
+              TOTAL: gastar na loja não mexe nesta barra. */}
           <div>
-            <div className="mb-1 flex justify-between font-label-caps text-[10px] text-outline">
-              <span>{stage.name}</span>
-              <span>{growth.next ? `FALTAM ${fmtK(growth.missing)} XP PRA ${growth.next.name}` : "TAMANHO MÁXIMO"}</span>
+            <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-xs">
+              <span className="text-outline">
+                <span className="font-medium text-on-surface">{cap(stage.name)}</span>
+                {" · "}
+                <span className="tabular-nums">{fmtK(g.xp)}</span> XP · nível <span className="tabular-nums">{g.level}</span>
+              </span>
+              <span className="text-outline tabular-nums">
+                {growth.next ? `Faltam ${fmtK(growth.missing)} XP pra ${cap(growth.next.name).toLowerCase()}` : "Tamanho máximo"}
+              </span>
             </div>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-surface-variant">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-variant">
               <div className="h-full rounded-full bg-primary-container transition-all" style={{ width: `${growth.pct}%` }} />
+            </div>
+            <div className="mt-2 text-xs text-outline">
+              <span className="tabular-nums">
+                {PET_ITEMS.filter((i) => petOwns(state, i.id)).length}/{PET_ITEMS.length}
+              </span>{" "}
+              itens · <span className="tabular-nums">{wornCount}</span> vestido(s)
             </div>
           </div>
 
           {/* Espécie e pelagem lado a lado: são a mesma pergunta ("que bicho é esse?"),
               e separá-las em telas diferentes só faria procurar. O que não é seu
               manda pra loja em vez de ficar inerte — cadeado sem porta é frustração. */}
-          <div>
-            <Caps className="text-outline text-[10px] mb-1.5 block">ESPÉCIE</Caps>
-            <div className="flex flex-wrap gap-1.5">
-              {PET_SPECIES.map((sp) => {
-                const on = sp.id === bicho.id;
-                const owned = petOwns(state, sp.id);
-                return (
-                  <button
-                    key={sp.id}
-                    onClick={() => (owned ? setState((prev) => setPetSpecies(prev, sp.id)) : setShop(true))}
-                    aria-pressed={on}
-                    title={owned ? sp.desc : `${sp.label} — ${petPriceLabel()} na lojinha`}
-                    className={`flex items-center gap-1.5 rounded-full border px-2 py-1 font-label-caps text-[9px] transition ${
-                      on
-                        ? "border-primary-container bg-primary-container/10 text-primary-container"
-                        : "border-outline-variant text-outline hover:border-outline"
-                    }`}
-                  >
-                    <MI name={owned ? "pets" : "lock"} className="text-[13px]" />
-                    {sp.label}
-                    {!owned && <span className="tabular-nums text-outline">{petPriceLabel()}</span>}
-                  </button>
-                );
-              })}
+          <div className="grid gap-5 md:grid-cols-[auto_1fr] md:gap-10">
+            <div>
+              <div className="mb-2 text-xs text-outline">Espécie</div>
+              <div className="flex flex-wrap gap-1.5">
+                {PET_SPECIES.map((sp) => {
+                  const on = sp.id === bicho.id;
+                  const owned = petOwns(state, sp.id);
+                  return (
+                    <button
+                      key={sp.id}
+                      onClick={() => (owned ? setState((prev) => setPetSpecies(prev, sp.id)) : setShop(true))}
+                      aria-pressed={on}
+                      title={owned ? sp.desc : `${cap(sp.label)} — ${petPriceLabel()} na lojinha`}
+                      className={chip(on)}
+                    >
+                      {!owned && <MI name="lock" className="text-[14px] text-outline" />}
+                      {cap(sp.label)}
+                      {!owned && <span className="tabular-nums text-outline">{petPriceLabel()}</span>}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
 
-          <div>
-            <Caps className="text-outline text-[10px] mb-1.5 block">PELAGEM</Caps>
-            <div className="flex flex-wrap gap-1.5">
-              {PET_COATS.map((k) => {
-                const on = k.id === coat.id;
-                return (
-                  <button
-                    key={k.id}
-                    onClick={() => patchPet({ coat: k.id })}
-                    aria-pressed={on}
-                    title={petCoatLabel(k, bicho.id)}
-                    className={`flex items-center gap-1.5 rounded-full border px-2 py-1 font-label-caps text-[9px] transition ${
-                      on ? "border-primary-container bg-primary-container/10 text-primary-container" : "border-outline-variant text-outline hover:border-outline"
-                    }`}
-                  >
-                    <span className="h-3.5 w-3.5 rounded-full border border-black/20" style={{ background: k.fur }} />
-                    {petCoatLabel(k, bicho.id)}
-                  </button>
-                );
-              })}
+            <div>
+              <div className="mb-2 text-xs text-outline">Pelagem</div>
+              <div className="flex flex-wrap gap-1.5">
+                {PET_COATS.map((k) => {
+                  const on = k.id === coat.id;
+                  return (
+                    <button
+                      key={k.id}
+                      onClick={() => patchPet({ coat: k.id })}
+                      aria-pressed={on}
+                      title={cap(petCoatLabel(k, bicho.id))}
+                      className={chip(on)}
+                    >
+                      <span className="size-3.5 rounded-full border border-black/15" style={{ background: k.fur }} />
+                      {cap(petCoatLabel(k, bicho.id))}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>

@@ -2,11 +2,14 @@
 
 import { useState, useRef, useEffect } from "react";
 
+// Campo no padrão shadcn (components/ui/input.jsx): borda de controle um degrau
+// acima da borda de card, anel de foco neutro. Exportado como string porque há
+// <input>/<select> crus espalhados que só precisam vestir a mesma roupa.
 export const inputCls =
-  "bg-surface-container-high text-on-surface border border-white/5 rounded-lg px-3 py-2 text-body-md outline-none focus:border-primary-container/50 transition-colors";
+  "bg-transparent dark:bg-input/30 text-on-surface border border-input rounded-md px-3 py-2 text-sm shadow-xs outline-none placeholder:text-outline transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50";
 
 export const textareaCls =
-  "w-full bg-surface-container-high text-on-surface border border-white/5 rounded-lg px-3 py-2.5 text-body-md outline-none resize-none focus:border-primary-container/50 transition-colors placeholder:text-outline";
+  "w-full bg-transparent dark:bg-input/30 text-on-surface border border-input rounded-md px-3 py-2.5 text-sm shadow-xs outline-none resize-none placeholder:text-outline transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
 export function MI({ name, className = "", fill = false, style }) {
   return (
@@ -19,8 +22,10 @@ export function MI({ name, className = "", fill = false, style }) {
   );
 }
 
+// Rótulo pequeno. O nome ficou da época do mono em caixa alta; hoje é 12px/500
+// em caixa normal — o texto que vem em caixa alta é responsabilidade de quem chama.
 export function Caps({ children, className = "" }) {
-  return <span className={`font-label-caps text-label-caps ${className}`}>{children}</span>;
+  return <span className={`text-label-caps font-medium ${className}`}>{children}</span>;
 }
 
 export function StarRating({ value, onChange, size = "text-xl" }) {
@@ -31,7 +36,7 @@ export function StarRating({ value, onChange, size = "text-xl" }) {
         const filled = v <= value;
         return (
           <button key={v} type="button" onClick={() => onChange(v)} aria-label={`Nota ${v} de 5`}>
-            <MI name="star" fill={filled} className={`${size} ${filled ? "text-primary-container" : "text-outline-variant"}`} />
+            <MI name="star" fill={filled} className={`${size} ${filled ? "text-primary-container" : "text-outline/40"}`} />
           </button>
         );
       })}
@@ -42,20 +47,20 @@ export function StarRating({ value, onChange, size = "text-xl" }) {
 export function Stepper({ label, value, onDec, onInc, suffix = "" }) {
   return (
     <div className="flex items-center justify-between">
-      {label && <span className="text-on-surface text-body-md">{label}</span>}
+      {label && <span className="text-on-surface text-sm">{label}</span>}
       <div className="flex items-center gap-3">
         <button
           onClick={onDec}
           aria-label={`Diminuir ${label || ""}`}
-          className="w-8 h-8 rounded-full bg-surface-variant text-on-surface flex items-center justify-center hover:brightness-125 active:scale-95 transition"
+          className="size-8 rounded-md border border-input text-on-surface flex items-center justify-center hover:bg-surface-variant active:scale-95 transition"
         >
           −
         </button>
-        <span className="font-label-caps w-12 text-center text-primary">{value}{suffix}</span>
+        <span className="w-12 text-center text-sm font-medium tabular-nums text-on-surface">{value}{suffix}</span>
         <button
           onClick={onInc}
           aria-label={`Aumentar ${label || ""}`}
-          className="w-8 h-8 rounded-full bg-surface-variant text-on-surface flex items-center justify-center hover:brightness-125 active:scale-95 transition"
+          className="size-8 rounded-md border border-input text-on-surface flex items-center justify-center hover:bg-surface-variant active:scale-95 transition"
         >
           +
         </button>
@@ -120,18 +125,18 @@ export function Select({ value, options = [], onChange, placeholder = "Selecione
         onKeyDown={onKey}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={`w-full flex items-center justify-between gap-2 bg-surface-container-high border rounded-lg px-3 py-2.5 text-body-md text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-          open ? "border-primary-container/60" : "border-white/5 hover:border-white/10"
+        className={`w-full h-9 flex items-center justify-between gap-2 bg-transparent dark:bg-input/30 border rounded-md px-3 text-sm text-left shadow-xs transition-[color,box-shadow] disabled:opacity-50 disabled:cursor-not-allowed ${
+          open ? "border-ring ring-[3px] ring-ring/50" : "border-input"
         }`}
       >
         <span className={`truncate ${selected ? "text-on-surface" : "text-outline"}`}>{selected ? selected.label : placeholder}</span>
-        <MI name="expand_more" className={`text-outline text-xl shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+        <MI name="expand_more" className={`text-outline text-[18px] shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && !disabled && (
         <ul
           role="listbox"
-          className="absolute z-30 mt-1.5 w-full max-h-60 overflow-y-auto ff-scroll rounded-lg border border-white/10 bg-surface-container-highest shadow-xl shadow-black/40 py-1 animate-[fadeIn_.1s_ease-out]"
+          className="absolute z-30 mt-1 w-full max-h-60 overflow-y-auto ff-scroll rounded-md border border-outline-variant bg-popover p-1 shadow-md animate-[fadeIn_.1s_ease-out]"
         >
           {opts.length === 0 && <li className="px-3 py-2 text-[13px] text-outline">Sem opções</li>}
           {opts.map((o, i) => {
@@ -143,11 +148,11 @@ export function Select({ value, options = [], onChange, placeholder = "Selecione
                 aria-selected={isSel}
                 onMouseEnter={() => setActive(i)}
                 onClick={() => pick(o.value)}
-                className={`flex items-center gap-2 px-3 py-2 text-body-md cursor-pointer transition-colors ${
-                  i === active ? "bg-primary-container/15" : ""
-                } ${isSel ? "text-primary" : "text-on-surface"}`}
+                className={`flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm cursor-pointer transition-colors text-on-surface ${
+                  i === active ? "bg-surface-variant" : ""
+                }`}
               >
-                <MI name="check" className={`text-lg shrink-0 ${isSel ? "text-primary-container" : "opacity-0"}`} />
+                <MI name="check" className={`text-[16px] shrink-0 ${isSel ? "" : "opacity-0"}`} />
                 <span className="truncate">{o.label}</span>
               </li>
             );
@@ -164,7 +169,7 @@ export function Spinner({ size = 24, className = "" }) {
     <span
       role="status"
       aria-label="Carregando"
-      className={`inline-block rounded-full border-2 border-surface-variant border-t-primary-container animate-spin ${className}`}
+      className={`inline-block rounded-full border-2 border-surface-variant border-t-on-surface-variant animate-spin ${className}`}
       style={{ width: size, height: size }}
     />
   );
@@ -174,35 +179,37 @@ export function Spinner({ size = 24, className = "" }) {
 export function Loader({ label = "Carregando..." }) {
   return (
     <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center gap-6 bg-background">
-      <div className="relative flex items-center justify-center">
-        <Spinner size={64} />
-        <MI name="bolt" fill className="absolute text-primary-container text-3xl animate-pulse" />
-      </div>
-      <div className="text-center">
-        <p className="font-headline-md text-headline-md text-primary tracking-widest uppercase">Discipline Rats</p>
-        <Caps className="text-outline mt-1 block">{label}</Caps>
+      <img src="/logo.jpg" alt="" width={40} height={40} className="size-10 rounded-lg" />
+      <div className="flex items-center gap-2 text-sm text-outline">
+        <Spinner size={14} /> {label}
       </div>
     </div>
   );
 }
 
-export function StatTile({ label, value, children }) {
+// Número com rótulo em cima. Sem ícone em círculo, sem cor: o valor é tinta,
+// o rótulo é cinza. `children` entra ao lado do valor (unidade, um sinal).
+export function StatTile({ label, value, children, className = "" }) {
   return (
-    <div className="glass-card p-6 rounded-xl relative overflow-hidden">
-      <div className="text-outline font-label-caps text-[10px] mb-1">{label}</div>
-      <div className="flex items-center gap-2">
-        <span className="text-headline-lg font-headline-lg text-primary">{value}</span>
+    <div className={`rounded-xl border border-outline-variant bg-surface-container p-4 ${className}`}>
+      <div className="text-xs text-outline">{label}</div>
+      <div className="mt-1 flex items-baseline gap-2">
+        <span className="text-2xl font-semibold tracking-tight tabular-nums text-on-surface">{value}</span>
         {children}
       </div>
     </div>
   );
 }
 
-export function PageHeader({ title, subtitle }) {
+// Título da tela: um h1 de 24px, uma linha de contexto, e as ações à direita.
+export function PageHeader({ title, subtitle, actions, className = "" }) {
   return (
-    <div className="mb-8">
-      <h2 className="font-headline-lg text-headline-lg text-primary uppercase">{title}</h2>
-      <p className="text-on-surface-variant text-body-md">{subtitle}</p>
+    <div className={`mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between ${className}`}>
+      <div className="min-w-0">
+        <h1 className="text-2xl font-semibold tracking-tight text-on-surface">{title}</h1>
+        {subtitle && <p className="mt-1 max-w-2xl text-sm text-on-surface-variant">{subtitle}</p>}
+      </div>
+      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
     </div>
   );
 }

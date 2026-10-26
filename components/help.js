@@ -38,10 +38,14 @@ function Table({ table }) {
   );
 }
 
+// Os rótulos de lib/help.js foram escritos em CAIXA ALTA pro mono antigo.
+// Aqui viram caixa normal, sem reescrever o conteúdo inteiro.
+const sentence = (t) => (typeof t === "string" && t === t.toUpperCase() ? t.charAt(0) + t.slice(1).toLowerCase() : t);
+
 function Section({ label, body, list, table }) {
   return (
     <section>
-      <Caps className="text-primary text-[10px] mb-2 block tracking-[0.15em]">{label}</Caps>
+      <Caps className="text-on-surface mb-2 block">{sentence(label)}</Caps>
       <div className="space-y-2">
         {body?.map((t, i) => <RichText key={i} text={t} className="text-body-md text-on-surface-variant" />)}
         {list && (
@@ -71,21 +75,21 @@ function HelpModal({ entry, onClose }) {
   const xp = entry.xp;
   return createPortal(
     <div
-      className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/60 animate-[fadeIn_.1s_ease-out]"
+      className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/50 animate-[fadeIn_.1s_ease-out]"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-label={`Como usar: ${entry.title}`}
     >
       <div
-        className="bg-surface-container-lowest rounded-2xl w-full max-w-lg shadow-2xl border border-white/10 max-h-[88vh] flex flex-col"
+        className="bg-popover rounded-xl w-full max-w-lg shadow-lg border border-outline-variant max-h-[88vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 p-6 pb-4 shrink-0 border-b border-white/5">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <MI name={entry.icon} className="text-primary-container text-xl" fill />
-              <h3 className="font-headline-md text-headline-md text-primary">{entry.title}</h3>
+              <MI name={entry.icon} className="text-on-surface-variant text-[20px]" />
+              <h3 className="text-base font-semibold text-on-surface">{entry.title}</h3>
             </div>
             <RichText text={entry.tagline} className="text-[13px] text-on-surface-variant mt-1.5" />
           </div>
@@ -99,8 +103,8 @@ function HelpModal({ entry, onClose }) {
 
           {xp && (
             <section>
-              <Caps className="text-primary text-[10px] mb-2 block tracking-[0.15em]">
-                {xp.none ? "ESTA PÁGINA NÃO TEM XP" : "XP DESTA PÁGINA"}
+              <Caps className="text-on-surface mb-2 block">
+                {xp.none ? "Esta página não tem XP" : "XP desta página"}
               </Caps>
               <div className="space-y-2">
                 {xp.rows && (
@@ -108,7 +112,7 @@ function HelpModal({ entry, onClose }) {
                     {xp.rows.map((r) => (
                       <div key={r[0]} className="flex items-center gap-3 px-3 py-2">
                         <span className="text-[12px] text-on-surface flex-1">{r[0]}</span>
-                        <span className={`font-label-caps text-[11px] shrink-0 ${String(r[1]).includes("−") ? "text-error" : "text-primary"}`}>{r[1]}</span>
+                        <span className={`text-xs font-medium tabular-nums shrink-0 ${String(r[1]).includes("−") ? "text-error" : "text-on-surface"}`}>{r[1]}</span>
                       </div>
                     ))}
                   </div>
@@ -120,7 +124,7 @@ function HelpModal({ entry, onClose }) {
 
           {entry.tips?.length > 0 && (
             <section className="rounded-lg bg-surface-container-high/60 border border-white/5 p-4">
-              <Caps className="text-outline text-[10px] mb-2 block tracking-[0.15em]">NA PRÁTICA</Caps>
+              <Caps className="text-outline mb-2 block">Na prática</Caps>
               <ul className="space-y-2">
                 {entry.tips.map((t, i) => (
                   <li key={i} className="flex gap-2">
@@ -136,7 +140,7 @@ function HelpModal({ entry, onClose }) {
           <details className="rounded-lg border border-white/10 group">
             <summary className="px-4 py-3 cursor-pointer flex items-center gap-2 list-none">
               <MI name="expand_more" className="text-outline text-lg transition-transform group-open:rotate-180" />
-              <Caps className="text-outline text-[10px] tracking-[0.15em]">{HELP_GLOBAL.label}</Caps>
+              <Caps className="text-outline">{sentence(HELP_GLOBAL.label)}</Caps>
             </summary>
             <div className="px-4 pb-4 space-y-2">
               {HELP_GLOBAL.body.map((t, i) => <RichText key={i} text={t} className="text-[12px] text-on-surface-variant" />)}
@@ -150,9 +154,9 @@ function HelpModal({ entry, onClose }) {
         <div className="p-6 pt-4 shrink-0 border-t border-white/5">
           <button
             onClick={onClose}
-            className="w-full py-2.5 rounded-lg border border-primary/40 text-primary hover:bg-primary/10 font-label-caps text-[11px] active:scale-95 transition"
+            className="w-full h-9 rounded-md border border-input text-on-surface hover:bg-surface-variant text-sm font-medium active:scale-[.98] transition"
           >
-            ENTENDI
+            Entendi
           </button>
         </div>
       </div>
@@ -172,7 +176,7 @@ export function HelpButton({ pathname, className = "" }) {
         onClick={() => setOpen(true)}
         aria-label={`Como usar: ${entry.title}`}
         title={`Como usar: ${entry.title}`}
-        className={`w-8 h-8 rounded-full grid place-items-center text-on-surface-variant/50 hover:text-primary hover:bg-surface-variant/50 transition ${className}`}
+        className={`size-8 rounded-md grid place-items-center text-on-surface-variant hover:text-on-surface hover:bg-surface-variant transition ${className}`}
       >
         <MI name="help" className="text-[18px]" />
       </button>
