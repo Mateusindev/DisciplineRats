@@ -31,7 +31,7 @@ Construído com **Next.js 15** (App Router) + **Supabase**. Instalável como app
 - **O rato** — o mascote do app aparece numa faixa no topo de cada aba comentando o dia (e na tela de sono, na cama). Sem gamificação: não há XP, nível, ranking nem loja.
 
 ### Desativadas
-Foco (Pomodoro), Agenda/Rotina, Exercício, Mapa, Dieta, Home, Carteira e Análise seguem no código, fora do menu e bloqueadas por URL (`TABS` em `lib/state.js` + `DISABLED_ROUTES` em `app/(app)/layout.js`).
+Foco (Pomodoro), Agenda/Rotina, Mapa, Dieta, Home, Carteira e Análise seguem no código, fora do menu e bloqueadas por URL (`TABS` em `lib/state.js` + `DISABLED_ROUTES` em `app/(app)/layout.js`).
 
 ## Stack
 

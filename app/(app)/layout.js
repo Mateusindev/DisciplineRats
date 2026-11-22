@@ -40,12 +40,12 @@ import { DEFAULT_MODE } from "@/lib/themes";
 // Rotas desativadas: fora do menu, mas acessíveis por URL — bloqueadas aqui.
 // /rotina entra junto com a Agenda: ela é só um redirect pra lá (ver rotina/page.js),
 // e sem isto o usuário veria o loader antes de bater na mesma parede.
-// /exercicio e /mapa saíram da navegação junto (dados intactos — ver TABS).
-const DISABLED_ROUTES = ["/dieta", "/foco", "/calendario", "/rotina", "/home", "/carteira", "/analise", "/exercicio", "/mapa"];
+// /mapa saiu da navegação junto (dados intactos — ver TABS).
+const DISABLED_ROUTES = ["/dieta", "/foco", "/calendario", "/rotina", "/home", "/carteira", "/analise", "/mapa"];
 
-// Rótulo curto pra barra de baixo do celular: 7 destinos em 360px não cabem
+// Rótulo curto pra barra de baixo do celular: 8 destinos em 360px não cabem
 // "Habit Tracker" inteiro sem quebrar a linha.
-const SHORT = { habitos: "Habits", sono: "Sleep", agua: "Water", diario: "Journal", leitura: "Reading", missoes: "Board" };
+const SHORT = { habitos: "Habits", sono: "Sleep", agua: "Water", exercicio: "Workout", diario: "Journal", leitura: "Reading", missoes: "Board" };
 
 function DisabledScreen() {
   return (
@@ -215,7 +215,7 @@ function Chrome({ children }) {
           borda, não pílula flutuante — mesma superfície do resto do chrome. */}
       <nav
         aria-label="Navegação"
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-7 border-t border-outline-variant bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-8 border-t border-outline-variant bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
       >
         {[...TABS.map((t) => ({ ...t, short: SHORT[t.id] || t.label })), { id: "perfil", short: "Perfil", icon: "account_circle", path: "/perfil" }].map((t) => {
           const active = pathname === t.path;
@@ -224,11 +224,11 @@ function Chrome({ children }) {
               key={t.id}
               href={t.path}
               aria-current={active ? "page" : undefined}
-              className={`flex h-16 min-w-0 flex-col items-center justify-center gap-1 text-[10.5px] font-medium transition-colors ${
+              className={`flex h-16 min-w-0 flex-col items-center justify-center gap-1 text-[10px] font-medium transition-colors ${
                 active ? "text-on-surface" : "text-outline hover:text-on-surface-variant"
               }`}
             >
-              <span className={`grid h-7 w-10 place-items-center rounded-full transition-colors ${active ? "bg-surface-variant" : ""}`}>
+              <span className={`grid h-7 w-9 place-items-center rounded-full transition-colors ${active ? "bg-surface-variant" : ""}`}>
                 <MI name={t.icon} fill={active} className="text-[20px]" />
               </span>
               {t.short}
