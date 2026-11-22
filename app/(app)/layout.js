@@ -45,7 +45,7 @@ const DISABLED_ROUTES = ["/dieta", "/foco", "/calendario", "/rotina", "/home", "
 
 // Rótulo curto pra barra de baixo do celular: 8 destinos em 360px não cabem
 // "Habit Tracker" inteiro sem quebrar a linha.
-const SHORT = { habitos: "Habits", sono: "Sleep", agua: "Water", exercicio: "Workout", diario: "Journal", leitura: "Reading", missoes: "Board" };
+const SHORT = { habitos: "Habits", sono: "Sleep", agua: "Water", exercicio: "Workout", diario: "Day", leitura: "Books", missoes: "Tasks" };
 
 function DisabledScreen() {
   return (
