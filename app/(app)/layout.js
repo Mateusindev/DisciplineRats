@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/sidebar";
 import { HelpButton } from "@/components/help";
 import BichoDaTela from "@/components/BichoDaTela";
-import { TABS, NAV_SECTIONS, HOME_ROUTE, gamify, fmtK } from "@/lib/state";
+import { TABS, NAV_SECTIONS, HOME_ROUTE } from "@/lib/state";
 import { hasSupabase } from "@/lib/persistence";
 import { DEFAULT_MODE } from "@/lib/themes";
 
@@ -41,11 +41,11 @@ import { DEFAULT_MODE } from "@/lib/themes";
 // /rotina entra junto com a Agenda: ela é só um redirect pra lá (ver rotina/page.js),
 // e sem isto o usuário veria o loader antes de bater na mesma parede.
 // /exercicio e /mapa saíram da navegação junto (dados intactos — ver TABS).
-const DISABLED_ROUTES = ["/dieta", "/foco", "/calendario", "/missoes", "/rotina", "/home", "/carteira", "/analise", "/grupos", "/exercicio", "/mapa"];
+const DISABLED_ROUTES = ["/dieta", "/foco", "/calendario", "/rotina", "/home", "/carteira", "/analise", "/exercicio", "/mapa"];
 
-// Rótulo curto pra barra de baixo do celular: 5 destinos em 360px não cabem
+// Rótulo curto pra barra de baixo do celular: 7 destinos em 360px não cabem
 // "Habit Tracker" inteiro sem quebrar a linha.
-const SHORT = { habitos: "Habits", sono: "Sleep", diario: "Journal", leitura: "Reading" };
+const SHORT = { habitos: "Habits", sono: "Sleep", agua: "Water", diario: "Journal", leitura: "Reading", missoes: "Board" };
 
 function DisabledScreen() {
   return (
@@ -70,7 +70,7 @@ function Brand() {
   );
 }
 
-function NavSidebar({ pathname, g, mode, toggleMode, onLogout }) {
+function NavSidebar({ pathname, mode, toggleMode, onLogout }) {
   const { isMobile, setOpenMobile } = useSidebar();
   const close = () => isMobile && setOpenMobile(false);
   return (
@@ -105,16 +105,6 @@ function NavSidebar({ pathname, g, mode, toggleMode, onLogout }) {
       </SidebarContent>
 
       <SidebarFooter className="gap-3 p-3 group-data-[collapsible=icon]:p-2">
-        {/* nível em uma linha: o tier e a barra completa estão no Perfil */}
-        <div className="px-1 group-data-[collapsible=icon]:hidden">
-          <div className="flex items-baseline justify-between text-xs">
-            <span className="font-medium text-on-surface">Nível {g.level}</span>
-            <span className="tabular text-outline">{fmtK(g.xp)} XP</span>
-          </div>
-          <div className="mt-1.5 h-1 rounded-full bg-surface-variant overflow-hidden">
-            <div className="h-full rounded-full bg-primary-container transition-all" style={{ width: `${g.pct}%` }} />
-          </div>
-        </div>
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
@@ -123,19 +113,13 @@ function NavSidebar({ pathname, g, mode, toggleMode, onLogout }) {
                   <span className="grid size-8 shrink-0 place-items-center rounded-md bg-surface-variant text-on-surface">
                     <MI name="person" className="text-[18px]" />
                   </span>
-                  <span className="grid flex-1 text-left leading-tight">
-                    <span className="truncate text-sm font-medium text-on-surface">Minha conta</span>
-                    <span className="truncate text-xs text-outline">{g.tier}</span>
-                  </span>
+                  <span className="truncate flex-1 text-left text-sm font-medium text-on-surface">Minha conta</span>
                   <MI name="unfold_more" className="text-[18px] text-outline" />
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent side={isMobile ? "bottom" : "right"} align="end" sideOffset={8} className="w-56">
                 <DropdownMenuItem asChild>
                   <Link href="/perfil" onClick={close}><MI name="account_circle" className="text-[18px]" /> Perfil</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/perfil#mascote" onClick={close}><MI name="pets" className="text-[18px]" /> Meu mascote</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={toggleMode}>
                   <MI name={mode === "light" ? "dark_mode" : "light_mode"} className="text-[18px]" />
@@ -172,7 +156,6 @@ function Chrome({ children }) {
     );
   }
 
-  const g = gamify(state.stats);
   const mode = state.settings.mode || DEFAULT_MODE;
   const toggleMode = () => setSetting("mode", mode === "light" ? "dark" : "light");
   // Recolher a sidebar é preferência, não estado de tela: mora em settings pra
@@ -184,7 +167,7 @@ function Chrome({ children }) {
 
   return (
     <SidebarProvider open={open} onOpenChange={(o) => setSetting("sidebarCollapsed", !o)}>
-      <NavSidebar pathname={pathname} g={g} mode={mode} toggleMode={toggleMode} onLogout={handleLogout} />
+      <NavSidebar pathname={pathname} mode={mode} toggleMode={toggleMode} onLogout={handleLogout} />
 
       <SidebarInset className="min-w-0 bg-background">
         {/* Barra do topo: onde estou + ações de canto. No celular a marca entra no
@@ -196,18 +179,6 @@ function Chrome({ children }) {
           <span className="truncate text-sm font-medium text-on-surface">{title}</span>
           <div className="ml-auto flex items-center gap-0.5">
             <HelpButton pathname={pathname} />
-            {/* O mascote mora no perfil, que é fundo de menu — sem um atalho ninguém
-                passa por lá pra ver o bicho crescer. Aponta pra âncora da seção. */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button asChild variant="ghost" size="icon-sm" className={pathname === "/perfil" ? "text-on-surface" : "text-on-surface-variant"}>
-                  <Link href="/perfil#mascote" aria-label="Ver meu mascote">
-                    <MI name="pets" className="text-[18px]" fill={pathname === "/perfil"} />
-                  </Link>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Meu mascote</TooltipContent>
-            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -240,11 +211,11 @@ function Chrome({ children }) {
         </main>
       </SidebarInset>
 
-      {/* Barra de baixo (celular): os quatro registros + Perfil. Barra lisa presa à
+      {/* Barra de baixo (celular): as abas + Perfil. Barra lisa presa à
           borda, não pílula flutuante — mesma superfície do resto do chrome. */}
       <nav
         aria-label="Navegação"
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-outline-variant bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-7 border-t border-outline-variant bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
       >
         {[...TABS.map((t) => ({ ...t, short: SHORT[t.id] || t.label })), { id: "perfil", short: "Perfil", icon: "account_circle", path: "/perfil" }].map((t) => {
           const active = pathname === t.path;
@@ -253,11 +224,11 @@ function Chrome({ children }) {
               key={t.id}
               href={t.path}
               aria-current={active ? "page" : undefined}
-              className={`flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${
+              className={`flex h-16 min-w-0 flex-col items-center justify-center gap-1 text-[10.5px] font-medium transition-colors ${
                 active ? "text-on-surface" : "text-outline hover:text-on-surface-variant"
               }`}
             >
-              <span className={`grid h-7 w-12 place-items-center rounded-full transition-colors ${active ? "bg-surface-variant" : ""}`}>
+              <span className={`grid h-7 w-10 place-items-center rounded-full transition-colors ${active ? "bg-surface-variant" : ""}`}>
                 <MI name={t.icon} fill={active} className="text-[20px]" />
               </span>
               {t.short}

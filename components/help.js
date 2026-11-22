@@ -72,7 +72,6 @@ function HelpModal({ entry, onClose }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const xp = entry.xp;
   return createPortal(
     <div
       className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/50 animate-[fadeIn_.1s_ease-out]"
@@ -101,27 +100,6 @@ function HelpModal({ entry, onClose }) {
         <div className="p-6 pt-5 space-y-6 overflow-y-auto ff-scroll overscroll-contain">
           {entry.sections.map((s) => <Section key={s.label} {...s} />)}
 
-          {xp && (
-            <section>
-              <Caps className="text-on-surface mb-2 block">
-                {xp.none ? "Esta página não tem XP" : "XP desta página"}
-              </Caps>
-              <div className="space-y-2">
-                {xp.rows && (
-                  <div className="rounded-lg border border-white/10 divide-y divide-white/5 overflow-hidden">
-                    {xp.rows.map((r) => (
-                      <div key={r[0]} className="flex items-center gap-3 px-3 py-2">
-                        <span className="text-[12px] text-on-surface flex-1">{r[0]}</span>
-                        <span className={`text-xs font-medium tabular-nums shrink-0 ${String(r[1]).includes("−") ? "text-error" : "text-on-surface"}`}>{r[1]}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {xp.note && <RichText text={xp.note} className="text-[12px] text-on-surface-variant" />}
-              </div>
-            </section>
-          )}
-
           {entry.tips?.length > 0 && (
             <section className="rounded-lg bg-surface-container-high/60 border border-white/5 p-4">
               <Caps className="text-outline mb-2 block">Na prática</Caps>
@@ -144,9 +122,6 @@ function HelpModal({ entry, onClose }) {
             </summary>
             <div className="px-4 pb-4 space-y-2">
               {HELP_GLOBAL.body.map((t, i) => <RichText key={i} text={t} className="text-[12px] text-on-surface-variant" />)}
-              <div className="pt-1">
-                <Table table={HELP_GLOBAL.table} />
-              </div>
             </div>
           </details>
         </div>

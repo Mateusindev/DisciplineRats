@@ -22,7 +22,6 @@ import {
   habitStepsBlock,
   habitStepProgress,
   getDateStr,
-  XP,
 } from "@/lib/state";
 
 const ds = (d) => format(d, "yyyy-MM-dd");
@@ -157,7 +156,7 @@ function RoutineModal({ items, habits, onEdit, onRemove, onClose }) {
           <button onClick={onClose} aria-label="Fechar" className="text-outline hover:text-on-surface transition p-1"><MI name="close" /></button>
         </div>
         <p className="text-[12px] text-outline mb-4">
-          O esqueleto do dia. Cada item marcado vale {XP.routineItem} XP e fechar todos os do dia dá {XP.routineAll} de bônus — sem multa por errar um dia.
+          O esqueleto do dia — sem multa por errar um dia.
         </p>
 
         {items.length === 0 ? (
@@ -299,7 +298,7 @@ export default function CalendarioPage() {
   function saveForm() {
     if (!form.title.trim()) return;
 
-    // ROTINA: outra lista, outras regras (marcável, dá XP, sem categoria e sem
+    // ROTINA: outra lista, outras regras (marcável, sem categoria e sem
     // nota). O formulário é o mesmo porque, pra quem usa, é tudo "o que eu faço".
     if (form.kind === "routine") {
       const weekdays = [...new Set(form.weekdays || [])].sort((a, b) => a - b);
@@ -405,7 +404,7 @@ export default function CalendarioPage() {
 
   return (
     <>
-      <PageHeader title="AGENDA" subtitle="A semana com hora à vista, e abaixo o dia que você escolher. Sem XP, sem cobrança — só planejamento." />
+      <PageHeader title="AGENDA" subtitle="A semana com hora à vista, e abaixo o dia que você escolher. Sem cobrança — só planejamento." />
 
       <div className="glass-card p-3 rounded-xl mb-gutter flex items-center justify-end gap-2 flex-wrap">
         {/* lembrete entra aqui, na ponta esquerda: um botão a mais numa barra que já
@@ -499,7 +498,7 @@ function CatLegend() {
 const FORM_KINDS = [
   { id: "once", label: "UMA VEZ", icon: "event", hint: "Acontece numa data só." },
   { id: "weekly", label: "TODA SEMANA", icon: "repeat", hint: "Vale pra sempre nos dias escolhidos. Editar muda todas as semanas." },
-  { id: "routine", label: "ROTINA", icon: "checklist", hint: "O esqueleto do dia: marcável, dá XP e não tem multa por errar um dia." },
+  { id: "routine", label: "ROTINA", icon: "checklist", hint: "O esqueleto do dia: marcável e sem multa por errar um dia." },
 ];
 
 function EventModal({ form, setForm, habits, onSave, onDelete, onSkip, onClose }) {
@@ -654,8 +653,8 @@ function EventModal({ form, setForm, habits, onSave, onDelete, onSkip, onClose }
             </>
           )}
 
-          {/* vínculo com hábito: só rotina tem. Marcar o item marca o hábito, e o
-              XP que entra é o dele — nunca os dois pelo mesmo ato. */}
+          {/* vínculo com hábito: só rotina tem. Marcar o item marca o hábito —
+              nunca os dois registros pelo mesmo ato. */}
           {isRoutine && (
             <div>
               <Caps className="text-outline text-[10px] mb-1.5 block">VINCULAR A UM HÁBITO (OPCIONAL)</Caps>
@@ -672,7 +671,7 @@ function EventModal({ form, setForm, habits, onSave, onDelete, onSkip, onClose }
                   </option>
                 ))}
               </select>
-              <p className="text-[11px] text-outline mt-1.5">Marcar aqui marca o hábito, e o XP que entra é o dele — não os dois.</p>
+              <p className="text-[11px] text-outline mt-1.5">Marcar aqui marca o hábito — não os dois.</p>
             </div>
           )}
 

@@ -5,8 +5,6 @@ import { createPortal } from "react-dom";
 import { useApp } from "../AppContext";
 import { MI, Caps, StarRating, Select, inputCls } from "@/components/ui";
 import {
-  XP,
-  award,
   getDateStr,
   shiftDate,
   weekdayShort,
@@ -771,28 +769,24 @@ export default function ExercicioPage() {
     }
     const durationMin = Math.min(300, Math.max(5, Math.round(n)));
     setState((prev) => {
-      const xpGain = award(XP.exercise, prev.stats.streak); // grava no log p/ estorno simétrico ao excluir
-      const log = { id: crypto.randomUUID(), date: sessionDate, type, division: effectiveDivision, durationMin, intensity, note: note.slice(0, 200), xp: xpGain };
+      const log = { id: crypto.randomUUID(), date: sessionDate, type, division: effectiveDivision, durationMin, intensity, note: note.slice(0, 200) };
       return {
         ...prev,
         exerciseLogs: [log, ...prev.exerciseLogs].slice(0, 200),
-        stats: { ...prev.stats, xp: (prev.stats.xp || 0) + xpGain },
       };
     });
     setNote("");
     const label = effectiveDivision ? `${type} · ${effectiveDivision}` : type;
     const when = isRetro ? ` · ${ddmm(sessionDate)}` : "";
-    toast("Treino registrado", { sub: `${label.toUpperCase()}${when} · ${durationMin} MIN · +${XP.exercise} XP`, icon: "fitness_center" });
+    toast("Treino registrado", { sub: `${label.toUpperCase()}${when} · ${durationMin} MIN`, icon: "fitness_center" });
     if (isRetro) setSessionDate(today); // evita segunda sessão acidental na data velha
   }
   async function removeLog(id) {
-    const log = state.exerciseLogs.find((l) => l.id === id);
-    const ok = await confirm({ title: "Remover treino?", body: log?.xp ? `Devolve ${log.xp} XP ganho nesse treino.` : "", confirmLabel: "REMOVER" });
+    const ok = await confirm({ title: "Remover treino?", confirmLabel: "REMOVER" });
     if (!ok) return;
     setState((prev) => ({
       ...prev,
       exerciseLogs: prev.exerciseLogs.filter((l) => l.id !== id),
-      stats: { ...prev.stats, xp: Math.max(0, (prev.stats.xp || 0) - (log?.xp || 0)) },
     }));
   }
   // ===== ciclo e histórico de fichas =====

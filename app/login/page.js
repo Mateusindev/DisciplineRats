@@ -63,7 +63,7 @@ export default function LoginPage() {
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-on-surface">Discipline Rats</h1>
             <p className="mt-1 text-sm text-on-surface-variant">
-              {mode === "signin" ? "Entre pra manter a disciplina." : "Crie sua conta e comece a forjar XP."}
+              {mode === "signin" ? "Entre pra manter a disciplina." : "Crie sua conta e comece a construir hábitos."}
             </p>
           </div>
         </div>

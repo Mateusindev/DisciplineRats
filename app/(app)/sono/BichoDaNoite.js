@@ -15,22 +15,14 @@
 // horário), cochila (no horário, mas curto) ou fica acordado (deitou tarde), que é o
 // único caso em que o bicho não dorme, de propósito.
 //
-// É o mesmo bicho do perfil: espécie, pelagem, degrau de crescimento e acessórios
-// comprados vêm do estado, porque o desenho vem de `components/PetArt.js`.
+// É o mesmo rato da faixa das outras telas — o desenho vem de `components/PetArt.js`.
 // ============================================================================
 
-import Link from "next/link";
 import { MI } from "@/components/ui";
 import { Bicho } from "@/components/PetArt";
-import { petCoat, petGrowth, defaultPet, bedtimeLateness, minutesToHm } from "@/lib/state";
+import { bedtimeLateness, minutesToHm } from "@/lib/state";
 
-export default function BichoDaNoite({ state, bedtime, wake, durationMin, goalMin, limit, quality }) {
-  const pet = state.pet || defaultPet();
-  const stage = petGrowth(state.stats).cur;
-  // 0,7 do tamanho do cercado: a proporção (headScale) fica intacta, então o
-  // filhote continua de cabeça grande — encolher por `size` é o que preserva isso.
-  const mini = { ...stage, size: Math.round(stage.size * 0.7) };
-  const name = (pet.name || "").trim();
+export default function BichoDaNoite({ bedtime, wake, durationMin, goalMin, limit, quality }) {
 
   const onTime = bedtimeLateness(bedtime, limit) <= 0;
   const hitsGoal = durationMin >= goalMin;
@@ -49,7 +41,7 @@ export default function BichoDaNoite({ state, bedtime, wake, durationMin, goalMi
       <div className="relative grid h-[92px] w-[112px] shrink-0 place-items-end justify-center rounded-lg bg-surface-container-high pb-3">
         <span className="absolute inset-x-3 bottom-[10px] h-px bg-outline-variant" />
         <div className="relative">
-          <Bicho stage={mini} coat={petCoat(pet.coat)} act={act} gear={pet.gear || {}} species={pet.species} />
+          <Bicho size={56} act={act} />
           {Array.from({ length: zzz }, (_, i) => (
             <span
               key={i}
@@ -64,7 +56,7 @@ export default function BichoDaNoite({ state, bedtime, wake, durationMin, goalMi
       </div>
 
       <div className="min-w-0 flex-1 space-y-2">
-        <div className="text-xs text-outline">{name ? `${name} diz` : "Sua noite"}</div>
+        <div className="text-xs text-outline">O rato diz</div>
 
         <div className={`flex items-center gap-1.5 text-sm font-medium ${mood.bad ? "text-error" : "text-on-surface"}`}>
           <MI name={mood.icon} className={`shrink-0 text-[18px] ${mood.bad ? "text-error" : "text-on-surface-variant"}`} />
@@ -89,13 +81,6 @@ export default function BichoDaNoite({ state, bedtime, wake, durationMin, goalMi
         </div>
       </div>
 
-      <Link
-        href="/perfil#mascote"
-        className="grid size-8 shrink-0 place-items-center self-start rounded-md text-outline transition-colors hover:bg-surface-variant hover:text-on-surface focus-visible:ring-[3px] focus-visible:ring-ring/50 outline-none"
-        aria-label="Ver o mascote no perfil"
-      >
-        <MI name="open_in_new" className="text-[16px]" />
-      </Link>
     </div>
   );
 }

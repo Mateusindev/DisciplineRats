@@ -7,7 +7,7 @@
 import Link from "next/link";
 import { useApp } from "../AppContext";
 import { MI, Caps, StatTile, Stepper } from "@/components/ui";
-import { focusXp, formatTime, getDateStr, pendingCards, toggleBoardCardState } from "@/lib/state";
+import { formatTime, getDateStr, pendingCards, toggleBoardCardState } from "@/lib/state";
 
 const PRI = {
   1: { label: "BAIXA", dot: "bg-outline" },
@@ -95,8 +95,6 @@ export default function FocoPage() {
                   </button>
                 )}
               </div>
-
-              <p className="text-outline text-[12px] mt-6">Sessão concluída rende +{focusXp(state.settings.focusMin)} XP</p>
             </div>
           </div>
         </div>
@@ -155,7 +153,7 @@ export default function FocoPage() {
                   })}
                 </div>
                 <p className="text-[11px] text-outline mt-3 pt-3 border-t border-white/5">
-                  Marcar aqui move o card no quadro, igual em Missões. Sem XP — card é livre de criar e de concluir.
+                  Marcar aqui move o card no quadro, igual em Missões.
                 </p>
               </>
             )}
@@ -167,7 +165,6 @@ export default function FocoPage() {
               <Stepper label="Foco (min)" value={state.settings.focusMin} onDec={() => updateSetting("focusMin", -5, 5, 90)} onInc={() => updateSetting("focusMin", 5, 5, 90)} />
               <Stepper label="Pausa (min)" value={state.settings.breakMin} onDec={() => updateSetting("breakMin", -1, 1, 30)} onInc={() => updateSetting("breakMin", 1, 1, 30)} />
             </div>
-            <p className="text-[11px] text-outline mt-3">O XP da sessão escala com a duração: 50 XP a cada 25 min.</p>
           </div>
         </div>
       </div>

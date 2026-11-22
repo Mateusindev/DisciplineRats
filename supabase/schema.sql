@@ -75,6 +75,17 @@ create table if not exists public.sleep_logs (
 alter table public.sleep_logs add column if not exists xp integer not null default 0;
 alter table public.sleep_logs add column if not exists late_reason text;
 
+-- Água: um registro por dia. `entries` = [{ id, ml, time }] (time em ms epoch);
+-- `goal` é a meta vigente naquele dia, pra semana não mudar de cor quando a meta mudar.
+create table if not exists public.water_logs (
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  date       date not null,
+  goal       integer not null default 2000,
+  entries    jsonb   not null default '[]'::jsonb,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, date)
+);
+
 -- Humor foi removido do app. A tabela não é mais criada nem lida.
 -- Se o seu banco já tem mood_logs e você quer se livrar dos dados, rode à mão:
 --   drop table if exists public.mood_logs;
@@ -231,6 +242,7 @@ alter table public.habit_checks enable row level security;
 alter table public.gym_sets     enable row level security;
 alter table public.routine_checks enable row level security;
 alter table public.weight_logs   enable row level security;
+alter table public.water_logs    enable row level security;
 
 -- profiles: cada um só mexe no próprio.
 drop policy if exists "own profile select" on public.profiles;
@@ -304,7 +316,7 @@ alter table public.pet_payments enable row level security;
 do $$
 declare t text;
 begin
-  foreach t in array array['sleep_logs','focus_days','exercise_logs','habits','habit_checks','gym_sets','routine_checks','transactions','weight_logs','canvas_pages']
+  foreach t in array array['sleep_logs','focus_days','exercise_logs','habits','habit_checks','gym_sets','routine_checks','transactions','weight_logs','canvas_pages','water_logs']
   loop
     execute format('drop policy if exists "own rows select" on public.%I', t);
     execute format('create policy "own rows select" on public.%I for select using (auth.uid() = user_id)', t);

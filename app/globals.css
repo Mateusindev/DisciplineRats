@@ -418,3 +418,46 @@ input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(0.7); }
 @media (prefers-reduced-motion: reduce) {
   .habit-pop { animation: none; }
 }
+
+/* ---------- Água (/agua): o copo ----------
+   A água é DADO, então vai no único acento (primary-container). O vidro é neutro
+   (tokens de superfície/contorno). `--level` (posição Y da superfície, em unidades
+   do viewBox) é definido pela página; a transição é o que faz o copo "encher". */
+.water-level { transform: translateY(var(--level, 384px)); transition: transform 1.5s cubic-bezier(0.3, 0.9, 0.3, 1); }
+.water-stop-top { stop-color: var(--color-primary-container); stop-opacity: 0.55; }
+.water-stop-bottom { stop-color: var(--color-primary-container); stop-opacity: 1; }
+.water-wave { fill: url(#waterFill); }
+.water-wave-back { opacity: 0.5; animation: water-drift 9s linear infinite reverse; }
+.water-wave-front { animation: water-drift 6s linear infinite; }
+.water-surface { transform-box: fill-box; transform-origin: 50% 0%; }
+.water-surface.is-splashing { animation: water-splash 1.6s cubic-bezier(0.22, 1, 0.36, 1); }
+.water-bubbles circle { fill: #fff; fill-opacity: 0.7; }
+.water-shimmer { opacity: 0; transform: skewX(-14deg); }
+.water-shimmer.is-running { animation: water-shimmer 1.8s 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+.glass-body { fill: var(--color-surface-container-high); fill-opacity: 0.5; }
+.glass-outline { fill: none; stroke: var(--color-outline); stroke-opacity: 0.55; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.glass-hl { fill: none; stroke: #fff; stroke-width: 7; stroke-linecap: round; opacity: 0.08; }
+.glass-hl-thin { stroke-width: 2.5; opacity: 0.06; }
+html.light .glass-hl { opacity: 0.7; }
+html.light .glass-hl-thin { opacity: 0.5; }
+.glass-ticks line { stroke: var(--color-outline-variant); stroke-width: 1.5; stroke-linecap: round; }
+.water-pace line { stroke: var(--color-on-surface); stroke-opacity: 0.42; stroke-width: 1.5; stroke-dasharray: 2 6; stroke-linecap: round; }
+.water-pace text { fill: var(--color-outline); font-size: 11px; font-weight: 500; dominant-baseline: middle; }
+.water-bump { animation: water-bump 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+.water-press { animation: water-press 0.35s cubic-bezier(0.22, 1, 0.36, 1); }
+@keyframes water-drift { to { transform: translateX(-300px); } }
+@keyframes water-splash {
+  0% { transform: scaleY(1); } 18% { transform: scaleY(2.6); }
+  45% { transform: scaleY(0.6); } 70% { transform: scaleY(1.4); } 100% { transform: scaleY(1); }
+}
+@keyframes water-shimmer {
+  0% { opacity: 0; transform: translateX(0) skewX(-14deg); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(520px) skewX(-14deg); }
+}
+@keyframes water-bump { 0% { transform: translateY(0); } 35% { transform: translateY(-5px); } 100% { transform: translateY(0); } }
+@keyframes water-press { 40% { transform: scale(0.95); } }
+@media (prefers-reduced-motion: reduce) {
+  .water-level { transition: none; }
+  .water-wave-back, .water-wave-front, .water-surface.is-splashing, .water-shimmer.is-running, .water-bump, .water-press { animation: none; }
+}

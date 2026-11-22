@@ -282,7 +282,7 @@ function CloseSession({ r }) {
 }
 
 // Folga justificada do dia: doença, lesão, descanso planejado, imprevisto.
-// Marcar abate a meta semanal e mantém a sequência geral — não vale XP e não conta
+// Marcar abate a meta semanal e mantém a sequência geral — não conta
 // como treino, porque o que se remove é a punição, não o esforço que não houve.
 function RestDayControl({ r }) {
   const [open, setOpen] = useState(false);
@@ -337,7 +337,7 @@ function RestDayControl({ r }) {
             </button>
           </div>
           <p className="text-[11px] text-outline">
-            Abate 1 treino da meta da semana e conta como dia ativo pra sequência. Não dá XP e não entra como treino.
+            Abate 1 treino da meta da semana e conta como dia ativo pra sequência. Não entra como treino.
           </p>
         </div>
       )}

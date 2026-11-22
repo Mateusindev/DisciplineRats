@@ -1,1 +1,0 @@
-../mp-webhook/README.md

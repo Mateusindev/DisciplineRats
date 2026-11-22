@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useApp } from "../AppContext";
 import { MI, Caps, StatTile } from "@/components/ui";
-import { gamify, fmtK, getDateStr, toggleHabitState, habitPriority, habitStreak, habitIsScheduled, bookPct, mapaFocus, pendingCards } from "@/lib/state";
+import { getDateStr, toggleHabitState, habitStreak, habitIsScheduled, bookPct, mapaFocus, pendingCards } from "@/lib/state";
 
 function greeting() {
   const h = new Date().getHours();
@@ -54,7 +54,6 @@ function WoDashboard({ workouts }) {
 
 export default function HomePage() {
   const { state, setState, myName } = useApp();
-  const g = gamify(state.stats);
   const today = getDateStr(0);
   const todayIdx = (new Date().getDay() + 6) % 7; // 0=Seg … 6=Dom (casa com weekStartOf)
   const FULL_DATE = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
@@ -101,27 +100,14 @@ export default function HomePage() {
       </div>
 
       {/* resumo */}
-      <section className="grid grid-cols-3 gap-card-gap mb-6">
+      <section className="grid grid-cols-2 gap-card-gap mb-12">
         <StatTile label="SEQUÊNCIA" value={state.stats.streak}>
           <MI name="local_fire_department" fill className="flame-active text-2xl" />
         </StatTile>
-        <StatTile label="NÍVEL" value={g.level}>
-          <span className="text-on-surface-variant font-label-caps text-[10px]">{g.tier}</span>
-        </StatTile>
-        <StatTile label="XP TOTAL" value={fmtK(g.xp)}>
+        <StatTile label="MELHOR SEQUÊNCIA" value={state.stats.bestStreak || 0}>
           <MI name="military_tech" className="text-primary-container" />
         </StatTile>
       </section>
-
-      <div className="glass-card p-6 rounded-xl mb-12">
-        <div className="w-full bg-surface-variant h-1.5 rounded-full">
-          <div className="bg-primary-container h-full rounded-full transition-all" style={{ width: `${g.pct}%` }} />
-        </div>
-        <div className="flex justify-between text-[10px] font-label-caps text-outline mt-1.5">
-          <span>NÍVEL {g.level}</span>
-          <span>FALTAM {fmtK(g.toNext)} XP</span>
-        </div>
-      </div>
 
       {/* foco do trimestre (nó fixado no Mapa) — item de maior altitude da página */}
       {focus && (
@@ -236,7 +222,6 @@ export default function HomePage() {
             {habits.map((h) => {
               const done = (h.doneDates || []).includes(today);
               const streak = habitStreak(h);
-              const noXp = (h.kind || "build") === "weekly" && h.direction === "max";
               return (
                 <button
                   key={h.id}
@@ -258,7 +243,6 @@ export default function HomePage() {
                   <div className="flex items-center gap-1 text-outline font-label-caps text-[9px]">
                     <MI name="local_fire_department" className={`text-xs ${streak > 0 ? "text-primary-container" : ""}`} />
                     {streak}D
-                    {!noXp && <span className="ml-auto">+{habitPriority(h).xp} XP</span>}
                   </div>
                 </button>
               );

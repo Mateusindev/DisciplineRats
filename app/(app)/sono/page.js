@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import MetasEditor from "@/components/MetasEditor";
-import { sleepXp, sleepMissXp, computeSleepXp, bedtimeLateness, SLEEP_LIMIT_DEFAULT, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX, award, getDateStr, shiftDate, minutesToHm, weekdayShort, last7Dates } from "@/lib/state";
+import { bedtimeLateness, SLEEP_LIMIT_DEFAULT, SLEEP_GOAL_MIN, SLEEP_GOAL_MAX, getDateStr, shiftDate, minutesToHm, weekdayShort, last7Dates } from "@/lib/state";
 import { LineChart } from "@/components/charts";
 import BichoDaNoite from "./BichoDaNoite";
 
@@ -82,8 +82,7 @@ export default function SonoPage() {
   const lateMin = bedtimeLateness(bedtime, limit); // >0 = deitou tarde
   const onTime = lateMin <= 0;
   const needsReason = lateMin > 0 && !lateReason.trim(); // deitou tarde exige justificativa
-  // XP líquido previsto p/ o registro atual (assinado): combina duração + horário
-  const previewNet = computeSleepXp({ durationMin, bedtime, goalMin, limit, streak: state.stats.streak });
+  const goodNight = hitsGoal && onTime;
 
   function save() {
     if (needsReason) {
@@ -91,13 +90,6 @@ export default function SonoPage() {
       return;
     }
     setState((prev) => {
-      const prevEntry = prev.sleep[date];
-      // net anterior (assinado): prêmio − penalidade; fallback p/ entradas legadas
-      const prevNet =
-        (prevEntry?.awardedXp || 0) - (prevEntry?.penaltyXp || 0) ||
-        (prevEntry?.xpAwarded ? award(sleepXp(goalMin), prev.stats.streak) : 0);
-      const net = computeSleepXp({ durationMin, bedtime, goalMin, limit, streak: prev.stats.streak });
-      const xp = Math.max(0, (prev.stats.xp || 0) + (net - prevNet)); // aplica só o delta (estorno simétrico)
       const entry = {
         bedtime,
         wake,
@@ -105,17 +97,14 @@ export default function SonoPage() {
         quality,
         note: note.slice(0, 200),
         lateReason: lateMin > 0 ? lateReason.slice(0, 200) : "",
-        awardedXp: net > 0 ? net : 0,
-        penaltyXp: net < 0 ? -net : 0,
       };
-      return { ...prev, sleep: { ...prev.sleep, [date]: entry }, stats: { ...prev.stats, xp } };
+      return { ...prev, sleep: { ...prev.sleep, [date]: entry } };
     });
-    const sign = previewNet >= 0 ? "+" : "−";
     const reason = !hitsGoal ? "Abaixo da meta" : onTime ? "Meta batida · cedo" : "Meta batida · deitou tarde";
     toast(isToday ? "Sono salvo" : `Sono de ${ddmm(date)} salvo`, {
-      sub: `${reason} · ${sign}${Math.abs(previewNet)} XP`,
-      icon: previewNet >= 0 ? "check_circle" : "warning",
-      type: previewNet >= 0 ? undefined : "error",
+      sub: reason,
+      icon: goodNight ? "check_circle" : "warning",
+      type: goodNight ? undefined : "error",
     });
   }
 
@@ -139,7 +128,6 @@ export default function SonoPage() {
 
   const card = "rounded-xl border border-outline-variant bg-surface-container";
   const lateTxt = `${Math.floor(lateMin / 60)}h${String(lateMin % 60).padStart(2, "0")}`;
-  const xpTxt = `${previewNet >= 0 ? "+" : "−"}${Math.abs(previewNet)} XP`;
 
   return (
     <>
@@ -152,11 +140,7 @@ export default function SonoPage() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
               <h2 className="text-base font-semibold text-on-surface">Sono de {dayLabel}</h2>
-              <p className="mt-1 text-sm text-on-surface-variant">
-                Este registro:{" "}
-                <span className={`font-medium tabular-nums ${previewNet >= 0 ? "text-on-surface" : "text-error"}`}>{xpTxt}</span>
-              </p>
-              <p className="mt-0.5 text-xs text-outline tabular-nums">Deitar até {limit} rende XP cheio</p>
+              <p className="mt-1 text-xs text-outline tabular-nums">Meta: deitar até {limit}</p>
             </div>
 
             {/* Seletor da noite. Fica no cabeçalho do formulário, não escondido num
@@ -224,7 +208,7 @@ export default function SonoPage() {
               {/* duração vs meta */}
               <Badge variant="outline" className={`whitespace-normal tabular-nums ${hitsGoal ? "text-on-surface-variant" : "border-error/40 text-error"}`}>
                 <MI name={hitsGoal ? "check_circle" : "warning"} className="text-[14px]" />
-                Meta {minutesToHm(goalMin)} · {hitsGoal ? "bateu a meta" : `abaixo da meta (−${sleepMissXp(goalMin)} XP)`}
+                Meta {minutesToHm(goalMin)} · {hitsGoal ? "bateu a meta" : "abaixo da meta"}
               </Badge>
             </div>
           </div>
@@ -294,7 +278,6 @@ export default function SonoPage() {
         <div className="flex flex-col gap-6 lg:col-span-5">
           {/* o mascote deitado: a mesma noite dos números ao lado, virada em cena */}
           <BichoDaNoite
-            state={state}
             bedtime={bedtime}
             wake={wake}
             durationMin={durationMin}

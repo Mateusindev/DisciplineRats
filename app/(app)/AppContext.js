@@ -3,22 +3,21 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { getSession, loadUserState, syncUserState, updateUsername, fetchLeaderboard, signOut, hasSupabase, savePushSubscription, deletePushSubscription, syncAgendaReminders, fetchEntitlements } from "@/lib/persistence";
+import { getSession, loadUserState, syncUserState, updateUsername, signOut, hasSupabase, savePushSubscription, deletePushSubscription, syncAgendaReminders } from "@/lib/persistence";
 import {
   defaultState,
   mergeWithDefaults,
   getDateStr,
-  XP,
-  XP_DAILY_CAP,
-  award,
-  focusXp,
   formatTime,
   playChime,
   playAlarm,
-  computeExercisePenalty,
-  computeHabitDailyPenalty,
   computeActivityStreak,
   agendaReminders,
+  waterEntries,
+  waterTotal,
+  waterGoal,
+  WATER_DAY_START_H,
+  WATER_DAY_END_H,
   HOME_ROUTE,
   TABS,
 } from "@/lib/state";
@@ -104,7 +103,7 @@ function ConfirmDialog() {
 
 // Foco desativado (fora de TABS): o cronômetro não pode sobreviver nem como widget
 // nem como sessão restaurada — um snapshot salvo antes de desativar mostraria o
-// botão de start e, se rodasse, pagaria XP de foco que o teto diário já não conta.
+// botão de start de uma seção que não existe mais na navegação.
 const FOCO_ON = TABS.some((t) => t.id === "foco");
 
 function TimerWidget() {
@@ -163,7 +162,6 @@ export function AppProvider({ children }) {
   const [state, setState] = useState(defaultState());
   const [saveError, setSaveError] = useState(false);
   const [myName, setMyName] = useState("");
-  const [board, setBoard] = useState([]);
   const [toasts, setToasts] = useState([]);
   const [confirmState, setConfirmState] = useState(null); // { title, body, confirmLabel, danger, resolve }
   const lastSavedRef = useRef(null); // baseline p/ diff-sync
@@ -191,7 +189,6 @@ export function AppProvider({ children }) {
   const stateRef = useRef(state);
   stateRef.current = state;
   const userIdRef = useRef(null);
-  const xpCapDayRef = useRef(null); // dia em que já avisamos do teto — 1 aviso, não 1 por save
 
   async function handleLogout() {
     await signOut();
@@ -274,6 +271,34 @@ export function AppProvider({ children }) {
     } catch (e) {}
   }, []);
 
+  // ---- lembrete de água ----
+  // Global (e não na página /agua) pra avisar em qualquer aba do app aberta. Avisa
+  // depois de `waterReminder` minutos sem registro, só dentro da janela 7h–22h e só
+  // enquanto a meta do dia não foi batida. Conta a partir do último registro OU do
+  // último aviso/abertura — senão reabrir o app à tarde avisaria na hora.
+  const waterNudgeRef = useRef(Date.now());
+  useEffect(() => {
+    if (!loaded || !state.settings?.waterReminder) return;
+    waterNudgeRef.current = Date.now();
+    const tick = () => {
+      const s = stateRef.current;
+      const mins = s.settings?.waterReminder;
+      if (!mins || typeof Notification === "undefined" || Notification.permission !== "granted") return;
+      const today = getDateStr(0);
+      const goal = waterGoal(s);
+      const total = waterTotal(s, today);
+      if (total >= goal) return;
+      const h = new Date().getHours();
+      if (h < WATER_DAY_START_H || h >= WATER_DAY_END_H) return;
+      const last = waterEntries(s, today).at(-1);
+      if (Date.now() - Math.max(last?.time || 0, waterNudgeRef.current) < mins * 60_000) return;
+      waterNudgeRef.current = Date.now();
+      notify("Hora de beber água", `Faltam ${(goal - total).toLocaleString("pt-BR")} ml pra meta de hoje.`, { tag: "agua", url: "/agua" });
+    };
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, [loaded, state.settings?.waterReminder]);
+
   // aplica o modo claro/escuro escolhido (classe no <html>)
   useEffect(() => {
     applyMode(state.settings?.mode);
@@ -287,7 +312,7 @@ export function AppProvider({ children }) {
       if (st === prev.stats.streak && st <= (prev.stats.bestStreak || 0)) return prev;
       return { ...prev, stats: { ...prev.stats, streak: st, bestStreak: Math.max(prev.stats.bestStreak || 0, st) } };
     });
-  }, [loaded, state.habits, state.exerciseLogs, state.gymSets, state.sleep, state.journal, state.routineChecks, state.focusHistory]);
+  }, [loaded, state.habits, state.exerciseLogs, state.gymSets, state.sleep, state.water, state.journal, state.routineChecks, state.focusHistory]);
 
   // redireciona ao /login em signout
   useEffect(() => {
@@ -297,12 +322,6 @@ export function AppProvider({ children }) {
     });
     return () => sub.subscription.unsubscribe();
   }, [router]);
-
-  // leaderboard real
-  useEffect(() => {
-    if (!loaded || !hasSupabase()) return;
-    fetchLeaderboard().then(setBoard);
-  }, [loaded, state.stats.xp]);
 
   // carga inicial
   useEffect(() => {
@@ -325,55 +344,17 @@ export function AppProvider({ children }) {
         lastSavedRef.current = res ? clone(s) : {};
 
         const today = getDateStr(0);
-        const yesterday = getDateStr(-1);
         if (s.stats.todayDate !== today) {
           s.stats.todaySessions = 0;
           s.stats.todayMinutes = 0;
           s.stats.todayDate = today;
         }
 
-        // ===== penalidades de períodos fechados (metade do XP do comportamento não cumprido) =====
-        // Centralizado no load: aplica ao abrir o app em qualquer página (não dá p/ fugir).
-        const penalties = [];
-        let penaltyXp = 0;
-
-        // missões viraram quadro Trello (state.board) — sem penalidade/rollover.
-        // rotina: sem penalidade por decisão — errar um dia do esqueleto do dia é um
-        // dia, não recaída. O ganho é o XP do item + bônus de fechar (lib/state.js).
-
-        // exercício: treinos faltantes na meta semanal, por semana fechada
-        const ep = computeExercisePenalty(s.exerciseLogs, s.settings?.exerciseWeeklyGoal, s.settings?.exercisePenaltyWeek, today, s.restDays);
-        if (ep) {
-          s.settings = { ...(s.settings || {}), exercisePenaltyWeek: ep.lastWeek };
-          if (ep.xp > 0) {
-            penaltyXp += ep.xp;
-            penalties.push(`treino (−${ep.xp})`);
-          }
-        }
-
-        // hábitos diários (build): dia fechado sem check → −metade por prioridade
-        let habitPenTotal = 0;
-        s.habits = (s.habits || []).map((h) => {
-          const hp = computeHabitDailyPenalty(h, today);
-          if (!hp) return h;
-          habitPenTotal += hp.xp;
-          return { ...h, penaltyDate: hp.lastEvaluated };
-        });
-        if (habitPenTotal > 0) {
-          penaltyXp += habitPenTotal;
-          penalties.push(`hábitos (−${habitPenTotal})`);
-        }
-
-        if (penaltyXp > 0) s.stats.xp = Math.max(0, (s.stats.xp || 0) - penaltyXp);
-
         // streak geral = dias consecutivos com QUALQUER atividade (derivado)
         s.stats.streak = computeActivityStreak(s, today);
         s.stats.bestStreak = Math.max(s.stats.bestStreak || 0, s.stats.streak);
         setState(s);
         setLoaded(true);
-        if (penaltyXp > 0) {
-          setTimeout(() => toast("XP perdido por pendências", { sub: `${penalties.join(" · ")} = −${penaltyXp} XP`, type: "error", icon: "trending_down", duration: 7000 }), 400);
-        }
       } catch (e) {
         // NUNCA cai em defaults + salva por cima: bloqueia e mostra erro
         setLoadError(true);
@@ -388,35 +369,8 @@ export function AppProvider({ children }) {
     saveTimer.current = setTimeout(async () => {
       const snapshot = stateRef.current; // versão imutável que vamos sincronizar
       try {
-        const res = await syncUserState(userIdRef.current, snapshot, lastSavedRef.current);
+        await syncUserState(userIdRef.current, snapshot, lastSavedRef.current);
         lastSavedRef.current = snapshot; // baseline avança só no sucesso
-        // XP é do servidor: ele aplica o delta e devolve o valor real. Se o teto
-        // diário cortou, a tela adota o número do banco em vez de seguir otimista —
-        // senão o baseline ficaria acima do banco e o próximo delta nasceria errado.
-        const serverXp = res?.xp;
-        if (Number.isFinite(serverXp) && serverXp !== (snapshot.stats?.xp || 0)) {
-          // Teto do dia batido: sem aviso o XP simplesmente para de subir e ninguém
-          // entende por quê. Uma vez por dia — o save roda a cada 600ms de atividade.
-          const today = getDateStr(0);
-          if (serverXp < (snapshot.stats?.xp || 0) && xpCapDayRef.current !== today) {
-            xpCapDayRef.current = today;
-            toast("Teto diário de XP atingido", {
-              sub: `${XP_DAILY_CAP} XP por dia. O que você fizer hoje continua registrado — só não rende mais XP.`,
-              type: "error",
-              icon: "speed",
-              duration: 7000,
-            });
-          }
-          const reconciled = { ...snapshot, stats: { ...snapshot.stats, xp: serverXp } };
-          lastSavedRef.current = reconciled;
-          setState((prev) => {
-            // o que o usuário ganhou DEPOIS do snapshot preserva o delta — vira o
-            // próximo pedido, em vez de sumir junto com o corte
-            const drift = (prev.stats?.xp || 0) - (snapshot.stats?.xp || 0);
-            const next = Math.max(0, serverXp + drift);
-            return prev.stats?.xp === next ? prev : { ...prev, stats: { ...prev.stats, xp: next } };
-          });
-        }
         setSaveError(false);
       } catch (e) {
         setSaveError(true); // mantém baseline → próxima mudança tenta de novo
@@ -448,7 +402,6 @@ export function AppProvider({ children }) {
       }
       stats.lastCompletedDate = today;
       stats.bestStreak = Math.max(stats.bestStreak, stats.streak);
-      stats.xp = (stats.xp || 0) + award(focusXp(prev.settings.focusMin), stats.streak);
       // registra no histórico diário (retrospecto de foco)
       const focusHistory = { ...(prev.focusHistory || {}) };
       const day = focusHistory[today] || { sessions: 0, minutes: 0 };
@@ -528,7 +481,7 @@ export function AppProvider({ children }) {
     const hidden = typeof document !== "undefined" && document.visibilityState !== "visible";
     if (phaseRef.current === "focus") {
       playAlarm(); // fim do pomodoro: alarme forte
-      if (hidden) notify("Pomodoro concluído! 🍅", `+${focusXp(s.focusMin)} XP · pausa de ${s.breakMin} min pronta, é só dar start.`);
+      if (hidden) notify("Pomodoro concluído! 🍅", `Pausa de ${s.breakMin} min pronta, é só dar start.`);
       completeFocusSession();
       setPhase("break");
       setSecondsLeft(s.breakMin * 60);
@@ -619,22 +572,12 @@ export function AppProvider({ children }) {
     setState((prev) => ({ ...prev, settings: { ...prev.settings, [key]: value } }));
   }
 
-  // Recarrega os itens pagos liberados. Usada no retorno do checkout: o webhook do Mercado Pago
-  // pode levar segundos, então a tela pergunta de novo em vez de mandar o usuário
-  // recarregar na mão. Não gera escrita: `entitlements` não entra no patch do sync.
-  const refreshEntitlements = useCallback(async () => {
-    const ents = await fetchEntitlements(userIdRef.current);
-    if (!ents) return null;
-    setState((prev) => ({ ...prev, entitlements: ents }));
-    return ents;
-  }, []);
   const updateNickname = useCallback(
     async (nick) => {
       const res = await updateUsername(userIdRef.current, nick.trim());
       if (res.ok) {
         setMyName(nick.trim());
-        toast("Nick atualizado", { sub: nick.trim().toUpperCase(), icon: "badge" });
-        fetchLeaderboard().then(setBoard); // re-match do "VOCÊ" no ranking
+        toast("Nick atualizado", { sub: nick.trim(), icon: "badge" });
       } else {
         const msg =
           res.reason === "taken" ? "Nick já em uso" : res.reason === "invalid" ? "3–20 caracteres: letras, números, _ . -" : "Falha ao salvar nick";
@@ -648,7 +591,7 @@ export function AppProvider({ children }) {
   async function resetAllData() {
     const ok = await confirm({
       title: "Reiniciar todos os dados?",
-      body: "Apaga foco, hábitos, sono, treinos, dieta e XP. Não dá pra desfazer.",
+      body: "Apaga hábitos, sono, diário, leitura, quadro e o resto. Não dá pra desfazer.",
       confirmLabel: "Apagar tudo",
     });
     if (!ok) return;
@@ -663,12 +606,10 @@ export function AppProvider({ children }) {
     userId: userIdRef.current,
     saveError,
     myName,
-    board,
     completeFocusSession,
     updateNickname,
     updateSetting,
     setSetting,
-    refreshEntitlements,
     resetAllData,
     handleLogout,
     toast,

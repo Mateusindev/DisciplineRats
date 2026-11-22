@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useApp } from "../AppContext";
 import { MI, PageHeader, textareaCls } from "@/components/ui";
 import { Button } from "@/components/ui/button";
-import { XP, award, getDateStr, shiftDate, weekdayShort, journalHasContent, journalStreak, JOURNAL_LEGACY_FIELDS } from "@/lib/state";
+import { getDateStr, shiftDate, weekdayShort, journalHasContent, journalStreak, JOURNAL_LEGACY_FIELDS } from "@/lib/state";
 
 // blocos de texto livre, na ordem em que aparecem no formulário.
 // `dump` guarda o relato do dia — era o antigo "despejo de emoções".
@@ -80,7 +80,8 @@ export default function DiarioPage() {
   const setField = (key) => (e) => setDraft((d) => ({ ...d, [key]: e.target.value }));
 
   const draftHasContent = journalHasContent(draft);
-  const alreadyAwarded = !!entry.xpAwarded;
+  const alreadySaved = journalHasContent(entry);
+  const todayDone = journalHasContent(state.journal?.[today]);
   const streak = journalStreak(state.journal);
   const totalDays = Object.values(state.journal || {}).filter(journalHasContent).length;
 
@@ -97,7 +98,7 @@ export default function DiarioPage() {
     }
     setState((prev) => {
       const cur = prev.journal?.[selDate] || {};
-      const clean = { xpAwarded: cur.xpAwarded || false };
+      const clean = {};
       // campos que o formulário não escreve mais continuam guardados como estavam
       for (const k of JOURNAL_LEGACY_FIELDS) if ((cur[k] || "").trim()) clean[k] = cur[k];
       // campo vazio some da entrada em vez de virar string vazia
@@ -105,16 +106,10 @@ export default function DiarioPage() {
         const v = (draft[k] || "").trim().slice(0, LIMITS[k] || 2000);
         if (v) clean[k] = v;
       }
-      let stats = prev.stats;
-      // XP só pelo dia de hoje (edição retroativa não rende XP — evita farm)
-      if (isToday && !cur.xpAwarded && journalHasContent(clean)) {
-        clean.xpAwarded = true;
-        stats = { ...stats, xp: (stats.xp || 0) + award(XP.journal, stats.streak) };
-      }
-      return { ...prev, journal: { ...(prev.journal || {}), [selDate]: clean }, stats };
+      return { ...prev, journal: { ...(prev.journal || {}), [selDate]: clean } };
     });
     toast("Diário salvo", {
-      sub: isToday ? (alreadyAwarded ? "Registro atualizado" : `+${XP.journal} XP · reflexão do dia`) : "Registro retroativo salvo",
+      sub: isToday ? (alreadySaved ? "Registro atualizado" : "Reflexão do dia") : "Registro retroativo salvo",
       icon: "book",
     });
   }
@@ -125,17 +120,17 @@ export default function DiarioPage() {
   );
 
   // linha de status do rodapé do editor — só texto, sem destaque
-  const status = !isToday
-    ? "Registro retroativo — não rende XP"
-    : alreadyAwarded
-      ? "XP do dia já creditado — edições não dão XP extra"
-      : draftHasContent
-        ? `Salvar rende +${XP.journal} XP`
-        : "Preencha ao menos um campo";
+  const status = !draftHasContent
+    ? "Preencha ao menos um campo"
+    : !isToday
+      ? "Registro retroativo"
+      : alreadySaved
+        ? "Já salvo hoje — salvar de novo atualiza"
+        : "Pronto pra salvar";
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Diário" subtitle="Gratidão, memória do dia, relato e controle. Escrever rende XP uma vez por dia." />
+      <PageHeader title="Diário" subtitle="Gratidão, memória do dia, relato e controle." />
 
       {/* stats — um card só, dividido em três colunas */}
       <section className="grid grid-cols-3 divide-x divide-outline-variant rounded-xl border border-outline-variant bg-surface-container">
@@ -153,7 +148,7 @@ export default function DiarioPage() {
         <div className="px-4 py-3 sm:px-5 sm:py-4 min-w-0">
           <div className="text-xs text-outline">Hoje</div>
           <div className="mt-1 text-xl sm:text-2xl font-semibold tracking-tight tabular-nums text-on-surface truncate">
-            {alreadyAwarded ? "Feito" : `+${XP.journal} XP`}
+            {todayDone ? "Feito" : "Pendente"}
           </div>
         </div>
       </section>
@@ -164,7 +159,7 @@ export default function DiarioPage() {
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-outline-variant px-5 py-4 md:px-6">
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-on-surface">{isToday ? "Entrada de hoje" : "Entrada retroativa"}</h2>
-            <p className="mt-0.5 text-xs text-outline">{isToday ? "Escreva com calma — salve quando terminar." : "Dias passados podem ser editados, mas não rendem XP."}</p>
+            <p className="mt-0.5 text-xs text-outline">{isToday ? "Escreva com calma — salve quando terminar." : "Dias passados também podem ser editados."}</p>
           </div>
           <div className="flex items-center gap-1">
             {!isToday && (
@@ -252,7 +247,7 @@ export default function DiarioPage() {
           </div>
         </div>
 
-        {/* rodapé: status do XP em texto discreto + a única ação primária */}
+        {/* rodapé: status em texto discreto + a única ação primária */}
         <div className="flex items-center justify-between gap-4 border-t border-outline-variant px-5 py-4 md:px-6">
           <p className="text-xs text-outline">{status}</p>
           <Button onClick={save} disabled={!draftHasContent} className="shrink-0">

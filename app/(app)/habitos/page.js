@@ -21,14 +21,10 @@ import {
   HABIT_PRIORITIES,
   habitPriority,
   QUIT_MILESTONES,
-  WEEKLY_BONUS,
-  award,
   cleanDays,
   bestCleanRun,
   lastRelapse,
   relapsesInWindow,
-  computeDueMilestones,
-  computeDueWeeklyBonus,
   weekCount,
   shiftDate,
   toggleHabitState,
@@ -112,10 +108,8 @@ function DowPicker({ value, onChange }) {
   );
 }
 
-// Prioridade como controle segmentado. O XP que ela paga fica escrito ao lado —
-// três botões iguais não dizem o que mudam.
-function PriorityPicker({ value, onChange, showXp = true }) {
-  const active = HABIT_PRIORITIES.find((p) => p.v === value) || HABIT_PRIORITIES[1];
+// Prioridade como controle segmentado: importância do hábito, nada além disso.
+function PriorityPicker({ value, onChange }) {
   return (
     <div className="flex items-center gap-2">
       <ToggleGroup
@@ -127,12 +121,11 @@ function PriorityPicker({ value, onChange, showXp = true }) {
         aria-label="Prioridade"
       >
         {HABIT_PRIORITIES.map((p) => (
-          <ToggleGroupItem key={p.v} value={String(p.v)} aria-label={`Prioridade ${sentence(p.label)}, +${p.xp} XP`} title={`${sentence(p.label)} · +${p.xp} XP`} className="text-xs">
+          <ToggleGroupItem key={p.v} value={String(p.v)} aria-label={`Prioridade ${sentence(p.label)}`} className="text-xs">
             {sentence(p.label)}
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
-      {showXp && <span className="text-xs text-outline tabular-nums whitespace-nowrap">+{active.xp} XP</span>}
     </div>
   );
 }
@@ -424,11 +417,11 @@ function CardHeader({ h, i, ctx }) {
         <p className="text-sm text-on-surface-variant whitespace-pre-wrap mb-4">{h.detail}</p>
       )}
       {/* prioridade só é editável no modo edição: fora dele é rótulo. Três botões
-          sempre clicáveis no card viviam trocando o XP do hábito sem querer. */}
+          sempre clicáveis no card viviam trocando a prioridade sem querer. */}
       {editing && (
         <div className="mb-4 grid gap-1.5">
           <FieldLabel>Prioridade</FieldLabel>
-          <PriorityPicker value={h.priority || 2} onChange={(v) => setPriority(h.id, v)} showXp={false} />
+          <PriorityPicker value={h.priority || 2} onChange={(v) => setPriority(h.id, v)} />
         </div>
       )}
     </>
@@ -437,21 +430,11 @@ function CardHeader({ h, i, ctx }) {
 
 // Rótulo de prioridade ao lado do título: leitura, não controle. Três degraus
 // preenchidos até o nível, em tom neutro.
-// O tooltip diz o que a prioridade faz NAQUELE tipo de hábito: paga XP por
-// marcação (diário e semanal de mínimo), multiplica o XP dos marcos (vício) ou
-// multiplica o bônus semanal. Prometer "+25 XP" nos três seria mentira em dois.
 function PriorityLabel({ h }) {
   const p = habitPriority(h);
-  const kind = h.kind || "build";
-  const paysPerCheck = kind === "build" || (kind === "weekly" && (h.direction || "min") === "min");
   const label = sentence(p.label);
-  const tip = paysPerCheck
-    ? `Prioridade ${label} · +${p.xp} XP por marcação`
-    : kind === "quit"
-      ? `Prioridade ${label} · multiplica o XP dos marcos`
-      : `Prioridade ${label} · multiplica o bônus semanal`;
   return (
-    <span title={tip} className="shrink-0 inline-flex items-center gap-1.5 text-xs text-on-surface-variant">
+    <span title={`Prioridade ${label}`} className="shrink-0 inline-flex items-center gap-1.5 text-xs text-on-surface-variant">
       <span className="flex items-end gap-0.5">
         {[6, 9, 12].map((px, idx) => (
           <span key={px} className={`w-1 rounded-sm ${idx < p.v ? "bg-on-surface-variant" : "bg-outline/25"}`} style={{ height: `${px}px` }} />
@@ -599,11 +582,8 @@ function StepChecklist({ h, ctx }) {
 //   marcado      → o mínimo recua pra lembrete apagado; hoje ele já não importa
 //
 // Não existe terceiro estado. Dia marcado pelo mínimo é dia marcado: a tela não
-// diz por qual caminho a marcação veio, porque a resposta não muda nada — mesmo
-// XP, mesma bolinha, mesma sequência.
-//
-// O XP mostrado é o base (sem multiplicador de sequência), igual ao resto da tela:
-// prometer o número final aqui e outro no crédito seria pior que não prometer.
+// diz por qual caminho a marcação veio, porque a resposta não muda nada — mesma
+// bolinha, mesma sequência.
 function MinimumBar({ h, ctx, className = "" }) {
   if (!habitMinAllowed(h)) return null;
   const today = ctx.today;
@@ -644,7 +624,7 @@ function MinimumBar({ h, ctx, className = "" }) {
         title="Marca o dia mesmo com microatividade em aberto"
         className="w-full"
       >
-        Fiz só o mínimo · +{habitPriority(h).xp} XP
+        Fiz só o mínimo
       </Button>
     </div>
   );
@@ -652,10 +632,9 @@ function MinimumBar({ h, ctx, className = "" }) {
 
 // Marcar/desmarcar o hábito do dia. Interruptor em vez de botão: o estado fica
 // escrito em palavras, então nunca resta a dúvida de "cliquei ou não?".
-// Marcar credita XP, desmarcar estorna o valor exato pago no dia.
 // Travado (passo em aberto) segue CLICÁVEL de propósito: o clique é o que dispara o
 // aviso dizendo quantos passos faltam. Botão morto não explica nada.
-function DoneSwitch({ done, dueToday, xp, blocked = false, pending = 0, onToggle }) {
+function DoneSwitch({ done, dueToday, blocked = false, pending = 0, onToggle }) {
   return (
     <button
       onClick={onToggle}
@@ -671,7 +650,7 @@ function DoneSwitch({ done, dueToday, xp, blocked = false, pending = 0, onToggle
           {done ? "Feito hoje" : dueToday ? "Ainda não feito" : "Não agendado hoje"}
         </span>
         <span className="text-xs text-outline block">
-          {blocked ? `Faltam ${pending} microatividade${pending > 1 ? "s" : ""}` : done ? `+${xp} XP creditados` : `Vale +${xp} XP`}
+          {blocked ? `Faltam ${pending} microatividade${pending > 1 ? "s" : ""}` : done ? "Toque pra desmarcar" : "Toque pra marcar como feito"}
         </span>
       </span>
       {blocked ? (
@@ -687,7 +666,6 @@ function DoneSwitch({ done, dueToday, xp, blocked = false, pending = 0, onToggle
 
 function BuildCard({ h, i, ctx, bare = false }) {
   const { today, toggleHabit, setWeekdays } = ctx;
-  const prio = habitPriority(h);
   const done = h.doneDates.includes(today);
   const streak = habitStreak(h);
   const best = bestHabitStreak(h);
@@ -716,8 +694,7 @@ function BuildCard({ h, i, ctx, bare = false }) {
         )
       )}
 
-      {/* a faixa já diz o estado do dia e o rótulo do título já diz o XP —
-          a linha "+XP/dia · descanso hoje" que morava aqui era repetição */}
+      {/* a faixa já diz o estado do dia — uma linha de resumo aqui seria repetição */}
       <StreakBanner streak={streak} sched={sched} best={best} dueToday={dueToday} done={done} />
 
       {!editing && <StepChecklist h={h} ctx={ctx} />}
@@ -727,7 +704,6 @@ function BuildCard({ h, i, ctx, bare = false }) {
       <DoneSwitch
         done={done}
         dueToday={dueToday}
-        xp={prio.xp}
         blocked={blocked}
         pending={prog?.pending || 0}
         onToggle={() => toggleHabit(h.id)}
@@ -742,8 +718,6 @@ function WeeklyCard({ h, i, ctx, bare = false }) {
   const dir = h.direction || "min";
   const count = weekCount(h);
   const done = h.doneDates.includes(today);
-  const prio = habitPriority(h);
-  const bonus = Math.round(WEEKLY_BONUS[dir] * prio.mult);
   const pct = Math.min(100, Math.round((count / Math.max(1, target)) * 100));
   const over = dir === "max" && count > target;
   const hit = dir === "min" && count >= target;
@@ -770,7 +744,6 @@ function WeeklyCard({ h, i, ctx, bare = false }) {
           <span className={over ? "text-error" : hit ? "text-on-surface font-medium" : "text-outline"}>
             {dir === "min" ? (hit ? "Meta batida" : `Faltam ${target - count}`) : over ? "Limite estourado" : `Restam ${target - count}`}
           </span>
-          <span className="text-outline">+{bonus} XP por semana na meta</span>
         </div>
       </div>
       {!editing && <StepChecklist h={h} ctx={ctx} />}
@@ -816,7 +789,6 @@ function QuitCard({ h, i, ctx, bare = false }) {
   const prev30 = relapsesInWindow(h.doneDates, shiftDate(today, -59), shiftDate(today, -30));
   const trend = prev30 > 0 ? last30 - prev30 : null;
   const next = QUIT_MILESTONES.find((m) => m.days > clean);
-  const prio = habitPriority(h);
   return (
     <div className={bare ? "p-4" : "p-5 relative"}>
       <CardHeader h={h} i={i} ctx={ctx} />
@@ -831,7 +803,7 @@ function QuitCard({ h, i, ctx, bare = false }) {
           </span>
           {next ? (
             <span className="text-right">
-              Próximo marco: {next.days}d (+{Math.round(next.xp * prio.mult)} XP)
+              Próximo marco: {next.days}d
             </span>
           ) : (
             <span />
@@ -1170,7 +1142,7 @@ function OrderList({ habits, ctx }) {
 //
 // Antes, no desktop, marcar hoje era acertar uma bolinha de 18px entre 31 — e só
 // ela mudava de cor. Aqui o bloco feito muda inteiro (borda e fundo no accent,
-// check cheio com um "pop", "Feito hoje · +XP"), e o placar do topo anda.
+// check cheio com um "pop", "Feito hoje"), e o placar do topo anda.
 // Recaída de vício é o único estado em tom de erro.
 //
 // Mesmas regras de sempre: passo em aberto trava diário/semanal (o toque segue
@@ -1221,7 +1193,6 @@ function HabitBlocks({ habits, ctx, action = null }) {
           const relapsed = marked && kind === "quit";
           const offToday = kind === "build" && !habitIsScheduled(h, ctx.today);
           const minText = habitMinAllowed(h) ? habitMinimum(h) : "";
-          const xp = habitPriority(h).xp;
           const tap = () => (kind === "quit" ? (marked ? ctx.undoRelapse(h.id) : ctx.logRelapse(h)) : ctx.toggleHabit(h.id));
           return (
             <div
@@ -1277,7 +1248,7 @@ function HabitBlocks({ habits, ctx, action = null }) {
                 <span className="mt-auto flex min-h-5 items-center">
                   {filled ? (
                     <span className="text-xs font-medium text-on-surface">
-                      Feito hoje{xp && !(kind === "weekly" && h.direction === "max") ? <span className="text-on-surface-variant font-normal"> · +{xp} XP</span> : null}
+                      Feito hoje
                     </span>
                   ) : relapsed ? (
                     <span className="text-xs text-error">Recaída hoje</span>
@@ -1296,7 +1267,7 @@ function HabitBlocks({ habits, ctx, action = null }) {
                   className="w-full rounded-lg border border-dashed border-outline-variant px-2.5 py-2 text-left transition hover:border-outline/60 active:scale-[.98]"
                 >
                   <span className="flex items-center gap-1 text-xs font-medium text-on-surface">
-                    <MI name="flag" className="text-[14px] text-outline" /> Só o mínimo · +{xp} XP
+                    <MI name="flag" className="text-[14px] text-outline" /> Só o mínimo
                   </span>
                   <span className="mt-0.5 block line-clamp-2 text-xs text-outline">{minText}</span>
                 </button>
@@ -1483,48 +1454,6 @@ export default function HabitosPage() {
   const toggleOpen = (id) => setOpenId((cur) => (cur === id ? null : id));
   const closeOpen = () => setOpenId(null);
 
-  // ===== recompensas pendentes: marcos de dias limpos (quit) + bônus de semana na meta (weekly) =====
-  useEffect(() => {
-    const dues = (state.habits || [])
-      .map((h) => {
-        const quit = computeDueMilestones(h);
-        const weekly = computeDueWeeklyBonus(h);
-        return quit || weekly ? { name: h.name, quit, weekly } : null;
-      })
-      .filter(Boolean);
-    if (!dues.length) return;
-    setState((prev) => {
-      // recomputa sobre prev: idempotente — se já concedido, retorna prev por identidade
-      let gained = 0;
-      const habits = (prev.habits || []).map((h) => {
-        const quit = computeDueMilestones(h);
-        const weekly = computeDueWeeklyBonus(h);
-        if (!quit && !weekly) return h;
-        const milestones = { ...(h.milestones || {}) };
-        if (quit) {
-          gained += quit.xp;
-          milestones[quit.key] = [...(milestones[quit.key] || []), ...quit.newDays];
-        }
-        if (weekly) {
-          gained += weekly.xp;
-          for (const k of weekly.keys) milestones[k] = true;
-        }
-        return { ...h, milestones };
-      });
-      if (!gained) return prev;
-      return { ...prev, habits, stats: { ...prev.stats, xp: (prev.stats.xp || 0) + gained } };
-    });
-    const totalXp = dues.reduce((s, x) => s + (x.quit?.xp || 0) + (x.weekly?.xp || 0), 0);
-    const notes = dues.map((x) => {
-      const parts = [];
-      if (x.quit) parts.push(x.quit.newDays.map((d) => `${d}d limpo`).join(", "));
-      if (x.weekly) parts.push(`${x.weekly.keys.length} semana(s) na meta`);
-      return `${x.name}: ${parts.join(" · ")}`;
-    });
-    toast("Recompensa de hábitos!", { sub: `${notes.join(" · ")} · +${totalXp} XP`, icon: "military_tech", duration: 5000 });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.habits]);
-
   function addHabit() {
     const name = newHabit.trim();
     if (!name) return;
@@ -1548,8 +1477,6 @@ export default function HabitosPage() {
           minDays: [],
           pos: prev.habits.length, // entra no fim da ordem escolhida
           doneDates: [],
-          checkXp: {},
-          milestones: {},
         },
       ],
     }));
@@ -1597,7 +1524,7 @@ export default function HabitosPage() {
     setState((prev) => ({ ...prev, habits: prev.habits.map((h) => (h.id === id ? { ...h, priority } : h)) }));
   }
 
-  // ===== build/weekly: check concede XP por prioridade (weekly-max não premia — marcar = consumir) =====
+  // ===== build/weekly: marcar/desmarcar o dia =====
   // `date` default hoje; o calendário passa qualquer dia já vivido (registro
   // retroativo). Dia passado ganha toast porque o clique acontece longe de onde o
   // olho está — sem confirmação em texto, marcar 12/08 por engano passa batido.
@@ -1613,21 +1540,11 @@ export default function HabitosPage() {
     setState((prev) => toggleHabitState(prev, id, date));
     // Hoje também avisa: antes só o retroativo tinha toast, e marcar o dia de
     // hoje no desktop mudava uma bolinha e mais nada — parecia que não tinha ido.
-    // XP = a mesma conta do reducer: estorno exato do checkXp, ganho com o multiplicador de agora.
     if (h && date === today) {
-      const noXp = (h.kind || "build") === "weekly" && h.direction === "max";
-      const xp = noXp ? 0 : marked ? h.checkXp?.[date] || 0 : award(habitPriority(h).xp, state.stats.streak);
-      toast(marked ? `"${h.name}" desmarcado` : `"${h.name}" feito hoje`, {
-        sub: xp ? (marked ? `−${xp} XP estornados` : `+${xp} XP`) : undefined,
-        icon: marked ? "undo" : "check_circle",
-      });
+      toast(marked ? `"${h.name}" desmarcado` : `"${h.name}" feito hoje`, { icon: marked ? "undo" : "check_circle" });
     }
     if (h && date !== today) {
-      const xp = (h.kind || "build") === "weekly" && h.direction === "max" ? 0 : habitPriority(h).xp;
-      toast(`"${h.name}" ${marked ? "desmarcado" : "registrado"} em ${ddmm(date)}`, {
-        sub: xp ? (marked ? `−${xp} XP estornados` : `+${xp} XP`) : undefined,
-        icon: "history",
-      });
+      toast(`"${h.name}" ${marked ? "desmarcado" : "registrado"} em ${ddmm(date)}`, { icon: "history" });
     }
   }
 
@@ -1639,7 +1556,7 @@ export default function HabitosPage() {
     const h = state.habits.find((x) => x.id === id);
     if (!h) return;
     setState((prev) => markHabitMinimum(prev, id, today));
-    toast(`"${h.name}" feito hoje`, { sub: `+${habitPriority(h).xp} XP`, icon: "flag" });
+    toast(`"${h.name}" feito hoje`, { icon: "flag" });
   }
 
   // ===== microatividades =====
@@ -1836,7 +1753,7 @@ export default function HabitosPage() {
     <>
       <PageHeader
         title="Hábitos"
-        subtitle="Construa os bons, largue os ruins. Prioridade alta vale mais XP; hábito diário não feito tira metade."
+        subtitle="Construa os bons, largue os ruins."
         actions={
           hasHabits && (
             <Button variant={formOpen ? "outline" : "default"} onClick={() => setShowForm((v) => !v)} aria-expanded={formOpen}>
